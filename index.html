@@ -161,7 +161,7 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #bigmap .x{position:absolute;right:16px;top:12px}
 /* mobile */
 #touch{position:fixed;inset:0;z-index:12;pointer-events:none}
-#joy{position:absolute;left:0;bottom:0;width:38%;height:42%;pointer-events:auto}
+#joy{position:absolute;left:8px;bottom:8px;width:140px;height:140px;pointer-events:auto}
 #joyBase{position:absolute;width:130px;height:130px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);transform:translate(-50%,-50%);display:none}
 #joyKnob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.35);transform:translate(-50%,-50%);display:none}
 #look{position:absolute;right:0;top:0;width:55%;height:100%;pointer-events:auto}
@@ -5127,7 +5127,16 @@ const UI = {
     this.touchBtns = B;
     // joystick
     const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
-    joy.addEventListener('touchstart', e => { if (UI.menuOpen || document.getElementById('menu') && !document.getElementById('menu').classList.contains('hidden')) return; e.preventDefault(); AU.init(); const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY; base.style.display = knob.style.display = 'block'; base.style.left = knob.style.left = jx + 'px'; base.style.top = knob.style.top = jy + 'px'; }, { passive: false });
+    joy.addEventListener('touchstart', e => {
+  const menu = document.getElementById('menu');
+  const bigmap = document.getElementById('bigmap');
+  if (UI.menuOpen || (menu && !menu.classList.contains('hidden')) || (bigmap && !bigmap.classList.contains('hidden'))) return;
+  e.preventDefault(); AU.init();
+  const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
+  base.style.display = knob.style.display = 'block';
+  base.style.left = knob.style.left = jx + 'px';
+  base.style.top = knob.style.top = jy + 'px';
+}, { passive: false });
     joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx + dx) + 'px'; knob.style.top = (jy + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
     const jend = e => { for (const t of e.changedTouches) if (t.identifier === jid) { jid = null; INP.mx = INP.mz = 0; INP.joyMag = 0; base.style.display = knob.style.display = 'none'; } };
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
@@ -5832,9 +5841,11 @@ async function startGame(mode, code) {
       for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
       G.online = true; G.isHost = true;
       setTimeout(() => {
-        if (UI && UI.chatLine) UI.chatLine(null, `//: 방코드 ${G.room}`);
-        toast(`방 코드: ${G.room} (채팅에 표시됨)`);
-      }, 800);
+        const msg = `//: 방코드 ${G.room}`;
+        if (UI && UI.chatLine) UI.chatLine(null, msg);
+        else if (typeof toast === 'function') toast(msg);
+        console.log(msg);
+      }, 500);
     }
     if (mode === 'join') {
       let err = null;
