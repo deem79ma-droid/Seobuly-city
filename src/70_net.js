@@ -238,7 +238,7 @@ const NET = {
   playerMsg() {
     const m = { t: 'p', n: ME.name, x: +ME.x.toFixed(2), y: +ME.y.toFixed(2), z: +ME.z.toFixed(2), yaw: +ME.yaw.toFixed(3), spd: +ME.spd.toFixed(2), gr: ME.grounded ? 1 : 0,
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
-      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
+      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), rc: POLICE.rcOut(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
@@ -262,6 +262,7 @@ const NET = {
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
     if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
+    if (G.isHost && conn && conn.pid && (m.t === 'hitAck' || (m.t === 'dmg' && m.to !== ME.id))) POLICE.hostSee(m, conn.pid); // 방장: 신고 수사용 사건 기록
     if (m.to && m.to !== ME.id) return;
     switch (m.t) {
       case 'full': toast('방이 가득 찼다 (최대 2명)'); break;
@@ -306,7 +307,7 @@ const NET = {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) rp.name = m.n;
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
-        refreshRemoteName(rp);
+        refreshRemoteName(rp); if (G.isHost) POLICE.observe(conn && conn.pid ? conn.pid : f, m.wanted, m.rc);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -332,11 +333,13 @@ const NET = {
       case 'punchFx': { const rp = G.players.get(f); if (rp && !sameSpace(rp)) break; sfx(m.h ? 'punchH' : 'punch', m.x, m.z); FX.impact({ x: m.x, y: m.y, z: m.z }, 'dust'); FX.impact({ x: m.x, y: m.y, z: m.z }, 'spark'); FX.emoji(m.h ? '💥' : '✦', m.x, m.y + 0.15, m.z, m.h ? 0.45 : 0.3); if (Math.hypot(ME.x - m.x, ME.z - m.z) < 3) CAM.shake = Math.min(0.6, CAM.shake + (m.h ? 0.22 : 0.1)); break; }
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
-        const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
-        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
+        const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자 (게스트는 NPC 피해를 꾸며낼 수 없다)
+        const before = ME.hp; ME.takeDamage(+m.amt || 0, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        if (G.isHost) POLICE.hostSelfHit(src, w, m.k, d);
+        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;
       }
-      case 'hitAck': { if (m.to !== ME.id) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
+      case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
       case 'wanted': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
@@ -365,6 +368,8 @@ const NET = {
       case 'ann': announce(m.a, m.b); break;
       case 'horn': { const rp = G.players.get(f); if (rp) sfx('horn', rp.x, rp.z); break; }
       case 'admin': ADMIN.onAdminMsg(m, conn); break;
+      case 'report': if (G.isHost && conn && conn.pid) { if (POLICE.busy.has(conn.pid)) break; POLICE.busy.add(conn.pid); setTimeout(() => POLICE.busy.delete(conn.pid), 1500); POLICE.hostReport(m.a, conn.pid); } break;
+      case 'verdict': if (!G.isHost && conn && conn === this.hostConn) POLICE.onVerdict(m); break;
       case 'free': if (m.to === ME.id && f && isAdminId(f)) LAW.release('🔓 관리자님이 무료로 석방해 주셨다'); break; // 인증된 관리자가 보낸 것만
       case 'adm': ADMIN.onNet(Object.assign({}, m, { f }), conn); break;
       case 'kicked': if (!G.isHost && !ADMIN.on && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce(m.ban ? '⛔ 밴당했다' : '👢 추방당했다', '로비로 돌아갑니다'); setTimeout(() => location.replace(cleanUrl()), 1800); } break;
@@ -376,7 +381,7 @@ const NET = {
     }
   },
 };
-const NO_RELAY = new Set(['hello', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct']);
+const NO_RELAY = new Set(['hello', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
 // tree regrowth (host)
 function hostTrees(dt) {
   if ((G._treeT = (G._treeT || 0) - dt) > 0) return; G._treeT = 5;

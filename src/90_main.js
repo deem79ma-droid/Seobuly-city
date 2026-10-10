@@ -154,7 +154,7 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -191,7 +191,7 @@ function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t
 function frame(dt, noRender) {
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; INP.fire = false; if (UI.joyReset) UI.joyReset(); }
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  INTERIOR.update(dt); LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -220,4 +220,4 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
+if (URLP.get("debug")) window.__SBC = { winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };

@@ -84,6 +84,17 @@ button{font-family:inherit;cursor:pointer}
 #invCount{font-size:12px;color:var(--dim);margin-top:8px}
 #invCount a{color:var(--acc2);text-decoration:underline;cursor:pointer}
 /* 친구 초대 창: 화면 전체 반투명 막(바깥 누르면 닫힘) + 작은 카드. 터치 버튼(#touch z12)·메뉴(z40)보다 위 */
+#repBtn{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:30;border:0;border-radius:999px;padding:7px 14px;background:linear-gradient(180deg,#ff4a5a,#c81a2a);color:#fff;font:800 14px 'Noto Sans KR',sans-serif;box-shadow:0 6px 18px rgba(200,20,40,.45);cursor:pointer;display:flex;gap:6px;align-items:center}
+#repBtn b{background:#fff;color:#c81a2a;border-radius:999px;padding:0 7px;font-size:12px}#repBtn small{opacity:.8;font-size:11px;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:0 4px}
+#repBtn.hidden{display:none}#repBtn.pulse{animation:repP .9s ease 3}@keyframes repP{50%{transform:translateX(-50%) scale(1.12)}}
+body.touch #repBtn{top:auto;bottom:16px;left:auto;right:290px;transform:none;padding:8px 12px}body.touch #repBtn.pulse{animation:none}
+#verdict{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:46;width:min(380px,92vw);max-height:calc(100vh - 24px);overflow:auto;padding:12px 14px;border-radius:14px;background:rgba(14,16,26,.96);border:1px solid rgba(255,211,74,.5);display:none;font-size:13.5px}
+#verdict h3{margin:0 0 6px;font-family:'Black Han Sans';font-weight:400;font-size:20px}#verdict .vx{position:absolute;top:6px;right:8px;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:16px;cursor:pointer}
+#verdict .vb{display:inline-block;padding:2px 10px;border-radius:999px;background:#555;font-weight:800;margin-bottom:6px}#verdict .vb.bad{background:#c81a2a}#verdict .vb.ok{background:#1a8a4a}#verdict .vs{opacity:.85;margin-bottom:4px}
+#verdict .vr{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid rgba(255,255,255,.08)}#verdict .vr span{opacity:.7;white-space:nowrap}#verdict .vr b{text-align:right;font-weight:700}
+@media(max-height:500px){#verdict{font-size:12px;padding:8px 12px;top:6px}#verdict h3{font-size:16px;margin-bottom:2px}#verdict .vr{padding:2px 0}}
+#flChip{position:fixed;top:64px;right:12px;z-index:22;padding:5px 11px;border-radius:999px;background:rgba(14,16,26,.85);border:1px solid rgba(160,200,255,.4);color:#fff;font:700 13px 'Noto Sans KR',sans-serif;pointer-events:none;display:none}
+body.touch #flChip{top:auto;bottom:212px;right:auto;left:50%;transform:translateX(-50%);font-size:12px}
 #share{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);pointer-events:auto;touch-action:manipulation;padding:8px}
 #share .sbox{position:relative;width:min(340px,88vw);max-height:100%;overflow:auto;padding:12px 14px;border-radius:16px;text-align:center;background:rgba(14,16,26,.97)}
 #share h3{margin:0;font-family:'Black Han Sans';font-weight:400;font-size:19px}
@@ -2745,7 +2756,7 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']);
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined;
 }
 function pedEnsureChar(p) {
   if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
@@ -2784,6 +2795,8 @@ function spawnPedNear(p, px, pz) {
   placePedOnEdge(p, r.e, r.t, Math.random() < 0.5 ? 1 : -1, Math.random() < 0.5 ? 1 : -1);
   const R = regionAt(p.x, p.z); if (R === 'sea') return false;
   pedSetIdentity(p, pedKindFor(R), (Math.random() * 1e9) | 0);
+  if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
+  pedStartRoutine(p);
   if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
   p.spawnT = G.t; return true;
 }
@@ -2808,11 +2821,14 @@ function hostUpdatePeds(dt) {
   const anyP = players.length ? players : [{ x: ME.x, z: ME.z }];
   for (const p of PEDS) {
     // relocation
+    if (p.state === 'parked' && p.nextTry > G.t) continue; // 건물에 들어간/밤이라 쉬는 NPC는 잠시 뒤에 다시 등장
     if (p.state !== 'dead') { const nd = nearestPlayerDist(p.x, p.z); if ((p.state === 'parked' || nd > 240) && !(p.raid && G.raid)) { const pl = pick(anyP); if (spawnPedNear(p, pl.x, pl.z)) { } continue; } }
     p.timer -= dt; p.fireT -= dt; p.actT = Math.min(1, p.actT + dt * (p.act === 'punchR' || p.act === 'punchL' ? 3 : 2));
     if (p.state === 'dead') { if (p.timer <= 0) { p.state = 'parked'; } continue; }
     if (p.state === 'knocked') { if (p.timer <= 0) p.state = 'flee', p.timer = 6; continue; }
     // perception every ~0.4s
+    if (p.state === 'surrender') { p.spd = 0; p.aiming = false; if (p.timer <= 0) p.state = 'parked'; continue; } // 신고당한 갱단원: 손 들고 연행 대기
+    if (p.state === 'collar') { POLICE.copCollar(p, dt); continue; } // 경찰: 갱단원 연행
     if ((p.percT = (p.percT || 0) - dt) <= 0) {
       p.percT = 0.35 + Math.random() * 0.2;
       if (p.kind !== 'civ' && p.kind !== 'medic' && p.kind !== 'worker') {
@@ -2820,11 +2836,15 @@ function hostUpdatePeds(dt) {
         for (const pl of players) { const d = Math.hypot(pl.x - p.x, pl.z - p.z); if (d < bd && pedHostileTo(p, pl)) { bd = d; best = { kind: pl.me ? 'me' : 'player', id: pl.id }; } }
         for (const q of PEDS) { if (q === p || q.state === 'dead' || q.state === 'parked') continue; const d = Math.abs(q.x - p.x) + Math.abs(q.z - p.z); if (d < bd && pedHostileTo(p, { isPed: true, ref: q })) { bd = d; best = { kind: 'ped', id: q.id }; } }
         if (best) { p.target = best; p.state = 'fight'; if (p.weapon !== 'fist' && p.char) p.char.setWeapon(p.weapon); }
-        else if (p.state === 'fight') { p.target = null; if (p.raid) p.state = 'raid'; else { p.state = 'walk'; snapToNearestEdge(p); } }
+        else if (p.state === 'fight' && p.dispT > G.t && targetPos(p.target)) { /* 체포 영장 집행 중: 목표 유지 */ }
+        else if (p.state === 'fight') { p.target = null; if (p.raid) p.state = 'raid'; else if (p.job === 'hang') { p.state = 'loiter'; p.lx = undefined; } else { p.state = 'walk'; snapToNearestEdge(p); } }
       }
     }
-    if (p.state === 'walk') pedWalk(p, dt);
-    else if (p.state === 'idle') { p.spd = 0; if (p.timer <= 0) p.state = 'walk'; }
+    if (p.state === 'walk') { if (p.job === 'hang') p.state = 'loiter'; else if (!pedRoutineTick(p, dt)) pedWalk(p, dt); }
+    else if (p.state === 'idle') { p.spd = 0; if (p.phone) { p.act = 'drink'; p.actT = 0.5; } if (p.timer <= 0) { p.state = 'walk'; p.phone = false; if (p.job === 'clerk') p.job = 'walk'; } }
+    else if (p.state === 'goto') pedGoto(p, dt);
+    else if (p.state === 'sit') { p.spd = 0; if (p.timer <= 0) { p.state = 'walk'; snapToNearestEdge(p); } }
+    else if (p.state === 'loiter') { pedLoiter(p, dt); }
     else if (p.state === 'flee') { pedFlee(p, dt); }
     else if (p.state === 'fight') { pedFight(p, dt); }
     else if (p.state === 'raid') { pedRaidMove(p, dt); }
@@ -2842,7 +2862,7 @@ function snapToNearestEdge(p) {
   p.e = best.id; p.t = t; p.side = side; p.dir = Math.random() < 0.5 ? 1 : -1; p.rejoin = true;
 }
 function pedWalk(p, dt) {
-  const E = EDGES[p.e]; const a = NODES[E.a], b = NODES[E.b]; const sp = p.kind === 'police' ? 1.5 : 1.35 + (p.seed % 5) * 0.08;
+  const E = EDGES[p.e]; const a = NODES[E.a], b = NODES[E.b]; const sp = pedJobSpeed(p);
   p.t += p.dir * sp * dt;
   if (p.t < 0 || p.t > E.len) {
     const node = p.t < 0 ? a : b; const opts = node.edges.filter(x => x !== p.e && !EDGES[x].bridge); const ne = opts.length ? pick(opts) : p.e; const NE = EDGES[ne];
@@ -2855,7 +2875,7 @@ function pedWalk(p, dt) {
   if (md > 0.01) { const k = p.rejoin ? Math.min(1, sp * 2.5 * dt / md) : 1; p.x += mx * k; p.z += mz * k; if (p.rejoin && md < 0.5) p.rejoin = false; if (md > 0.02) p.yaw = dampAng(p.yaw, Math.atan2(mx, mz), 8, dt); }
   p.spd = sp; p.y = groundHeight(p.x, p.z, p.y + 1);
   if (p.rejoin) { const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); p.x = r.x; p.z = r.z; }
-  if (Math.random() < dt * 0.01 && p.char) p.char.say(pick(PED_LINES[p.kind] || PED_LINES.civ), 4);
+  if (Math.random() < dt * 0.01 && p.char) p.char.say(pick((p.job && JOB_LINES[p.job]) || PED_LINES[p.kind] || PED_LINES.civ), 4);
 }
 function pedRaidMove(p, dt) {
   if (!G.raid) { p.raid = false; p.state = 'walk'; snapToNearestEdge(p); return; }
@@ -2881,7 +2901,7 @@ function targetPos(tg) {
 }
 function pedFight(p, dt) {
   const tp = targetPos(p.target); if (!tp) { p.state = p.raid ? 'raid' : 'walk'; p.target = null; if (!p.raid) snapToNearestEdge(p); return; }
-  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee' }); sfx('punch', p.x, p.z); } }
+  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
   const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz);
   const W = WEAPONS[p.weapon]; const ranged = !W.melee; const want = ranged ? (p.kind === 'police' ? 14 : 11) : 1.3;
   p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt);
@@ -2906,7 +2926,7 @@ function pedFight(p, dt) {
       const mz = { x: p.x + Math.sin(p.yaw) * 0.5, y: p.y + 1.45, z: p.z + Math.cos(p.yaw) * 0.5 };
       showShot(mz, end, W.sfx, hit ? (p.target.kind === 'ped' ? 'blood' : 'blood') : 'dust');
       NET.send({ t: 'shot', a: [mz.x, mz.y, mz.z], b: [end.x, end.y, end.z], w: p.weapon, i: hit ? 'blood' : 'dust' });
-      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun' });
+      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun', w: p.weapon });
     } else if (d < 1.8) {
       p.fireT = 0.7; p.act = Math.random() < 0.5 ? 'punchR' : 'punchL'; p.actT = 0;
       if (p.weapon === 'bat') p.act = 'bat';
@@ -2949,7 +2969,7 @@ function pedDamage(p, amt, from, opts = {}) {
   if (opts.kind === 'gun' || p.hp <= 0) panicAround(p.x, p.z, 30);
 }
 function panicAround(x, z, r) {
-  for (const q of PEDS) if ((q.kind === 'civ' || q.kind === 'worker' || q.kind === 'medic') && (q.state === 'walk' || q.state === 'idle' || q.state === 'talk' || q.state === 'club') && Math.abs(q.x - x) < r && Math.abs(q.z - z) < r) { q.state = 'flee'; q.timer = rnd(6, 12); q.fx = x; q.fz = z; q.dance = -1; }
+  for (const q of PEDS) if ((q.kind === 'civ' || q.kind === 'worker' || q.kind === 'medic') && (q.state === 'walk' || q.state === 'idle' || q.state === 'talk' || q.state === 'club' || q.state === 'sit' || q.state === 'goto') && Math.abs(q.x - x) < r && Math.abs(q.z - z) < r) { q.state = 'flee'; q.timer = rnd(6, 12); q.fx = x; q.fz = z; q.dance = -1; }
   for (const an of ANIMALS) if (!an.S.predator && an.state !== 'dead' && an.state !== 'follow' && Math.abs(an.x - x) < r && Math.abs(an.z - z) < r) { an.state = 'flee'; an.timer = 6; an.fx = x; an.fz = z; }
 }
 function spawnPickup(x, z, amount, id) {
@@ -2985,7 +3005,7 @@ function raidUpdate(dt) {
   announce(t1, t2); NET.send({ t: 'ann', a: t1, b: t2 });
 }
 // ----- render peds (all clients) -----
-const PED_ANIM_STATES = ['walk', 'idle', 'flee', 'fight', 'dead', 'knocked', 'club', 'dance', 'talk', 'parked'];
+const PED_ANIM_STATES = ['walk', 'idle', 'flee', 'fight', 'dead', 'knocked', 'club', 'dance', 'talk', 'parked', 'goto', 'sit', 'loiter', 'surrender', 'collar'];
 function renderPeds(dt, cam) {
   const view = Q().npcView;
   for (const p of PEDS) {
@@ -2996,7 +3016,8 @@ function renderPeds(dt, cam) {
     if (!G.isHost && p.tx !== undefined) { p.x = damp(p.x, p.tx, 10, dt); p.z = damp(p.z, p.tz, 10, dt); p.y = damp(p.y, p.ty, 10, dt); p.yaw = dampAng(p.yaw, p.tyaw, 10, dt); }
     c.root.position.set(p.x, p.y, p.z); c.root.rotation.y = p.yaw;
     const wantShadow = d < 45; if (wantShadow !== p.shadowOn) { c.setShadow(wantShadow); p.shadowOn = wantShadow; }
-    const st = p.state === 'dead' ? 'dead' : p.state === 'knocked' ? 'knocked' : 'normal';
+    const st = p.state === 'dead' ? 'dead' : p.state === 'knocked' ? 'knocked' : p.state === 'sit' ? 'sit' : 'normal';
+    if (p.state === 'sit') c.root.position.y = p.y + 0.5 - 0.95;
     c.setWeapon(((p.state === 'fight' || p.state === 'raid') && p.weapon !== 'fist') ? p.weapon : 'fist');
     c.update(dt, { speed: p.spd, grounded: true, state: st, aiming: p.aiming && p.state === 'fight', aimPitch: 0, action: p.act, actionT: p.actT, dance: (p.state === 'club' || p.state === 'dance') ? p.dance : -1, guard: p.state === 'fight' && p.weapon === 'fist', idleLook: 1, work: p.kind === 'worker' && p.state === 'idle' });
   }
@@ -3087,6 +3108,8 @@ function runOverCheck(v, by) {
   if (v.kind === 'horse') return;
   for (const q of PEDS) { if (q.state === 'dead' || q.state === 'parked' || q.state === 'knocked') continue; if (Math.abs(q.x - v.x) > 5 || Math.abs(q.z - v.z) > 5) continue; if (hit(q.x, q.z)) { const tg = { kind: 'ped', id: q.id }; dealDamage(tg, sp * 4.5, by === 'me' ? ME.id : 'n', { kind: 'car' }); q.x += fx * 2; q.z += fz * 2; if (G.isHost) { q.state = q.hp > 0 ? 'knocked' : 'dead'; q.timer = q.hp > 0 ? 2.5 : 25; } sfx('punch', q.x, q.z); FX.impact({ x: q.x, y: q.y + 1, z: q.z }, 'blood'); v.speed *= 0.85; } }
   if (by !== 'me' && !ME.dead && !ME.vehicle && hit(ME.x, ME.z) && Math.abs(ME.y - v.y) < 2) { ME.takeDamage(sp * 3.5, 'car'); ME.knock(fx * sp * 0.6, fz * sp * 0.6); }
+  // 내가 운전한 차에 다른 플레이어가 치임 (같은 공간·1초에 한 번) → 피해는 맞은 쪽이 적용, 사고 기록은 신고 수사에 쓰인다
+  if (by === 'me') for (const [id, rp] of G.players) { if (rp.dead || rp.veh || !sameSpace(rp) || Math.abs(rp.y - v.y) > 2 || !hit(rp.x, rp.z)) continue; if (G.t < (rp._carHitT || 0)) continue; rp._carHitT = G.t + 1; dealDamage({ kind: 'player', id }, sp * 3.5, ME.id, { kind: 'car', w: 'car' }); FX.impact({ x: rp.x, y: rp.y + 1, z: rp.z }, 'blood'); sfx('punch', rp.x, rp.z); v.speed *= 0.85; }
   for (const an of ANIMALS) { if (an.state === 'dead') continue; if (Math.abs(an.x - v.x) > 6 || Math.abs(an.z - v.z) > 6) continue; if (hit(an.x, an.z)) dealDamage({ kind: 'animal', id: an.id }, sp * 4, by === 'me' ? ME.id : 'n', { kind: 'car' }); }
 }
 // ================= ANIMALS =================
@@ -3161,6 +3184,88 @@ function renderAnimals(dt, cam) {
 }
 
 
+// ================= NPC 일과 (시간대별 직업 · 행동) =================
+// 방장 화면에서만 판단한다(상태는 기존 동기화로 게스트에게 전달). 결정은 몇 초에 한 번만 → 모바일에서도 가볍다.
+const JOB_LINES = {
+  commute: ['지각이다 지각!', '오늘도 출근…', '퇴근하고 싶다', '회의 몇 시였지?'], shop: ['장 보러 가야지', '세일한다던데', '뭐 사러 왔더라?'],
+  jog: ['헉헉… 3km 남았다', '조깅 최고!', '오늘은 한 바퀴 더!'], bench: ['아이고 다리야', '날씨 좋다~', '잠깐 쉬었다 가자'],
+  phone: ['여보세요? 응, 지금 가는 중', '아 진짜? 대박', '나중에 다시 걸게'], delivery: ['배달 왔습니다!', '다음 집 어디였지', '빨리빨리!'],
+  home: ['이제 집에 가야지', '피곤하다… 자러 가자'], patrol: ['순찰 중입니다', '이상 무!', '안전 운전하세요'], hang: ['우리 구역에서 뭐 해?', '뭘 봐?', '형님 언제 오냐'],
+  work: ['공사중입니다!', '안전모 필수!'], clerk: ['어서오세요~', '1+1 행사 중이에요', '찾으시는 거 있으세요?'],
+};
+const JOB_NAME = { commute: '직장인', shop: '쇼핑객', jog: '조깅', bench: '휴식', phone: '통화 중', delivery: '배달원', home: '귀가', patrol: '순찰', hang: '조직원', work: '작업자', clerk: '점원', walk: '산책' };
+function isNight() { return G.time >= 23 || G.time < 5; }
+function pedPickJob(p) {
+  const h = G.time;
+  if (p.kind === 'police') return 'patrol';
+  if (p.kind === 'gangA' || p.kind === 'gangB') return Math.random() < 0.7 ? 'hang' : 'walk';
+  if (p.kind === 'worker') return 'work';
+  if (p.kind === 'medic') return 'walk';
+  const rush = (h >= 7 && h < 9.5) || (h >= 17 && h < 19.5), early = h >= 5 && h < 8, eve = h >= 18 && h < 22, day = h >= 9 && h < 21;
+  const w = { commute: rush ? 4 : 0.5, shop: day ? 2.2 : 0.2, jog: early || eve ? 1.6 : 0.25, bench: day ? 1.5 : 0.3, phone: 0.8, delivery: h >= 10 && h < 22 ? 1 : 0.2, walk: 1.4, home: isNight() ? 4 : h >= 21 ? 1.5 : 0.15 };
+  let tot = 0; for (const k in w) tot += w[k]; let r = Math.random() * tot; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return 'walk';
+}
+function pedJobSpeed(p) { const j = p.job; return j === 'jog' ? 3.4 : j === 'delivery' ? 2.1 : j === 'commute' ? 1.8 : j === 'patrol' ? 1.5 : j === 'hang' ? 0.9 : 1.35 + (p.seed % 5) * 0.08; }
+function pedSayJob(p) { if (p.char && Math.random() < 0.5) p.char.say(pick(JOB_LINES[p.job] || PED_LINES[p.kind] || PED_LINES.civ), 3.5); }
+// 스폰 직후: 직업 정하기 + 일부는 건물 문에서 걸어 나오거나(점원은 가게 앞에 선다)
+function pedStartRoutine(p) {
+  p.job = pedPickJob(p); p.jobT = rnd(6, 20); p.goal = null; p.ax = p.x; p.az = p.z;
+  if (p.kind !== 'civ' || p.state !== 'walk') return;
+  const h = G.time; if (h < 6 || h >= 23) return;
+  const near = buildingsNear(p.x, p.z); let best = null, bd = 30;
+  for (const b of near) { const d = Math.hypot(b.door.x - p.x, b.door.z - p.z); if (d < bd && Math.abs(groundHeight(b.door.x, b.door.z) - p.y) < 2) { bd = d; best = b; } }
+  if (!best) return;
+  if (best.fac && Math.random() < 0.25 && h >= 8 && h < 22) { // 가게 앞 점원
+    p.job = 'clerk'; p.x = best.door.x + best.door.sx * 0.8; p.z = best.door.z + best.door.sz * 0.8; p.y = groundHeight(p.x, p.z); p.yaw = Math.atan2(best.door.sx, best.door.sz); p.state = 'idle'; p.timer = rnd(40, 90); return;
+  }
+  if (Math.random() < 0.35) { p.x = best.door.x; p.z = best.door.z; p.y = groundHeight(p.x, p.z); snapToNearestEdge(p); } // 건물에서 나와 인도로
+}
+// 걷는 중 일과 판단 (몇 초에 한 번)
+function pedRoutineTick(p, dt) {
+  if ((p.jobT = (p.jobT ?? 8) - dt) > 0) return false;
+  p.jobT = rnd(5, 12); const j = p.job || 'walk';
+  if (j === 'commute' || j === 'shop' || j === 'home' || j === 'delivery') {
+    if (Math.random() < (j === 'home' ? 0.7 : j === 'delivery' ? 0.6 : 0.35)) { // 근처 건물로 들어간다
+      let best = null, bd = 24;
+      for (const b of buildingsNear(p.x, p.z)) { if (j === 'shop' && !b.fac && Math.random() < 0.6) continue; const d = Math.hypot(b.door.x - p.x, b.door.z - p.z); if (d < bd && d > 2 && Math.abs(groundHeight(b.door.x, b.door.z) - p.y) < 2) { bd = d; best = b; } }
+      if (best) { p.state = 'goto'; p.goal = { x: best.door.x, z: best.door.z, act: 'enter' }; p.gT = 0; pedSayJob(p); return true; }
+    }
+  } else if (j === 'bench' || (j === 'walk' && Math.random() < 0.2)) {
+    let best = null, bd = 45;
+    for (const b of BENCHES) { if (b.taken && b.taken > G.t) continue; const d = Math.hypot(b.x - p.x, b.z - p.z); if (d < bd) { bd = d; best = b; } }
+    if (best) { best.taken = G.t + 70; p.state = 'goto'; p.goal = { x: best.x + Math.sin(best.yaw) * 0.8, z: best.z + Math.cos(best.yaw) * 0.8, act: 'sit', b: best }; p.gT = 0; return true; }
+  } else if (j === 'phone' && Math.random() < 0.6) { p.state = 'idle'; p.timer = rnd(6, 14); p.phone = true; pedSayJob(p); return true; }
+  else if (j === 'patrol' && Math.random() < 0.35) { p.state = 'idle'; p.timer = rnd(3, 6); pedSayJob(p); return true; }
+  else if (j === 'jog' && Math.random() < 0.15) { p.state = 'idle'; p.timer = rnd(3, 6); p.act = 'drink'; p.actT = 0; pedSayJob(p); return true; } // 물 한 모금
+  if (Math.random() < 0.2) pedSayJob(p);
+  return false;
+}
+function pedGoto(p, dt) {
+  const g = p.goal; if (!g) { p.state = 'walk'; snapToNearestEdge(p); return; }
+  p.gT = (p.gT || 0) + dt; const dx = g.x - p.x, dz = g.z - p.z, d = Math.hypot(dx, dz);
+  if (p.gT > 25) { p.goal = null; p.state = 'walk'; snapToNearestEdge(p); return; } // 길이 막힘 → 포기
+  if (d < 0.7) {
+    if (g.act === 'enter') { p.state = 'parked'; p.goal = null; p.nextTry = G.t + rnd(4, 12); return; } // 건물 안으로 들어감
+    if (g.act === 'sit') { const b = g.b; p.state = 'sit'; p.x = b.x - Math.sin(b.yaw) * 0.05; p.z = b.z - Math.cos(b.yaw) * 0.05; p.y = b.y ?? groundHeight(b.x, b.z); p.yaw = b.yaw; p.spd = 0; p.timer = rnd(20, 50); p.goal = null; pedSayJob(p); return; }
+  }
+  p.spd = p.job === 'jog' ? 3.2 : 1.6; p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 7, dt);
+  p.x += Math.sin(p.yaw) * p.spd * dt; p.z += Math.cos(p.yaw) * p.spd * dt;
+  const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); p.x = r.x; p.z = r.z; p.y = groundHeight(p.x, p.z, p.y + 1);
+}
+// 갱단: 자기 구역(스폰 지점) 근처에서 어슬렁거린다
+function pedLoiter(p, dt) {
+  if (p.lx === undefined || Math.hypot(p.lx - p.x, p.lz - p.z) < 0.6) {
+    if (p.timer > 0 && p.spd === 0) return; // 서서 쉬는 중
+    if (p.lx !== undefined && Math.random() < 0.6) { p.spd = 0; p.timer = rnd(3, 9); p.lx = p.x; p.lz = p.z; if (Math.random() < 0.3) pedSayJob(p); return; }
+    const a = Math.random() * TAU, r = rnd(1, 6); p.lx = (p.ax ?? p.x) + Math.sin(a) * r; p.lz = (p.az ?? p.z) + Math.cos(a) * r;
+  }
+  if (p.timer > 0 && p.spd === 0) return;
+  const dx = p.lx - p.x, dz = p.lz - p.z; p.spd = 0.9; p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 5, dt);
+  p.x += Math.sin(p.yaw) * p.spd * dt; p.z += Math.cos(p.yaw) * p.spd * dt;
+  const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); if (r.hit) p.lx = undefined; p.x = r.x; p.z = r.z; p.y = groundHeight(p.x, p.z, p.y + 1);
+}
+
+
 // ================= PLAYER =================
 const ME = {
   id: 'me', name: '플레이어', x: 0, y: LAND, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, grounded: true, hp: 100, armor: 0, stamina: 100, money: 50000,
@@ -3168,14 +3273,16 @@ const ME = {
   skills: { shoot: 0, fight: 0, drive: 0, fit: 0, swim: 0, study: 0 }, garage: [], outfit: null, vehicle: null, seat: null, dead: false, deadT: 0, spawn: null,
   char: null, grudge: {}, drunk: 0, dance: -1, action: null, actionT: 1, aiming: false, swim: false, knockT: 0, sitBench: null, reloadT: 0, fireT: 0, punchSide: 0,
   combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
-  takeDamage(amt, from) {
+  takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (this.armor > 0) { const a = Math.min(this.armor, amt * 0.65); this.armor -= a; amt -= a; }
     this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);
-    if (this.hp <= 0 && this.wanted > 0 && !this.jail && PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - this.x, q.z - this.z) < 35)) { this.hp = 25; LAW.arrest(); return; }
+    const rec = () => { if (typeof POLICE !== 'undefined') POLICE.onHurt(from, amt, w); }; // 신고용 피해 기록
+    if (this.hp <= 0 && this.wanted > 0 && !this.jail && PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - this.x, q.z - this.z) < 35)) { this.hp = 25; rec(); LAW.arrest(); return; }
     if (this.hp <= 0) this.die(from);
+    rec();
   },
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
@@ -3190,6 +3297,7 @@ const ME = {
     if (!sp) { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } } sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 }; }
     this.x = sp.x; this.z = sp.z; this.y = groundHeight(this.x, this.z) + 0.1; this.vx = this.vz = this.vy = 0;
     $('#death').classList.add('hidden'); toast(`🏥 병원비 ${fmtMoney(fee)} 지불`); G.godT = G.t + 3;
+    if (this.warrant) { this.wanted = 2; toast('🚨 체포 영장은 아직 유효하다 — 경찰이 찾고 있다', 3000); }
   },
 };
 const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
@@ -3214,6 +3322,7 @@ function initInput() {
     if (k === 'h' && ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); }
     if (k === 'l' && ME.vehicle && ME.vehicle.M.police) ME.vehicle.siren = !ME.vehicle.siren;
     if (k === 'u') COMFORT.unstick(true);
+    if (k === 'j') POLICE.open();
     if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1;
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
@@ -3266,17 +3375,24 @@ function raycastWorld(o, d, maxD, opt = {}) {
 // ----- damage routing -----
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
-  if (tg.kind === 'me') { if (from !== ME.id) ME.takeDamage(amt, from); return; }
+  if (tg.kind === 'me') {
+    if (from === ME.id) return; const hb = ME.hp; ME.takeDamage(amt, from, opts.w);
+    if (G.isHost && /^n\d+$/.test(String(from))) POLICE.hostSelfHit(String(from), opts.w, opts.kind, hb - Math.max(0, ME.hp)); // 방장 화면의 NPC가 방장을 때림 → 사건 기록
+    return;
+  }
   // PvP: 피해는 오직 맞은 사람에게만 — 공격자 자신(같은 id)은 절대 피해를 받지 않는다. 맞은 쪽이 hitAck로 결과를 돌려준다.
   if (tg.kind === 'player') {
     if (!tg.id || tg.id === ME.id || tg.id === from) return;
     const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
-    NET.send({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind }); return;
+    const w = opts.w || (opts.kind === 'car' ? 'car' : opts.kind === 'boom' ? 'boom' : from === ME.id ? ME.weapon : '');
+    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w }); return;
   }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
   if (tg.kind === 'veh') { const v = vehicles.get(tg.id); if (v) v.damage(amt, from); }
 }
+// 플레이어 피해 메시지 전송 (방장은 보내는 순간 사건 기록 → 신고 수사의 근거)
+function sendDmg(msg) { NET.send(msg); if (G.isHost && typeof POLICE !== 'undefined') POLICE.hostSee(msg, ME.id); }
 function notifyPlayer(id, msg) { if (id === ME.id) handlePersonal(msg); else { msg.to = id; NET.send(msg); } }
 function handlePersonal(m) {
   if (m.t === 'wanted') addWanted(m.add);
@@ -3295,7 +3411,7 @@ function damageArea(x, y, z, r, dmg, by) {
   if (G.isHost) {
     for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked') continue; const d = Math.hypot(p.x - x, p.z - z); if (d < r) pedDamage(p, dmg * (1 - d / r), from, { kind: 'gun' }); }
     for (const a of ANIMALS) { const d = Math.hypot(a.x - x, a.z - z); if (d < r) animalDamage(a, dmg * (1 - d / r), from); }
-    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
+    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) sendDmg({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom', w: 'boom' }); }
   }
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
@@ -3940,7 +4056,25 @@ function anchorOf(o) { // 실내에 있는 사람은 건물 문 앞에 있는 �
   return o;
 }
 function myBi() { return INTERIOR.cur ? INTERIOR.cur.b.id : -1; }
-function sameSpace(rp) { return (rp.bi ?? -1) === myBi(); }
+// 같은 공간 = 같은 건물(또는 둘 다 밖) + 실내라면 같은 층 (높이 차 3.6m 미만 — 다락은 같은 층으로 친다)
+function sameSpace(rp) { const bi = rp.bi ?? -1; if (bi !== myBi()) return false; return bi < 0 || Math.abs((rp.y ?? ME.y) - ME.y) < 3.6; }
+// 직사각형에서 구멍(직사각형들)을 뺀 나머지 조각들 (층 바닥판의 계단·승강로 구멍)
+function rectMinus(r, holes) {
+  let out = [r];
+  for (const h of holes) {
+    const nx = [];
+    for (const a of out) {
+      if (h.x1 <= a.x0 || h.x0 >= a.x1 || h.z1 <= a.z0 || h.z0 >= a.z1) { nx.push(a); continue; }
+      const ix0 = Math.max(a.x0, h.x0), ix1 = Math.min(a.x1, h.x1);
+      if (a.x0 < ix0) nx.push({ x0: a.x0, x1: ix0, z0: a.z0, z1: a.z1 });
+      if (ix1 < a.x1) nx.push({ x0: ix1, x1: a.x1, z0: a.z0, z1: a.z1 });
+      if (a.z0 < h.z0) nx.push({ x0: ix0, x1: ix1, z0: a.z0, z1: h.z0 });
+      if (h.z1 < a.z1) nx.push({ x0: ix0, x1: ix1, z0: h.z1, z1: a.z1 });
+    }
+    out = nx;
+  }
+  return out.filter(q => q.x1 - q.x0 > 0.01 && q.z1 - q.z0 > 0.01);
+}
 // 플레이어 발밑 높이: 지형 + 실내 바닥/계단 + 올라설 수 있는 건물 옥상·물체 윗면
 function floorAt(x, z, y) {
   let g = groundHeight(x, z, y + 0.5);
@@ -3972,11 +4106,12 @@ const INTERIOR = {
     if (this.cur && this.cur.b === b) return;
     if (this.cur) this.dispose();
     this.clearRoof();
-    const I = this.build(b); this.cur = I; this.cool = G.t + 1.2;
+    const topF = this.tall(b) ? this.floorsOf(b) - 1 : 0, f0 = opts.fromRoof ? topF : 0;
+    const I = this.build(b, f0); this.cur = I; this.cool = G.t + 1.2; this.elevInit(I, f0);
     const sp = opts.fromRoof ? I.elev : I.spawn;
-    ME.x = sp.x; ME.z = sp.z; ME.y = I.O.y + 0.02; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; CAM.yaw = Math.PI; CAM.pitch = 0.12;
+    ME.x = sp.x; ME.z = sp.z; ME.y = I.O.y + f0 * I.FH + 0.02; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; CAM.yaw = Math.PI; CAM.pitch = 0.12;
     ME.dance = -1; ME.sitBench = null;
-    if (this.light) { this.light.position.set(I.O.x, I.O.y + I.H - 0.6, I.O.z); this.light.intensity = 40; this.light.distance = Math.max(I.W, I.D) * 1.6; }
+    this.placeLight(I);
     sfx('door'); toast(`🚪 ${I.title} — 문으로 걸어 나가거나 E: 나가기`, 2600);
     NET.send({ t: 'chat', m: `🚪 ${ME.name}님이 ${I.title}에 들어갔다`, sys: 1, quiet: 1 });
   },
@@ -4001,8 +4136,13 @@ const INTERIOR = {
     toast(`🏙️ 옥상 (${Math.round(y - b.y0)}m) — 떨어지면 크게 다친다! 엘리베이터에서 E로 내려가기`, 3500);
   },
   clearRoof() { const R = this.roof; if (!R) return; scene.remove(R.g); R.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== MAT.plain) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); removeCollider(R.col); this.roof = null; },
-  dispose() {
+  placeLight(I) { if (this.light) { this.light.position.set(I.O.x, I.O.y + I.center * I.FH + I.H - 0.6, I.O.z); this.light.intensity = 40; this.light.distance = Math.max(I.W, I.D) * 1.6; } },
+  // 계단·엘리베이터로 층이 바뀌면 그 층 ±1층으로 다시 만든다 (엘리베이터 상태는 유지)
+  setFloor(f) { const I = this.cur; if (!I) return; const b = I.b; this.dispose(true); const N = this.build(b, f); this.cur = N; if (this.el) { this.el.I = N; N.plats.push(this.el.plat); this.elevSync(); } this.placeLight(N); },
+  dispose(keepEl) {
     const I = this.cur; if (!I) return; this.cur = null;
+    for (const k in I.dyn.doors) { const d = I.dyn.doors[k]; if (d.col) removeCollider(d.col); d.col = null; }
+    if (!keepEl) this.elevDispose();
     scene.remove(I.group);
     I.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.userData.shared) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
     for (const c of I.cols) removeCollider(c);
@@ -4016,7 +4156,8 @@ const INTERIOR = {
     if (I) {
       if (ME.dead || ME.jail || ME.vehicle || Math.abs(ME.x - I.O.x) > 120 || Math.abs(ME.z - I.O.z) > 120) { this.dispose(); return; }
       // 출구 쪽으로 걸어가면 자동으로 나간다
-      if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) this.exit();
+      if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) { this.exit(); return; }
+      if (I.tall) { this.elevUpdate(dt); const C2 = this.cur; if (C2 && !this.inCar()) { const cf = this.floorOfY(C2, ME.y); if (cf !== C2.center) this.setFloor(cf); } }
       return;
     }
     if (this.roof) { const R = this.roof; if (Math.hypot(ME.x - R.x, ME.z - R.z) > 160 || ME.y < R.y - 30) this.clearRoof(); }
@@ -4038,16 +4179,19 @@ const INTERIOR = {
   interacts(cand) {
     const I = this.cur;
     if (I) {
-      { const de = Math.hypot(ME.x - I.exit.x, ME.z - I.exit.z); if (de < 2.4) cand(de * 0.5 + 0.05, { label: '🚪 밖으로 나가기', key: 'E', fn: () => this.exit() }); }
+      { const de = Math.hypot(ME.x - I.exit.x, ME.z - I.exit.z); if (de < 2.4 && Math.abs(ME.y - I.O.y) < 1.5) cand(de * 0.5 + 0.05, { label: '🚪 밖으로 나가기', key: 'E', fn: () => this.exit() }); }
+      if (I.tall && this.el) this.elevInteracts(cand);
       for (const it of I.items) { const d = Math.hypot(ME.x - it.x, ME.z - it.z); if (d < (it.r || 1.8) && Math.abs(ME.y - (it.y ?? I.O.y)) < 1.6) cand(d * 0.5, { label: it.label, key: 'E', fn: it.fn }); }
       return;
     }
     const R = this.roof; if (R && Math.hypot(ME.x - R.x, ME.z - R.z) < 3 && Math.abs(ME.y - R.y) < 1.5) cand(0.3, { label: '🛗 엘리베이터 (1층으로 내려가기)', key: 'E', fn: () => this.enter(R.b, { fromRoof: true }) });
   },
   // ---------- 실내 생성 ----------
-  build(b) {
+  build(b, center = 0) {
     const O = this.slot(b); const kind = b.kind; const fac = b.fac;
-    const loft = ['house', 'apartment', 'villa', 'home', 'hotel'].includes(kind);
+    const tall = this.tall(b); const NF = tall ? this.floorsOf(b) : 1; center = clamp(center | 0, 0, NF - 1);
+    const lo = Math.max(0, center - 1), hi = Math.min(NF - 1, center + 1); // 지금 층 ±1층만 만든다 (15층 건물도 가볍게)
+    const loft = ['house', 'apartment', 'villa', 'home', 'hotel'].includes(kind) && !tall;
     const big = ['church', 'factory', 'casino', 'pool', 'gym', 'dealer', 'barn'].includes(kind);
     const W = clamp(Math.round(b.w * 0.8), big ? 20 : 14, big ? 34 : 28), D = clamp(Math.round(b.d * 0.75), big ? 18 : 12, big ? 28 : 22);
     const H = loft ? 6.6 : (kind === 'church' || kind === 'factory' || kind === 'barn' || kind === 'casino') ? 8 : 4.2;
@@ -4055,27 +4199,52 @@ const INTERIOR = {
     const R = (a, c) => a + (c - a) * rnd2(); const RP = (a) => a[Math.floor(rnd2() * a.length)];
     const mb = new MB(); const cols = []; const plats = []; const items = []; const group = new THREE.Group(); const extra = [];
     const X = (lx) => O.x + lx, Z = (lz) => O.z + lz;
-    const box = (lx, ly, lz, w, h, d, col, solid) => { mb.box(X(lx), O.y + ly, Z(lz), w, h, d, typeof col === 'number' ? C(col) : col); if (solid) cols.push(addCollider(X(lx) - w / 2, Z(lz) - d / 2, X(lx) + w / 2, Z(lz) + d / 2, O.y + ly + h, 'int', null, O.y + ly - 0.3)); };
+    const FH = H + 0.4, LV = (k) => k * FH; // 층 높이 (바닥 슬래브 0.4 포함)
+    const hw0 = W / 2, hd0 = D / 2;
+    // 높은 건물: 오른쪽 벽 = 계단실(2줄 왕복 계단), 왼쪽 안쪽 모서리 = 엘리베이터 승강로
+    const ST = tall ? { ax0: hw0 - 1.35, ax1: hw0 - 0.05, bx0: hw0 - 2.75, bx1: hw0 - 1.45, z0: -hd0 + 1.6, z1: -hd0 + 1.6 + Math.min(7.5, D - 4.6) } : null;
+    const SH = tall ? { x0: -hw0, x1: -hw0 + 2.4, z0: -hd0, z1: -hd0 + 2.2, dx: -hw0 + 1.2 } : null;
+    const reserved = tall ? [{ x0: ST.bx0 - 0.4, x1: hw0 + 1, z0: ST.z0 - 1.6, z1: ST.z1 + 1.6 }, { x0: -hw0 - 1, x1: SH.x1 + 0.5, z0: -hd0 - 1, z1: SH.z1 + 1.8 }] : [];
+    const inRes = (lx, lz, w = 0, d = 0) => reserved.some(r => lx + w / 2 > r.x0 && lx - w / 2 < r.x1 && lz + d / 2 > r.z0 && lz - d / 2 < r.z1);
+    let furn = false; // 가구 배치 중에는 계단실·승강로 자리를 피한다
+    const box = (lx, ly, lz, w, h, d, col, solid, bo) => { if (furn && inRes(lx, lz, w, d)) return; mb.box(X(lx), O.y + ly, Z(lz), w, h, d, typeof col === 'number' ? C(col) : col, null, bo ? { bottom: true } : undefined); if (solid) cols.push(addCollider(X(lx) - w / 2, Z(lz) - d / 2, X(lx) + w / 2, Z(lz) + d / 2, O.y + ly + h, 'int', null, O.y + ly - 0.3)); };
     const cyl = (lx, ly, lz, r, h, col, seg = 12, r2) => mb.cyl(X(lx), O.y + ly, Z(lz), r, h, C(col), seg, r2 ?? r);
-    const item = (lx, lz, label, fn, r = 1.8, ly = 0) => items.push({ x: X(lx), z: Z(lz), y: O.y + ly, label, fn, r });
+    const item = (lx, lz, label, fn, r = 1.8, ly = 0) => { if (furn && inRes(lx, lz)) { lx = 0; lz = hd0 - 3.2; } items.push({ x: X(lx), z: Z(lz), y: O.y + ly, label, fn, r }); };
     const T = this.theme(kind);
-    // 바닥 · 벽 · 천장
-    box(0, -0.4, 0, W + 0.6, 0.4, D + 0.6, T.floor); plats.push({ x0: X(-W / 2 - 0.3), x1: X(W / 2 + 0.3), z0: Z(-D / 2 - 0.3), z1: Z(D / 2 + 0.3), y: O.y });
-    if (T.tiles) for (let i = -W / 2 + 1; i < W / 2; i += 2) box(i, 0.005, 0, 0.04, 0.01, D, T.tiles);
+    // 바닥 · 벽 · 천장 (층마다)
     const wallT = 0.3, WH = H + 0.2;
-    box(0, 0, -D / 2 - wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
-    box(-W / 2 - wallT / 2, 0, 0, wallT, WH, D, T.wall, true); box(W / 2 + wallT / 2, 0, 0, wallT, WH, D, T.wall, true);
-    box(-(W / 4 + 0.6), 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true); box(W / 4 + 0.6, 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true);
-    box(0, 2.6, D / 2 + wallT / 2, 2.4, WH - 2.6, wallT, T.wall, true);
-    box(0, 0, D / 2 + wallT + 0.4, 2.4, 2.6, 0.2, 0x111111, true); // 문 밖은 막혀 있음 (출구 표시)
-    box(0, 2.62, D / 2 - 0.05, 1.4, 0.35, 0.1, 0x18c860); // 비상구 표시
-    box(0, H, 0, W + 0.6, 0.25, D + 0.6, T.ceil); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + H + 0.4, 'roof', null, O.y + H));
-    for (let i = -W / 2 + 0.05; i <= W / 2; i += W - 0.1) box(i, 0, 0, 0.06, 0.18, D, T.trim); // 걸레받이
-    box(0, 0, -D / 2 + 0.02, W, 0.18, 0.06, T.trim);
-    for (let lx = -W / 2 + 3; lx < W / 2 - 1; lx += 5) for (let lz = -D / 2 + 3; lz < D / 2 - 1; lz += 5) box(lx, H - 0.06, lz, 1.4, 0.05, 0.6, 0xfffbe8);
+    const full = { x0: -W / 2 - 0.3, x1: W / 2 + 0.3, z0: -D / 2 - 0.3, z1: D / 2 + 0.3 };
+    const laneR = (L) => L === 'A' ? { x0: ST.ax0, x1: ST.ax1, z0: ST.z0, z1: ST.z1 } : { x0: ST.bx0, x1: ST.bx1, z0: ST.z0, z1: ST.z1 };
+    const laneOf = (k) => k % 2 ? 'B' : 'A'; // k층에서 올라가는 계단 줄
+    const holes = (k) => !tall || k === 0 ? [] : [{ x0: SH.x0 - 0.3, x1: SH.x1, z0: SH.z0 - 0.3, z1: SH.z1 }, laneR(laneOf(k - 1))];
+    const slab = (k, asFloor) => { // k층 바닥판 (구멍 뚫린 곳 제외) = 아래층 천장
+      for (const r of rectMinus(full, holes(k))) {
+        const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+        box(cx, LV(k) - 0.4, cz, w, 0.4, d, k === 0 ? T.floor : T.ceil, false, true);
+        if (k > 0) { box(cx, LV(k) + 0.002, cz, w, 0.01, d, T.floor); cols.push(addCollider(X(r.x0), Z(r.z0), X(r.x1), Z(r.z1), O.y + LV(k), 'roof', null, O.y + LV(k) - 0.4)); }
+        if (asFloor) plats.push({ x0: X(r.x0), x1: X(r.x1), z0: Z(r.z0), z1: Z(r.z1), y: O.y + LV(k) });
+      }
+    };
+    for (let k = lo; k <= hi; k++) {
+      const y = LV(k); slab(k, true);
+      if (T.tiles) for (let i = -W / 2 + 1; i < W / 2; i += 2) box(i, y + 0.005, 0, 0.04, 0.01, D, T.tiles);
+      box(0, y, -D / 2 - wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
+      box(-W / 2 - wallT / 2, y, 0, wallT, WH, D, T.wall, true); box(W / 2 + wallT / 2, y, 0, wallT, WH, D, T.wall, true);
+      if (k === 0) {
+        box(-(W / 4 + 0.6), 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true); box(W / 4 + 0.6, 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true);
+        box(0, 2.6, D / 2 + wallT / 2, 2.4, WH - 2.6, wallT, T.wall, true);
+        box(0, 0, D / 2 + wallT + 0.4, 2.4, 2.6, 0.2, 0x111111, true); // 문 밖은 막혀 있음 (출구 표시)
+        box(0, 2.62, D / 2 - 0.05, 1.4, 0.35, 0.1, 0x18c860); // 비상구 표시
+      } else box(0, y, D / 2 + wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
+      for (let i = -W / 2 + 0.05; i <= W / 2; i += W - 0.1) box(i, y, 0, 0.06, 0.18, D, T.trim); // 걸레받이
+      box(0, y, -D / 2 + 0.02, W, 0.18, 0.06, T.trim);
+      for (let lx = -W / 2 + 3; lx < W / 2 - 1; lx += 5) for (let lz = -D / 2 + 3; lz < D / 2 - 1; lz += 5) if (!tall || !inRes(lx, lz, 1.4, 0.6)) box(lx, y + H - 0.06, lz, 1.4, 0.05, 0.6, 0xfffbe8, false, true);
+    }
+    if (hi < NF - 1) slab(hi + 1, false); // 위층 바닥 = 천장
+    else { box(0, LV(hi) + H, 0, W + 0.6, 0.25, D + 0.6, T.ceil, false, true); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + LV(hi) + H + 0.4, 'roof', null, O.y + LV(hi) + H)); }
     // 간판 (안쪽 벽)
     const title = fac ? fac.name : b.name;
-    { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(title, T.sub, T.sign) })); sg.position.set(X(0), O.y + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
+    for (let k = lo; k <= hi; k++) { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(k ? `${k + 1}층` : title, k ? title : T.sub, T.sign) })); sg.position.set(X(tall ? 1 : 0), O.y + LV(k) + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
     // 종류별 가구
     const facItem = (lx, lz, label) => { if (fac) item(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, () => UI.openFacility(fac), 2.4); };
     const desk = (lx, lz, col = 0x8a6a4a, mon = true) => { box(lx, 0, lz, 1.6, 0.76, 0.8, col, true); if (mon) { box(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); } box(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); box(lx, 0.45, lz + 0.98, 0.5, 0.55, 0.06, 0x2a2a30); };
@@ -4088,6 +4257,7 @@ const INTERIOR = {
     const plant = (lx, lz) => { cyl(lx, 0, lz, 0.25, 0.45, 0x8a5a3a, 8, 0.2); box(lx, 0.45, lz, 0.6, 0.9, 0.6, 0x3a8a3a); };
     const bars = (x0, z0, x1, z1, h = 3) => { const len = Math.hypot(x1 - x0, z1 - z0); const n = Math.floor(len / 0.3); for (let i = 0; i <= n; i++) { const t = i / n; box(lerp(x0, x1, t), 0, lerp(z0, z1, t), 0.06, h, 0.06, 0x2a2c30); } cols.push(addCollider(X(Math.min(x0, x1)) - 0.12, Z(Math.min(z0, z1)) - 0.12, X(Math.max(x0, x1)) + 0.12, Z(Math.max(z0, z1)) + 0.12, O.y + h, 'int', null, O.y - 0.3)); };
     const hw = W / 2, hd = D / 2;
+    if (lo === 0) { furn = true;
     switch (kind) {
       case 'police': case 'guard': {
         counter(0, -hd + 3.2, Math.min(8, W - 6), 0x30508f); facItem(0, -hd + 4.6, fac ? '🚓 민원실 (출소카드·수배 해제)' : undefined);
@@ -4245,20 +4415,60 @@ const INTERIOR = {
       if (b.plot && b.plot.owner === ME.id) item(0, hd - 5, '📍 내 집을 스폰 지점으로', () => { ME.homePlot = b.plot.id; toast('📍 집이 스폰 지점이 되었다'); saveGame(); }, 1.6);
       if (fac) facItem(0, hd - 6);
     }
-    // 엘리베이터 (높은 건물 → 옥상)
-    let elev = null;
-    if (this.tall(b)) {
-      const ex = -hw + 1.6, ez = -hd + 0.4; box(ex, 0, ez, 2.2, 2.6, 0.1, 0xb8bcc4); box(ex - 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 1.3, 1.1, ez + 0.08, 0.15, 0.3, 0.04, 0xffd34a);
-      elev = { x: X(ex), z: Z(ez + 1.4) };
-      const floors = b.floors || Math.max(2, Math.round((b.top - b.y0) / FLOOR_H));
-      item(ex, ez + 1.4, `🛗 엘리베이터 — 옥상 (${floors}층 · ${Math.round(b.top - b.y0)}m)`, () => this.exit(true), 1.6);
+    furn = false; }
+    // 높은 건물: 계단실 · 엘리베이터 승강로 · 위층 가구
+    const dyn = { doors: {}, lo, hi };
+    if (tall) {
+      const zm = (ST.z0 + ST.z1) / 2, run = ST.z1 - ST.z0, n = 14;
+      const top = LV(hi) + FH + 1;
+      // 두 계단 줄 사이 칸막이 + 계단실 바깥벽 (끝은 열려 있어 드나들 수 있다)
+      box(hw0 - 1.4, LV(lo), zm, 0.08, top - LV(lo), run, 0xd8d4cc, true); box(ST.bx0 - 0.08, LV(lo), zm, 0.12, top - LV(lo), run, 0xd8d4cc, true);
+      for (let k = lo; k <= hi; k++) {
+        const y = LV(k);
+        if (k < NF - 1) { // k층 → k+1층 계단
+          const L = laneOf(k), r = laneR(L), cx = (r.x0 + r.x1) / 2, up = L === 'A' ? -1 : 1; // A: +z 끝에서 -z 쪽으로 올라감, B: 반대
+          for (let i = 0; i < n; i++) { const z = up < 0 ? ST.z1 - (i + 0.5) * run / n : ST.z0 + (i + 0.5) * run / n; box(cx, y, z, r.x1 - r.x0, (i + 1) * FH / n, run / n + 0.01, i % 2 ? 0x9a9690 : 0xa8a49e); }
+          plats.push({ ramp: true, x0: X(r.x0), x1: X(r.x1), z0: Z(ST.z0), z1: Z(ST.z1), y0: O.y + (up < 0 ? LV(k + 1) : y), y1: O.y + (up < 0 ? y : LV(k + 1)) });
+          const hz0 = up < 0 ? ST.z0 : zm, hz1 = up < 0 ? zm : ST.z1; // 계단 밑 (머리 닿는 쪽)은 막는다
+          cols.push(addCollider(X(r.x0), Z(hz0), X(r.x1), Z(hz1), O.y + y + FH * 0.5, 'int', null, O.y + y - 0.3));
+          const lowZ = up < 0 ? ST.z1 + 0.6 : ST.z0 - 0.6; box(cx, y + 0.01, lowZ, r.x1 - r.x0, 0.01, 0.5, 0xf2c23a); // 계단 시작 표시
+        } else { // 꼭대기 층: 옥상 출입문
+          const L = laneOf(k), r = laneR(L), cx = (r.x0 + r.x1) / 2, dz = L === 'A' ? ST.z1 - 0.2 : ST.z0 + 0.2;
+          box(cx, y, dz, r.x1 - r.x0 - 0.1, 2.3, 0.12, 0x5a5e66, true); box(cx, y + 2.35, dz, 0.9, 0.25, 0.14, 0x18c860);
+          item(cx, L === 'A' ? ST.z1 + 0.8 : ST.z0 - 0.8, '🚪 옥상으로 나가기 (계단)', () => this.exit(true), 1.4, y);
+        }
+        if (k > 0) { // 아래층 계단 구멍 앞 난간 (막힌 쪽 끝)
+          const L = laneOf(k - 1), r = laneR(L), rz = L === 'A' ? ST.z1 : ST.z0;
+          box((r.x0 + r.x1) / 2, y, rz, r.x1 - r.x0, 1.05, 0.08, 0x8a8e96, true);
+        }
+        // 엘리베이터 승강로 (층마다 문)
+        box(SH.x1 + 0.06, y, (SH.z0 + SH.z1) / 2, 0.12, FH, SH.z1 - SH.z0, 0xb8bcc4, true);
+        box((SH.x0 + SH.dx - 0.6) / 2, y, SH.z1 + 0.06, SH.dx - 0.6 - SH.x0, FH, 0.12, 0xb8bcc4, true);
+        box((SH.dx + 0.6 + SH.x1 + 0.12) / 2, y, SH.z1 + 0.06, SH.x1 + 0.12 - SH.dx - 0.6, FH, 0.12, 0xb8bcc4, true);
+        box(SH.dx, y + 2.4, SH.z1 + 0.06, 1.2, FH - 2.4, 0.12, 0xb8bcc4, true);
+        box(SH.dx, y + 2.45, SH.z1 + 0.14, 0.7, 0.28, 0.04, 0x111418); // 층 표시창
+        box(SH.dx + 0.95, y + 1.1, SH.z1 + 0.14, 0.16, 0.3, 0.04, 0xffd34a); // 호출 버튼
+        { const fs = textSprite(`🛗 ${k + 1}층`, '#ffd34a'); fs.position.set(X(SH.dx), O.y + y + 2.95, Z(SH.z1 + 0.2)); fs.scale.multiplyScalar(0.7); group.add(fs); }
+        const dm = new THREE.MeshBasicMaterial({ color: 0x9aa0aa }); const dl = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm), dr = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm);
+        dl.position.set(X(SH.dx - 0.3), O.y + y + 1.2, Z(SH.z1 + 0.02)); dr.position.set(X(SH.dx + 0.3), O.y + y + 1.2, Z(SH.z1 + 0.02)); group.add(dl, dr);
+        dyn.doors[k] = { dl, dr, x: X(SH.dx), y: O.y + y, col: null };
+        if (k > 0) { // 위층: 사무실 / 객실 / 병실
+          furn = true; const rr = mulberry32(hashStr('fl' + b.id + ':' + k));
+          const style = ['hotel', 'apartment'].includes(kind) ? 'rooms' : kind === 'hospital' ? 'ward' : 'office';
+          if (style === 'office') { for (let lz = -hd0 + 4.4; lz < hd0 - 2; lz += 3) for (let lx = -hw0 + 4; lx < hw0 - 3.5; lx += 3.2) { if (rr() < 0.15) continue; box(lx, y, lz, 1.6, 0.76, 0.8, 0xd8d4cc, true); box(lx, y + 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, y + 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); box(lx, y, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); } }
+          else if (style === 'ward') { for (let lx = -hw0 + 4; lx < hw0 - 4; lx += 2.6) for (const lz of [-hd0 + 1.6, hd0 - 1.8]) { box(lx, y, lz, 1.0, 0.55, 2.0, 0xe8eef2, true); box(lx, y + 0.55, lz, 0.95, 0.12, 1.9, 0x9ad0f0); } }
+          else { for (let lx = -hw0 + 4.2; lx < hw0 - 4; lx += 3.4) { box(lx, y, -hd0 + 1.4, 1.5, 0.5, 2.1, 0x6a4a2a, true); box(lx, y + 0.5, -hd0 + 1.4, 1.45, 0.16, 2.0, C(rr() < 0.5 ? 0x5a7ab8 : 0xb85a7a)); box(lx + 1.7, y, -hd0 + 1.5, 0.08, 2.4, 2.6, 0xe8e0d0, true); } for (let lx = -hw0 + 4.5; lx < hw0 - 4; lx += 4.5) sofa(lx, hd0 - 2, C(0x6a7a8a), y); }
+          box(-hw0 + 3.6, y, hd0 - 1, 0.6, 0.9, 0.6, 0x3a8a3a); box(hw0 - 4, y, hd0 - 0.8, 0.4, 1.2, 0.4, 0xcfe8f4);
+          furn = false;
+        }
+      }
     }
     // 메쉬 (조명은 굽기: 위쪽 면은 밝고 옆·아래는 어둡게 → 라이트 없이도 실내 느낌, 저사양 폰도 가볍게)
     const g = mb.geo(); const nor = g.attributes.normal, col = g.attributes.color;
     for (let i = 0; i < col.count; i++) { const ny = nor.getY(i), nx = nor.getX(i), nz = nor.getZ(i); const f = ny > 0.5 ? 1.0 : ny < -0.5 ? 0.78 : 0.84 + nx * 0.06 + nz * 0.04; col.setXYZ(i, col.getX(i) * f * T.bright, col.getY(i) * f * T.bright, col.getZ(i) * f * T.bright); }
     const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true })); group.add(mesh);
     scene.add(group);
-    const I = { b, O, W, D, H, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: elev || { x: X(0), z: Z(hd - 1.6) } };
+    const I = { b, O, W, D, H, FH, NF, center, lo, hi, tall, ST, SH, dyn, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: tall ? { x: X(SH.dx), z: Z(SH.z1 + 1.0) } : { x: X(0), z: Z(hd - 1.6) } };
     return I;
   },
   theme(kind) {
@@ -4301,6 +4511,114 @@ const INTERIOR = {
     ]);
   },
 };
+
+
+// ================= 엘리베이터 (높은 건물) =================
+// 승강로 안을 실제로 오르내리는 엘리베이터 칸 + 층마다 미닫이 문. 호출 버튼(E) → 문 열림 → 타서 층 버튼(E) → 문 닫힘 → 이동 → 도착 → 문 열림.
+// 계단은 걸어서 오르내리고, 층이 바뀌면 그 층 ±1층을 다시 만든다. 옥상은 엘리베이터 '옥상' 버튼이나 꼭대기 층 옥상 출입문으로.
+Object.assign(INTERIOR, {
+  el: null,
+  floorsOf(b) { return clamp(Math.round(b.floors || (b.top - b.y0) / FLOOR_H), 2, 30); },
+  floorOfY(I, y) { return clamp(Math.floor((y - I.O.y + 0.8) / I.FH), 0, I.NF - 1); },
+  elevInit(I, at) {
+    this.elevDispose(); if (!I.tall) return;
+    const { O, SH } = I; const X = (lx) => O.x + lx, Z = (lz) => O.z + lz;
+    const w = SH.x1 - SH.x0, d = SH.z1 - SH.z0, cx = (SH.x0 + SH.x1) / 2, cz = (SH.z0 + SH.z1) / 2;
+    const g = new THREE.Group(); g.position.set(X(cx), O.y, Z(cz)); const mb = new MB();
+    mb.box(0, -0.14, 0, w - 0.1, 0.14, d - 0.1, C(0x5a5e66)); mb.box(0, 0.002, 0, w - 0.3, 0.01, d - 0.3, C(0x3a3e46));
+    mb.box(0, 2.56, 0, w - 0.1, 0.1, d - 0.1, C(0xdfe3ea), null, { bottom: true }); mb.box(0, 2.5, 0, 1.0, 0.05, 0.6, C(0xfffbe8), null, { bottom: true });
+    mb.box(0, 0, -d / 2 + 0.1, w - 0.2, 2.56, 0.06, C(0xc8ccd4)); mb.box(-w / 2 + 0.08, 0, 0, 0.06, 2.56, d - 0.2, C(0xbcc0c8)); mb.box(w / 2 - 0.08, 0, 0, 0.06, 2.56, d - 0.2, C(0xbcc0c8));
+    mb.box(0, 0.95, -d / 2 + 0.17, w - 0.5, 0.05, 0.06, C(0x8a8e96)); mb.box(w / 2 - 0.14, 0.9, d / 2 - 0.45, 0.04, 0.6, 0.26, C(0x22262e));
+    for (let i = 0; i < 6; i++) mb.box(w / 2 - 0.17, 1.0 + i * 0.08, d / 2 - 0.45, 0.02, 0.04, 0.06, C(0xffd34a));
+    mb.box(0, 2.62, 0, w - 0.1, 0.4, d - 0.1, C(0x2a2c30)); // 지붕 (승강로에서 보이는 쪽)
+    const g2 = mb.geo(); const car = new THREE.Mesh(g2, new THREE.MeshBasicMaterial({ vertexColors: true })); g.add(car);
+    const dm = new THREE.MeshBasicMaterial({ color: 0xb0b6c0 }); const cl = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm), cr = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm); g.add(cl, cr);
+    const bx = SH.dx - cx; cl.position.set(bx - 0.3, 1.2, d / 2 - 0.1); cr.position.set(bx + 0.3, 1.2, d / 2 - 0.1);
+    const sign = textSprite('🛗', '#ffd34a'); sign.position.set(0, 2.25, -d / 2 + 0.2); sign.scale.multiplyScalar(0.5); g.add(sign);
+    scene.add(g);
+    const e = { I, g, cl, cr, bx, y: at * I.FH, at, target: null, phase: 'open', doors: 1, t: 4, v: 0, roof: false, dir: 0,
+      plat: { x0: X(SH.x0 + 0.05), x1: X(SH.x1 - 0.05), z0: Z(SH.z0 + 0.05), z1: Z(SH.z1 - 0.05), y: O.y + at * I.FH },
+      cols: [addCollider(X(SH.x0), Z(SH.z0), X(SH.x1), Z(SH.z0 + 0.12), 0, 'int', null, 0), addCollider(X(SH.x0), Z(SH.z0), X(SH.x0 + 0.12), Z(SH.z1), 0, 'int', null, 0), addCollider(X(SH.x1 - 0.12), Z(SH.z0), X(SH.x1), Z(SH.z1), 0, 'int', null, 0)], front: null };
+    this.el = e; I.plats.push(e.plat); this.elevSync();
+  },
+  elevDispose() {
+    const e = this.el; if (!e) return; this.el = null; scene.remove(e.g);
+    e.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    for (const c of e.cols) removeCollider(c); if (e.front) removeCollider(e.front); const ch = $('#flChip'); if (ch) ch.style.display = 'none';
+  },
+  // 위치·문·충돌체를 상태에 맞춘다
+  elevSync() {
+    const e = this.el, I = this.cur; if (!e || !I) return; const O = I.O, SH = I.SH; const cy = O.y + e.y;
+    e.g.position.y = cy; e.plat.y = cy; for (const c of e.cols) { c.y0 = cy - 0.2; c.y1 = cy + 2.7; }
+    const op = e.doors; e.cl.position.x = e.bx - 0.3 - op * 0.55; e.cr.position.x = e.bx + 0.3 + op * 0.55;
+    const carBlock = op < 0.75;
+    if (carBlock && !e.front) e.front = addCollider(O.x + SH.dx - 0.6, O.z + SH.z1 - 0.2, O.x + SH.dx + 0.6, O.z + SH.z1 - 0.06, cy + 2.6, 'int', null, cy - 0.2);
+    else if (!carBlock && e.front) { removeCollider(e.front); e.front = null; }
+    if (e.front) { e.front.y0 = cy - 0.2; e.front.y1 = cy + 2.6; }
+    for (const k in I.dyn.doors) {
+      const D = I.dyn.doors[k]; const o = (+k === e.at) ? op : 0;
+      D.dl.position.x = D.x - 0.3 - o * 0.55; D.dr.position.x = D.x + 0.3 + o * 0.55;
+      const block = o < 0.75;
+      if (block && !D.col) D.col = addCollider(D.x - 0.6, O.z + SH.z1 - 0.04, D.x + 0.6, O.z + SH.z1 + 0.16, D.y + 2.4, 'int', null, D.y - 0.3);
+      else if (!block && D.col) { removeCollider(D.col); D.col = null; }
+    }
+  },
+  inCar() {
+    const e = this.el, I = this.cur; if (!e || !I) return false; const lx = ME.x - I.O.x, lz = ME.z - I.O.z, SH = I.SH;
+    return lx > SH.x0 + 0.05 && lx < SH.x1 - 0.05 && lz > SH.z0 + 0.05 && lz < SH.z1 - 0.02 && Math.abs(ME.y - (I.O.y + e.y)) < 1.4;
+  },
+  inDoorway() {
+    const e = this.el, I = this.cur; if (!e || !I || e.at < 0) return false; const lx = ME.x - I.O.x, lz = ME.z - I.O.z, SH = I.SH;
+    return Math.abs(lx - SH.dx) < 0.75 && Math.abs(lz - SH.z1) < 0.45 && Math.abs(ME.y - (I.O.y + e.at * I.FH)) < 1.2;
+  },
+  call(k) {
+    const e = this.el; if (!e) return;
+    if (e.at === k && e.phase !== 'moving') { if (e.phase === 'idle' || e.phase === 'closing') e.phase = 'opening'; else e.t = Math.max(e.t, 5); return; }
+    e.target = k; if (e.phase === 'idle') { e.phase = 'moving'; e.at = -1; } else if (e.phase === 'open' || e.phase === 'opening') { if (!this.inDoorway()) e.phase = 'closing'; }
+  },
+  elevUpdate(dt) {
+    const e = this.el; let I = this.cur; if (!e || !I) return; const FH = I.FH;
+    const riding = this.inCar();
+    switch (e.phase) {
+      case 'open': e.doors = Math.min(1, e.doors + dt * 1.6); e.t -= dt; if (!this.inDoorway() && (e.t <= 0 || (e.target != null && e.target !== e.at && e.t < 4))) e.phase = 'closing'; break;
+      case 'opening': e.doors += dt * 1.6; if (e.doors >= 1) { e.doors = 1; e.phase = 'open'; e.t = 5; if (e.roof && riding && e.at === I.NF - 1) { e.roof = false; this.exit(true); return; } e.roof = false; } break;
+      case 'closing': if (this.inDoorway()) { e.phase = 'opening'; break; } e.doors -= dt * 1.3; if (e.doors <= 0) { e.doors = 0; if (e.target != null && e.target !== e.at) { e.phase = 'moving'; e.at = -1; sfx('ui'); } else { e.phase = 'idle'; e.target = null; } } break;
+      case 'idle': if (e.target != null && e.target !== e.at) { e.phase = 'moving'; e.at = -1; } break;
+      case 'moving': {
+        if (e.target == null) { e.target = clamp(Math.round(e.y / FH), 0, I.NF - 1); }
+        const ty = e.target * FH, dy = ty - e.y, dir = Math.sign(dy); e.dir = dir;
+        const stopD = e.v * e.v / (2 * 2.4);
+        e.v = Math.abs(dy) <= stopD + 0.05 ? Math.max(0.7, e.v - 2.4 * dt) : Math.min(5, e.v + 2.4 * dt);
+        const step = e.v * dt;
+        if (Math.abs(dy) <= step) {
+          e.y = ty; e.v = 0; e.at = e.target; e.target = null; e.phase = 'opening'; e.dir = 0; sfx('levelup');
+          if (riding) { if (e.at !== I.center) { this.setFloor(e.at); I = this.cur; } toast(`🛗 ${e.at + 1}층${e.at === 0 ? ' — 로비' : ''}`, 1400); }
+        } else e.y += dir * step;
+        break;
+      }
+    }
+    if (riding) { const cy = I.O.y + e.y; if (e.phase === 'moving' || (Math.abs(ME.y - cy) < 0.6 && ME.vy <= 0.01)) { ME.y = cy + 0.01; ME.vy = 0; ME.grounded = true; ME.fallTop = null; } }
+    this.elevSync();
+    // 층 표시
+    let ch = $('#flChip'); if (!ch) { ch = document.createElement('div'); ch.id = 'flChip'; document.body.appendChild(ch); }
+    const myF = this.floorOfY(I, ME.y); const carF = e.at >= 0 ? e.at + 1 : Math.floor(e.y / FH + 0.5) + 1;
+    ch.style.display = 'block'; ch.textContent = `🏢 ${myF + 1}층 / ${I.NF}층 · 🛗 ${carF}층${e.phase === 'moving' ? (e.dir > 0 ? ' ▲' : ' ▼') : ''}`;
+  },
+  floorMenu() {
+    const I = this.cur, e = this.el; if (!I || !e) return; const items = [];
+    items.push({ ic: '🏙️', t: '옥상 (R)', d: `${Math.round(I.b.top - I.b.y0)}m · 꼭대기 층에서 옥상으로 나간다`, fn: () => { if (e.at === I.NF - 1 && e.phase !== 'moving') { this.exit(true); return; } e.roof = true; this.call(I.NF - 1); } });
+    for (let k = I.NF - 1; k >= 0; k--) items.push({ ic: k === 0 ? '🚪' : '🔢', t: `${k + 1}층${k === 0 ? ' (로비 · 출구)' : ''}`, d: k === e.at ? '지금 이 층' : '', dis: k === e.at, disMsg: '지금 이 층이다', fn: () => { e.roof = false; this.call(k); sfx('ui'); } });
+    UI.openMenu('🛗 엘리베이터', `${escHtml(I.title)} · ${I.NF}층 건물 — 가고 싶은 층을 누르세요`, items);
+  },
+  elevInteracts(cand) {
+    const I = this.cur, e = this.el, SH = I.SH; const lx = ME.x - I.O.x, lz = ME.z - I.O.z;
+    if (this.inCar()) { cand(0.1, { label: `🛗 층 버튼 누르기 (${e.at >= 0 ? '지금 ' + (e.at + 1) + '층' : '이동 중'})`, key: 'E', fn: () => this.floorMenu() }); return; }
+    const k = this.floorOfY(I, ME.y); const dd = Math.hypot(lx - SH.dx, lz - (SH.z1 + 0.9));
+    if (dd > 1.9 || Math.abs(ME.y - (I.O.y + k * I.FH)) > 1) return;
+    if (e.at === k && e.doors > 0.5) cand(0.15, { label: '🛗 엘리베이터 타기 (층 선택)', key: 'E', fn: () => { ME.x = I.O.x + SH.dx; ME.z = I.O.z + SH.z1 - 0.7; /* 문 쪽을 보고 선다 → 카메라가 칸 안에 들어온다 */ ME.y = I.O.y + e.y + 0.01; ME.vx = ME.vz = ME.vy = 0; ME.yaw = 0; CAM.yaw = 0; e.t = Math.max(e.t, 3); this.floorMenu(); } });
+    else cand(0.15, { label: `🛗 엘리베이터 호출 (지금 ${e.at >= 0 ? e.at + 1 + '층' : '이동 중'})`, key: 'E', fn: () => { this.call(k); toast('🛗 엘리베이터를 불렀다 — 문이 열리면 E로 타기', 1800); sfx('ui'); } });
+  },
+});
 
 
 // ================= CONSTRUCTION (건축 의뢰) =================
@@ -4708,7 +5026,7 @@ const NET = {
   playerMsg() {
     const m = { t: 'p', n: ME.name, x: +ME.x.toFixed(2), y: +ME.y.toFixed(2), z: +ME.z.toFixed(2), yaw: +ME.yaw.toFixed(3), spd: +ME.spd.toFixed(2), gr: ME.grounded ? 1 : 0,
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
-      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
+      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), rc: POLICE.rcOut(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
@@ -4732,6 +5050,7 @@ const NET = {
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
     if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
+    if (G.isHost && conn && conn.pid && (m.t === 'hitAck' || (m.t === 'dmg' && m.to !== ME.id))) POLICE.hostSee(m, conn.pid); // 방장: 신고 수사용 사건 기록
     if (m.to && m.to !== ME.id) return;
     switch (m.t) {
       case 'full': toast('방이 가득 찼다 (최대 2명)'); break;
@@ -4776,7 +5095,7 @@ const NET = {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) rp.name = m.n;
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
-        refreshRemoteName(rp);
+        refreshRemoteName(rp); if (G.isHost) POLICE.observe(conn && conn.pid ? conn.pid : f, m.wanted, m.rc);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -4802,11 +5121,13 @@ const NET = {
       case 'punchFx': { const rp = G.players.get(f); if (rp && !sameSpace(rp)) break; sfx(m.h ? 'punchH' : 'punch', m.x, m.z); FX.impact({ x: m.x, y: m.y, z: m.z }, 'dust'); FX.impact({ x: m.x, y: m.y, z: m.z }, 'spark'); FX.emoji(m.h ? '💥' : '✦', m.x, m.y + 0.15, m.z, m.h ? 0.45 : 0.3); if (Math.hypot(ME.x - m.x, ME.z - m.z) < 3) CAM.shake = Math.min(0.6, CAM.shake + (m.h ? 0.22 : 0.1)); break; }
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
-        const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
-        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
+        const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자 (게스트는 NPC 피해를 꾸며낼 수 없다)
+        const before = ME.hp; ME.takeDamage(+m.amt || 0, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        if (G.isHost) POLICE.hostSelfHit(src, w, m.k, d);
+        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;
       }
-      case 'hitAck': { if (m.to !== ME.id) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
+      case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
       case 'wanted': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
@@ -4835,6 +5156,8 @@ const NET = {
       case 'ann': announce(m.a, m.b); break;
       case 'horn': { const rp = G.players.get(f); if (rp) sfx('horn', rp.x, rp.z); break; }
       case 'admin': ADMIN.onAdminMsg(m, conn); break;
+      case 'report': if (G.isHost && conn && conn.pid) { if (POLICE.busy.has(conn.pid)) break; POLICE.busy.add(conn.pid); setTimeout(() => POLICE.busy.delete(conn.pid), 1500); POLICE.hostReport(m.a, conn.pid); } break;
+      case 'verdict': if (!G.isHost && conn && conn === this.hostConn) POLICE.onVerdict(m); break;
       case 'free': if (m.to === ME.id && f && isAdminId(f)) LAW.release('🔓 관리자님이 무료로 석방해 주셨다'); break; // 인증된 관리자가 보낸 것만
       case 'adm': ADMIN.onNet(Object.assign({}, m, { f }), conn); break;
       case 'kicked': if (!G.isHost && !ADMIN.on && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce(m.ban ? '⛔ 밴당했다' : '👢 추방당했다', '로비로 돌아갑니다'); setTimeout(() => location.replace(cleanUrl()), 1800); } break;
@@ -4846,7 +5169,7 @@ const NET = {
     }
   },
 };
-const NO_RELAY = new Set(['hello', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct']);
+const NO_RELAY = new Set(['hello', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
 // tree regrowth (host)
 function hostTrees(dt) {
   if ((G._treeT = (G._treeT || 0) - dt) > 0) return; G._treeT = 5;
@@ -5092,6 +5415,7 @@ const UI = {
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
+      { ic: '🚔', t: '경찰 신고 (112)', p: 0, d: POLICE.pending().length ? `신고할 사건 ${POLICE.pending().length}건 · 단축키 J` : '나를 공격한 사람·갱단원 신고 · 단축키 J', fn: () => setTimeout(() => POLICE.open(), 30) },
       { ic: '🔗', t: '친구 초대 (방 코드 · 링크)', p: 0, d: G.online ? `방 ${PUBLIC_ROOMS.includes(G.room) ? '공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1) : G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 비공개방을 만들고 코드·링크가 나와요', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
@@ -5506,7 +5830,7 @@ UI.openHelp = function () {
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
     
     + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
-    + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
+    + sec('경찰 · 건물') + row('J', '🚨 경찰 신고 (나를 공격한 사람·갱단원)') + row('E', '엘리베이터 호출 · 층 선택 / 계단은 걸어서 오르내리기') + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
   UI.openMenu('🎮 조작법', IS_TOUCH ? tc : pc, []);
@@ -5651,13 +5975,13 @@ const LAW = {
     if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
     const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
     INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
-    const stars = ME.wanted; const s = Math.max(40, stars * 40);
+    const stars = ME.wanted; const wr = ME.warrant; const s = Math.max(40, stars * 40, wr ? wr.s : 0); // 신고 수사로 정해진 형량이 있으면 그 형량
     ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
     ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
     this.putInCell(pr.cells[ci]);
-    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
+    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초${wr ? ' (신고 사건 · ' + wr.v + ')' : ''}`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
   },
   release(msg) {
     if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;
@@ -5827,6 +6151,206 @@ UI.openEasy = function () {
 };
 
 
+// ================= 경찰 신고 · 수사 · 판결 =================
+// 피해자: 나를 공격한 상대(플레이어·갱단원)를 기록 → 🚨 신고(J / 폰 112 / 터치 🚨)
+// 방장(권한자): 실제로 오간 피해 메시지로 사건을 따로 기록해 두고, 그 기록으로만 수사한다 → 조작된 신고는 '증거 없음'
+// 판결: 실수(경고·벌금) / 고의(체포 영장 → 경찰 출동, 형량 = 무기·피해·횟수·전과·평소 행실)
+const W_SEV = { fist: 1, car: 1, bat: 2, axe: 3, pistol: 3, smg: 3, shotgun: 3, rifle: 4, sniper: 4, boom: 4 };
+function wName(w) { return w === 'car' ? '차량' : w === 'boom' ? '폭발물' : (WEAPONS[w] ? WEAPONS[w].name : '맨손'); }
+function escHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+const GANG_NAME = { gangA: '레드 크루 조직원', gangB: '블루 독스 조직원' };
+const POLICE = {
+  log: new Map(), hinc: new Map(), rec: new Map(), my: null, card: null, btn: null, busy: new Set(),
+  loadMy() { if (this.my) return this.my; try { this.my = Object.assign({ a: 0, c: 0, w: 0 }, JSON.parse(localStorage.getItem('sbc3d_rec') || '{}')); } catch (e) { this.my = { a: 0, c: 0, w: 0 }; } return this.my; },
+  saveMy() { try { localStorage.setItem('sbc3d_rec', JSON.stringify(this.my)); } catch (e) { } },
+  rcOut() { const m = this.loadMy(); return [m.a | 0, m.c | 0]; },
+  // ---------- 피해자 쪽 기록 (신고 목록) ----------
+  onHurt(from, amt, w) {
+    if (!from || amt <= 0) return; from = String(from); let kind, name, seed = 0;
+    if (G.players.has(from)) { kind = 'player'; name = G.players.get(from).name || '플레이어'; }
+    else if (/^n\d+$/.test(from)) { const p = PEDS[+from.slice(1)]; if (!p || !p.kind.startsWith('gang')) return; kind = 'gang'; name = GANG_NAME[p.kind]; seed = p.seed; w = w || p.weapon; }
+    else return;
+    let e = this.log.get(from);
+    if (!e || e.reported || G.t - e.lastT > 300 || (kind === 'gang' && e.seed !== seed)) { e = { a: from, kind, name, seed, ws: {}, hits: 0, dmg: 0, minHp: 100, dead: false, firstT: G.t, lastT: G.t, reported: false }; this.log.set(from, e); }
+    e.name = name; e.hits++; e.dmg += amt; e.ws[w || 'fist'] = (e.ws[w || 'fist'] || 0) + 1; e.lastT = G.t; e.minHp = Math.min(e.minHp, Math.max(0, ME.hp)); if (ME.dead) e.dead = true;
+    this.refreshBtn(true);
+  },
+  pending() { const out = []; for (const e of this.log.values()) if (!e.reported && G.t - e.lastT < 300) out.push(e); return out.sort((a, b) => b.lastT - a.lastT); },
+  outcome(e) { return e.dead ? '사망' : e.minHp <= 35 ? '중상' : '경상'; },
+  worstW(ws) { let best = 'fist', s = -1; for (const w in ws) { const v = W_SEV[w] || 1; if (v > s) { s = v; best = w; } } return best; },
+  open() {
+    const L = this.pending();
+    const items = L.map(e => ({ ic: e.kind === 'player' ? '👤' : e.a && PEDS[+e.a.slice(1)] && PEDS[+e.a.slice(1)].kind === 'gangA' ? '🔴' : '🔵', t: e.name, p: '신고', d: `${Object.keys(e.ws).map(wName).join('·')} · ${e.hits}회 · 피해 ${Math.round(e.dmg)} · ${this.outcome(e)} · ${Math.max(0, Math.round(G.t - e.lastT))}초 전`, fn: () => this.report(e) }));
+    if (!items.length) items.push({ ic: 'ℹ️', t: '신고할 사건이 없다', d: '최근 5분 안에 나를 공격한 사람·갱단원이 있으면 여기에 떠요', dis: true, disMsg: '신고할 사건이 없다' });
+    UI.openMenu('🚔 경찰 신고 (112)', '누가 나를 공격했나요? 경찰이 기록을 보고 <b>실수인지 고의인지</b>, 무기·피해·전과로 처분을 정해요.', items);
+  },
+  report(e) {
+    if (!e || e.reported) return; e.reported = true; this.refreshBtn();
+    toast('🚔 신고 접수 — 경찰이 사건 기록을 검토 중…', 2200); sfx('ui');
+    if (!G.online || G.isHost) this.hostReport(e.a, ME.id); else NET.send({ t: 'report', a: e.a });
+  },
+  // ---------- 방장 쪽: 검증된 사건 기록 ----------
+  key(a, v) { return a + '>' + v; },
+  hostEntry(a, v, w) {
+    const k = this.key(a, v); let e = this.hinc.get(k);
+    if (!e || e.judged || G.t - e.lastT > 600) { e = { a, v, ws: {}, hits: 0, dmg: 0, minHp: 100, dead: false, firstT: G.t, lastT: G.t, judged: false, seed: 0, pk: null }; this.hinc.set(k, e); if (this.hinc.size > 60) this.hinc.delete(this.hinc.keys().next().value); }
+    if (/^n\d+$/.test(a)) { const p = PEDS[+a.slice(1)]; if (p) { if (e.seed && e.seed !== p.seed) { e = { a, v, ws: {}, hits: 0, dmg: 0, minHp: 100, dead: false, firstT: G.t, lastT: G.t, judged: false }; this.hinc.set(k, e); } e.seed = p.seed; e.pk = p.kind; } }
+    return e;
+  },
+  // 방장이 보거나 보낸 피해 메시지 (src: 보낸 사람의 실제 연결 id — 메시지 안의 from은 방장 자신이 보낸 것만 믿는다)
+  hostSee(m, src) {
+    if (!G.isHost || !m) return;
+    if (m.t === 'dmg') {
+      if (!m.to || !src) return; const a = src === ME.id ? String(m.from || ME.id) : src; if (a === m.to) return;
+      if (src !== ME.id && /^n/.test(String(m.from || ''))) return; // 게스트는 NPC 피해를 만들 수 없다
+      const e = this.hostEntry(a, m.to, m.w); const w = m.w || (m.k === 'car' ? 'car' : m.k === 'boom' ? 'boom' : 'fist');
+      e.hits++; e.ws[w] = (e.ws[w] || 0) + 1; e.claim = (e.claim || 0) + (+m.amt || 0); e.lastT = G.t;
+    } else if (m.t === 'hitAck') {
+      const a = String(m.a || m.to || ''), v = src; if (!a || !v) return; const e = this.hinc.get(this.key(a, v)); if (!e || e.judged) return;
+      this.hostOutcome(e, +m.d || 0, m.hp, !!m.dead);
+    }
+  },
+  hostOutcome(e, d, hp, dead) { e.dmg += Math.max(0, d); if (hp != null) e.minHp = Math.min(e.minHp, Math.max(0, +hp)); if (dead) e.dead = true; },
+  // 방장 자신이 맞았을 때 / NPC가 방장을 때렸을 때
+  hostSelfHit(a, w, k, d) { if (!G.isHost || !a) return; const e = this.hostEntry(String(a), ME.id, w); const ww = w || (k === 'car' ? 'car' : 'fist'); e.hits++; e.ws[ww] = (e.ws[ww] || 0) + 1; e.lastT = G.t; this.hostOutcome(e, d, ME.hp, ME.dead); },
+  recOf(id) { let r = this.rec.get(id); if (!r) { r = { crimes: [], lastW: 0, a: 0, c: 0, w: 0, rc: [0, 0], since: G.t }; this.rec.set(id, r); } return r; },
+  observe(id, wanted, rc) {
+    if (!G.isHost || !id) return; const r = this.recOf(id); wanted = wanted | 0;
+    if (wanted > r.lastW) for (let i = r.lastW; i < wanted; i++) r.crimes.push(G.t);
+    r.lastW = wanted; r.wantedNow = wanted; if (Array.isArray(rc)) r.rc = [rc[0] | 0, rc[1] | 0];
+    while (r.crimes.length && G.t - r.crimes[0] > 900) r.crimes.shift();
+  },
+  nameOf(id) { if (id === ME.id) return ME.name; const rp = G.players.get(id); return rp ? rp.name : '플레이어'; },
+  hostReport(a, v) {
+    if (!G.isHost) return; a = String(a || ''); const e = this.hinc.get(this.key(a, v));
+    const reply = (o) => { const msg = Object.assign({ t: 'verdict', v, a, vn: this.nameOf(v) }, o); setTimeout(() => { if (G.online) NET.send(msg); this.onVerdict(msg); }, 1600); };
+    if (!e || !e.hits || G.t - e.lastT > 600) { reply({ r: 'none', an: /^n/.test(a) ? '갱단원' : this.nameOf(a) }); return; }
+    if (e.judged) { reply({ r: 'dup', an: /^n/.test(a) ? GANG_NAME[e.pk] || '갱단원' : this.nameOf(a) }); return; }
+    e.judged = true;
+    const outcome = e.dead ? '사망' : e.minHp <= 35 ? '중상' : '경상'; const mw = this.worstW(e.ws); const sev = W_SEV[mw] || 1; const dmg = Math.round(e.dmg || e.claim || 0);
+    const base = { hits: e.hits, w: Object.keys(e.ws).map(wName).join('·'), mw: wName(mw), out: outcome, dmg };
+    if (/^n\d+$/.test(a)) { // 갱단원 신고 → 경찰이 가서 연행
+      const p = PEDS[+a.slice(1)]; const here = p && p.seed === e.seed && p.state !== 'dead' && p.state !== 'parked';
+      if (here) this.arrestPed(p); reply(Object.assign(base, { r: here ? 'gang' : 'gangGone', an: GANG_NAME[e.pk] || '갱단원', intent: '고의', dead: p && p.state === 'dead' ? 1 : 0 })); return;
+    }
+    const R = this.recOf(a); const rcA = a === ME.id ? this.rcOut() : R.rc; const arrests = Math.max(R.a, rcA[0] | 0), conv = Math.max(R.c, rcA[1] | 0); const priors = arrests + conv;
+    const recent = R.crimes.filter(t => G.t - t < 900).length; const wantedNow = a === ME.id ? ME.wanted : (R.wantedNow | 0);
+    const cScore = priors * 2 + recent + wantedNow; const conduct = cScore === 0 ? '양호' : cScore <= 3 ? '보통' : '불량';
+    // 실수 vs 고의: 한 번 부딪히거나 한 대 맞은 정도(맨손·차량)는 실수, 반복·무기·사망은 고의
+    let score = (e.hits - 1) * 0.8 + (sev >= 3 ? 2 : sev === 2 ? 1 : 0) + (e.dead && sev >= 2 ? 1 : 0) + (e.hits >= 3 && e.lastT - e.firstT > 6 ? 0.5 : 0);
+    if (mw === 'car' && e.hits <= 2) score = Math.min(score, 1);
+    const intent = score >= 2 ? '고의' : '실수';
+    const adm = isAdminId(a) || (a === ME.id && ADMIN.on);
+    let fine = 0, sentence = 0, act;
+    if (intent === '실수') { fine = { 경상: 3000, 중상: 15000, 사망: 50000 }[outcome] * (conduct === '불량' ? 2 : 1); if (outcome === '경상' && conduct === '양호' && e.hits === 1) { fine = 0; act = '경고'; } else act = '벌금'; }
+    else {
+      let s = ({ 1: 40, 2: 70, 3: 100, 4: 130 }[sev]) * ({ 경상: 1, 중상: 1.6, 사망: 2.6 }[outcome]) + Math.min(60, (e.hits - 1) * 6);
+      s *= 1 + Math.min(1.5, priors * 0.25); if (conduct === '양호') s *= 0.8; if (conduct === '불량') s *= 1.2; s += wantedNow * 15;
+      sentence = Math.round(clamp(s, 40, 900) / 5) * 5; act = '체포';
+    }
+    if (intent === '고의') R.c++; else R.w++;
+    reply(Object.assign(base, { r: 'player', an: this.nameOf(a), intent, act, fine, s: sentence, pri: priors, arr: arrests, conv, recent, conduct, adm: adm ? 1 : 0 }));
+    if (intent === '고의' && !adm) this.dispatch(a);
+  },
+  // ---------- 판결 카드 (피해자·가해자 화면) ----------
+  onVerdict(m) {
+    const S = (v, ok, d) => ok.includes(v) ? v : d; // 방장이 보낸 값도 형식을 강제 (카드에 그대로 들어가므로)
+    m = Object.assign({}, m, { hits: m.hits | 0, dmg: m.dmg | 0, s: m.s | 0, fine: Math.max(0, m.fine | 0), pri: m.pri | 0, arr: m.arr | 0, conv: m.conv | 0, recent: m.recent | 0, an: String(m.an || '').slice(0, 20), vn: String(m.vn || '').slice(0, 20), w: String(m.w || '').slice(0, 40), out: S(m.out, ['경상', '중상', '사망'], '경상'), intent: S(m.intent, ['고의', '실수'], '실수'), act: S(m.act, ['체포', '벌금', '경고'], '경고'), conduct: S(m.conduct, ['양호', '보통', '불량'], '보통'), r: S(m.r, ['none', 'dup', 'gang', 'gangGone', 'player'], 'none') });
+    const meV = m.v === ME.id, meA = m.a === ME.id;
+    const line = m.r === 'player' ? `🚔 수사 결과: ${m.an} → ${m.vn} 사건 · ${m.intent} · ${m.adm ? '관리자 면책' : m.act === '체포' ? '체포 영장 (형량 ' + m.s + '초)' : m.act === '벌금' ? '벌금 ' + fmtMoney(m.fine) : '경고'}`
+      : m.r === 'gang' ? `🚔 ${m.vn}님 신고로 ${m.an} 연행 출동` : '';
+    if (line) UI.chatLine(null, line);
+    if (!meV && !meA) return;
+    if (meV) { const e = this.log.get(m.a); if (e) e.reported = true; }
+    const rows = [];
+    const R = (k, v, c) => rows.push(`<div class="vr"><span>${k}</span><b${c ? ` style="color:${c}"` : ''}>${v}</b></div>`);
+    let title = '🚔 수사 결과', badge = '', sub = '';
+    if (m.r === 'none') { badge = '증거 없음'; sub = '경찰 기록에 해당 사건이 없어 신고가 기각됐다'; }
+    else if (m.r === 'dup') { badge = '이미 처리됨'; sub = '이 사건은 이미 수사가 끝났다'; }
+    else {
+      R('사건', `${escHtml(m.an)} → ${escHtml(m.vn)}`); R('사용 무기', escHtml(m.w || m.mw)); R('피해', `${m.hits}회 · 총 ${m.dmg} · <span style="color:${m.out === '사망' ? '#ff5a5a' : m.out === '중상' ? '#ffb03a' : '#9fe0ff'}">${m.out}</span>`);
+      if (m.r === 'player') {
+        badge = m.intent; R('판정', m.intent === '고의' ? '🔴 고의 (반복·무기 사용)' : '🟢 실수 (우발적)', m.intent === '고의' ? '#ff6a6a' : '#7ef0a0');
+        R('전과', `${m.pri}범 (체포 ${m.arr} · 유죄 ${m.conv}) · 최근 범죄 ${m.recent}건`); R('평소 행실', m.conduct, m.conduct === '양호' ? '#7ef0a0' : m.conduct === '불량' ? '#ff6a6a' : '#ffd34a');
+        R('처분', m.adm ? '👑 관리자 — 처벌 면제' : m.act === '체포' ? `🚨 체포 영장 · 형량 ${Math.floor(m.s / 60)}분 ${m.s % 60}초` : m.act === '벌금' ? `💸 벌금 ${fmtMoney(m.fine)} (피해자에게 지급)` : '⚠ 경고 (초범·경상)', '#ffd34a');
+      } else { badge = '고의'; R('판정', '🔴 고의 (갱단 폭행)', '#ff6a6a'); R('처분', m.r === 'gang' ? '🚓 경찰 출동 → 연행' : m.dead ? '용의자 사망 — 사건 종결' : '용의자 도주 — 지명수배', '#ffd34a'); }
+    }
+    this.showCard(title, badge, sub, rows.join(''));
+    // 처분 적용 (각자 자기 화면에서)
+    if (m.r === 'player' && !m.adm) {
+      if (meA) {
+        const my = this.loadMy();
+        if (m.act === '체포') { my.c++; ME.warrant = { s: m.s, until: G.t + 240, v: m.vn }; if (ME.wanted < 2) { ME.wanted = 2; ME.wantedCool = 0; UI.updateStars(true); } announce('🚨 체포 영장 발부', `${m.vn}님 신고 · 형량 ${m.s}초 — 경찰이 출동했다`); sfx('error'); }
+        else { my.w++; if (m.fine) { const f = Math.min(ME.money, m.fine); ME.money -= f; toast(`💸 벌금 ${fmtMoney(f)} 납부`); } else toast('⚠ 경찰 경고: 조심하세요'); }
+        this.saveMy();
+      }
+      if (meV && m.act === '벌금' && m.fine) { ME.money += m.fine; sfx('cash'); toast(`💰 보상금 ${fmtMoney(m.fine)} 받음`); }
+    }
+  },
+  showCard(title, badge, sub, html) {
+    let el = $('#verdict'); if (!el) { el = document.createElement('div'); el.id = 'verdict'; el.className = 'panel'; document.body.appendChild(el); }
+    el.innerHTML = `<button type="button" class="vx" aria-label="닫기">✕</button><h3></h3>${badge ? `<div class="vb ${badge === '고의' ? 'bad' : badge === '실수' ? 'ok' : ''}"></div>` : ''}${sub ? '<div class="vs"></div>' : ''}${html}`;
+    el.querySelector('h3').textContent = title; if (badge) el.querySelector('.vb').textContent = badge; if (sub) el.querySelector('.vs').textContent = sub;
+    el.style.display = 'block'; el.querySelector('.vx').onclick = (e) => { e.stopPropagation(); el.style.display = 'none'; };
+    el.ontouchstart = (e) => e.stopPropagation();
+    clearTimeout(this._cT); this._cT = setTimeout(() => { el.style.display = 'none'; }, 14000); this.card = el;
+  },
+  // ---------- 경찰 출동 (방장 NPC) ----------
+  freeCop(x, z, near = 70) {
+    let best = null, bd = near;
+    for (const p of PEDS) if (p.kind === 'police' && (p.state === 'walk' || p.state === 'idle' || p.state === 'talk') && !p.raidCop) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
+    if (best) return best;
+    // 근처에 경찰이 없으면 순찰 경찰을 새로 배치 (안 보이는 NPC를 경찰로 바꿔 35m 밖 도로에 세운다)
+    const spare = PEDS.filter(p => p.state === 'parked' || ((p.kind === 'civ' || p.kind === 'worker') && p.state === 'walk' && nearestPlayerDist(p.x, p.z) > 90)).sort((a, b) => (a.state === 'parked' ? -1 : 0) - (b.state === 'parked' ? -1 : 0))[0];
+    if (!spare) return null; const r = edgeNearPoint(x, z, 28, 45, e => !e.bridge);
+    pedSetIdentity(spare, 'police', (Math.random() * 1e9) | 0);
+    if (r) placePedOnEdge(spare, r.e, r.t, 1, 1); else { const a = rnd(0, TAU); spare.x = x + Math.sin(a) * 30; spare.z = z + Math.cos(a) * 30; spare.y = groundHeight(spare.x, spare.z); }
+    spare.spawnT = G.t; spare.job = 'patrol'; return spare;
+  },
+  dispatch(id) {
+    const tg = { kind: id === ME.id ? 'me' : 'player', id }; const tp = id === ME.id ? anchorOf(ME) : anchorOf(G.players.get(id) || { x: ME.x, z: ME.z });
+    for (let i = 0; i < 2; i++) { const c = this.freeCop(tp.x, tp.z); if (!c) break; c.state = 'fight'; c.target = tg; c.dispT = G.t + 60; c.percT = 1; if (c.char) c.char.say('🚨 체포 영장 집행! 멈춰!', 4); }
+  },
+  arrestPed(q) {
+    q.state = 'surrender'; q.target = null; q.raid = false; q.timer = 90; q.spd = 0; q.aiming = false; if (q.char) q.char.say('🙌 알았어요, 항복!', 4);
+    const c = this.freeCop(q.x, q.z, 70); if (!c) { q.state = 'parked'; return; }
+    c.state = 'collar'; c.collar = q.id; c.collarT = G.t; c.cuffT = 0; c.target = null; if (c.char) c.char.say('🚓 경찰이다! 손 들어!', 4);
+  },
+  copCollar(p, dt) {
+    const q = PEDS[p.collar]; if (!q || q.state !== 'surrender') { p.state = 'walk'; p.collar = null; snapToNearestEdge(p); return; }
+    const dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+    if (G.t - p.collarT > 25 && d > 3) { p.x = q.x - 1.2; p.z = q.z - 1.2; p.y = q.y; } // 길이 막히면 바로 옆으로
+    if (d > 1.3) { p.spd = 4.4; p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt); p.x += Math.sin(p.yaw) * p.spd * dt; p.z += Math.cos(p.yaw) * p.spd * dt; const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); p.x = r.x; p.z = r.z; p.y = groundHeight(p.x, p.z, p.y + 1); return; }
+    p.spd = 0; p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt); q.yaw = dampAng(q.yaw, Math.atan2(-dx, -dz) + Math.PI, 8, dt);
+    if (!p.cuffT) { p.cuffT = G.t + 2.5; p.act = 'punchR'; p.actT = 0; if (p.char) p.char.say('🔗 수갑 채웁니다. 연행합니다', 3); FX.emoji('🔗', q.x, q.y + 2.1, q.z); }
+    else if (G.t >= p.cuffT) {
+      q.state = 'parked'; q.target = null; p.state = 'walk'; p.collar = null; p.cuffT = 0; snapToNearestEdge(p);
+      FX.emoji('🚓', q.x, q.y + 2, q.z); const t = `🚓 ${GANG_NAME[q.kind] || '갱단원'} 연행 완료`; UI.chatLine(null, t); if (G.online) NET.send({ t: 'chat', m: t, sys: 1 });
+    }
+  },
+  // ---------- 매 프레임 ----------
+  tick(dt) {
+    if (!G.started) return;
+    if (G.isHost && (this._oT = (this._oT || 0) - dt) <= 0) { this._oT = 0.5; this.observe(ME.id, ME.wanted, this.rcOut()); }
+    const w = ME.warrant; if (w) { if (ME.jail || ADMIN.on) ME.warrant = null; else if (G.t > w.until) { ME.warrant = null; toast('📄 체포 영장 만료 — 하지만 전과 기록은 남는다'); } else if (!ME.dead && ME.wanted < 2) { ME.wanted = 2; ME.wantedCool = 0; UI.updateStars(); } }
+    if ((this._bT = (this._bT || 0) - dt) <= 0) { this._bT = 1; this.refreshBtn(); }
+  },
+  refreshBtn(flash) {
+    const n = this.pending().length; const b = $('#repBtn');
+    if (b) { b.classList.toggle('hidden', !n || !G.started); b.querySelector('b').textContent = n; if (flash && n) { b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } }
+  },
+  initUI() {
+    if ($('#repBtn')) return; const b = document.createElement('button'); b.type = 'button'; b.id = 'repBtn'; b.className = 'hidden';
+    b.innerHTML = `🚨 신고 <b>0</b>${IS_TOUCH ? '' : '<small>J</small>'}`; document.body.appendChild(b);
+    const go = (e) => { e.preventDefault(); e.stopPropagation(); AU.init(); this.open(); };
+    b.addEventListener('click', go); b.addEventListener('touchstart', go, { passive: false });
+  },
+};
+// 가해자가 수감되면 기록
+const _lawArrest = LAW.arrest.bind(LAW);
+LAW.arrest = function () { const was = !!ME.jail; _lawArrest(); if (!was && ME.jail) { const my = POLICE.loadMy(); my.a++; POLICE.saveMy(); ME.warrant = null; } };
+
+
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
 // 상대를 때릴 때 내가 맞는 버그가 생긴다 → 탭마다 고유 id(잠금 + 탭 전용 id)를 쓴다.
@@ -5982,7 +6506,7 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -6019,7 +6543,7 @@ function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t
 function frame(dt, noRender) {
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; INP.fire = false; if (UI.joyReset) UI.joyReset(); }
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  INTERIOR.update(dt); LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -6048,7 +6572,7 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
+if (URLP.get("debug")) window.__SBC = { winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
 
 </script>
 

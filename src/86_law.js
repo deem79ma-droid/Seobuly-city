@@ -133,13 +133,13 @@ const LAW = {
     if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
     const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
     INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
-    const stars = ME.wanted; const s = Math.max(40, stars * 40);
+    const stars = ME.wanted; const wr = ME.warrant; const s = Math.max(40, stars * 40, wr ? wr.s : 0); // 신고 수사로 정해진 형량이 있으면 그 형량
     ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
     ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
     this.putInCell(pr.cells[ci]);
-    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
+    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초${wr ? ' (신고 사건 · ' + wr.v + ')' : ''}`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
   },
   release(msg) {
     if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;

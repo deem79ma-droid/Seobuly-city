@@ -21,7 +21,25 @@ function anchorOf(o) { // 실내에 있는 사람은 건물 문 앞에 있는 �
   return o;
 }
 function myBi() { return INTERIOR.cur ? INTERIOR.cur.b.id : -1; }
-function sameSpace(rp) { return (rp.bi ?? -1) === myBi(); }
+// 같은 공간 = 같은 건물(또는 둘 다 밖) + 실내라면 같은 층 (높이 차 3.6m 미만 — 다락은 같은 층으로 친다)
+function sameSpace(rp) { const bi = rp.bi ?? -1; if (bi !== myBi()) return false; return bi < 0 || Math.abs((rp.y ?? ME.y) - ME.y) < 3.6; }
+// 직사각형에서 구멍(직사각형들)을 뺀 나머지 조각들 (층 바닥판의 계단·승강로 구멍)
+function rectMinus(r, holes) {
+  let out = [r];
+  for (const h of holes) {
+    const nx = [];
+    for (const a of out) {
+      if (h.x1 <= a.x0 || h.x0 >= a.x1 || h.z1 <= a.z0 || h.z0 >= a.z1) { nx.push(a); continue; }
+      const ix0 = Math.max(a.x0, h.x0), ix1 = Math.min(a.x1, h.x1);
+      if (a.x0 < ix0) nx.push({ x0: a.x0, x1: ix0, z0: a.z0, z1: a.z1 });
+      if (ix1 < a.x1) nx.push({ x0: ix1, x1: a.x1, z0: a.z0, z1: a.z1 });
+      if (a.z0 < h.z0) nx.push({ x0: ix0, x1: ix1, z0: a.z0, z1: h.z0 });
+      if (h.z1 < a.z1) nx.push({ x0: ix0, x1: ix1, z0: h.z1, z1: a.z1 });
+    }
+    out = nx;
+  }
+  return out.filter(q => q.x1 - q.x0 > 0.01 && q.z1 - q.z0 > 0.01);
+}
 // 플레이어 발밑 높이: 지형 + 실내 바닥/계단 + 올라설 수 있는 건물 옥상·물체 윗면
 function floorAt(x, z, y) {
   let g = groundHeight(x, z, y + 0.5);
@@ -53,11 +71,12 @@ const INTERIOR = {
     if (this.cur && this.cur.b === b) return;
     if (this.cur) this.dispose();
     this.clearRoof();
-    const I = this.build(b); this.cur = I; this.cool = G.t + 1.2;
+    const topF = this.tall(b) ? this.floorsOf(b) - 1 : 0, f0 = opts.fromRoof ? topF : 0;
+    const I = this.build(b, f0); this.cur = I; this.cool = G.t + 1.2; this.elevInit(I, f0);
     const sp = opts.fromRoof ? I.elev : I.spawn;
-    ME.x = sp.x; ME.z = sp.z; ME.y = I.O.y + 0.02; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; CAM.yaw = Math.PI; CAM.pitch = 0.12;
+    ME.x = sp.x; ME.z = sp.z; ME.y = I.O.y + f0 * I.FH + 0.02; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; CAM.yaw = Math.PI; CAM.pitch = 0.12;
     ME.dance = -1; ME.sitBench = null;
-    if (this.light) { this.light.position.set(I.O.x, I.O.y + I.H - 0.6, I.O.z); this.light.intensity = 40; this.light.distance = Math.max(I.W, I.D) * 1.6; }
+    this.placeLight(I);
     sfx('door'); toast(`🚪 ${I.title} — 문으로 걸어 나가거나 E: 나가기`, 2600);
     NET.send({ t: 'chat', m: `🚪 ${ME.name}님이 ${I.title}에 들어갔다`, sys: 1, quiet: 1 });
   },
@@ -82,8 +101,13 @@ const INTERIOR = {
     toast(`🏙️ 옥상 (${Math.round(y - b.y0)}m) — 떨어지면 크게 다친다! 엘리베이터에서 E로 내려가기`, 3500);
   },
   clearRoof() { const R = this.roof; if (!R) return; scene.remove(R.g); R.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== MAT.plain) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); removeCollider(R.col); this.roof = null; },
-  dispose() {
+  placeLight(I) { if (this.light) { this.light.position.set(I.O.x, I.O.y + I.center * I.FH + I.H - 0.6, I.O.z); this.light.intensity = 40; this.light.distance = Math.max(I.W, I.D) * 1.6; } },
+  // 계단·엘리베이터로 층이 바뀌면 그 층 ±1층으로 다시 만든다 (엘리베이터 상태는 유지)
+  setFloor(f) { const I = this.cur; if (!I) return; const b = I.b; this.dispose(true); const N = this.build(b, f); this.cur = N; if (this.el) { this.el.I = N; N.plats.push(this.el.plat); this.elevSync(); } this.placeLight(N); },
+  dispose(keepEl) {
     const I = this.cur; if (!I) return; this.cur = null;
+    for (const k in I.dyn.doors) { const d = I.dyn.doors[k]; if (d.col) removeCollider(d.col); d.col = null; }
+    if (!keepEl) this.elevDispose();
     scene.remove(I.group);
     I.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.userData.shared) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
     for (const c of I.cols) removeCollider(c);
@@ -97,7 +121,8 @@ const INTERIOR = {
     if (I) {
       if (ME.dead || ME.jail || ME.vehicle || Math.abs(ME.x - I.O.x) > 120 || Math.abs(ME.z - I.O.z) > 120) { this.dispose(); return; }
       // 출구 쪽으로 걸어가면 자동으로 나간다
-      if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) this.exit();
+      if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) { this.exit(); return; }
+      if (I.tall) { this.elevUpdate(dt); const C2 = this.cur; if (C2 && !this.inCar()) { const cf = this.floorOfY(C2, ME.y); if (cf !== C2.center) this.setFloor(cf); } }
       return;
     }
     if (this.roof) { const R = this.roof; if (Math.hypot(ME.x - R.x, ME.z - R.z) > 160 || ME.y < R.y - 30) this.clearRoof(); }
@@ -119,16 +144,19 @@ const INTERIOR = {
   interacts(cand) {
     const I = this.cur;
     if (I) {
-      { const de = Math.hypot(ME.x - I.exit.x, ME.z - I.exit.z); if (de < 2.4) cand(de * 0.5 + 0.05, { label: '🚪 밖으로 나가기', key: 'E', fn: () => this.exit() }); }
+      { const de = Math.hypot(ME.x - I.exit.x, ME.z - I.exit.z); if (de < 2.4 && Math.abs(ME.y - I.O.y) < 1.5) cand(de * 0.5 + 0.05, { label: '🚪 밖으로 나가기', key: 'E', fn: () => this.exit() }); }
+      if (I.tall && this.el) this.elevInteracts(cand);
       for (const it of I.items) { const d = Math.hypot(ME.x - it.x, ME.z - it.z); if (d < (it.r || 1.8) && Math.abs(ME.y - (it.y ?? I.O.y)) < 1.6) cand(d * 0.5, { label: it.label, key: 'E', fn: it.fn }); }
       return;
     }
     const R = this.roof; if (R && Math.hypot(ME.x - R.x, ME.z - R.z) < 3 && Math.abs(ME.y - R.y) < 1.5) cand(0.3, { label: '🛗 엘리베이터 (1층으로 내려가기)', key: 'E', fn: () => this.enter(R.b, { fromRoof: true }) });
   },
   // ---------- 실내 생성 ----------
-  build(b) {
+  build(b, center = 0) {
     const O = this.slot(b); const kind = b.kind; const fac = b.fac;
-    const loft = ['house', 'apartment', 'villa', 'home', 'hotel'].includes(kind);
+    const tall = this.tall(b); const NF = tall ? this.floorsOf(b) : 1; center = clamp(center | 0, 0, NF - 1);
+    const lo = Math.max(0, center - 1), hi = Math.min(NF - 1, center + 1); // 지금 층 ±1층만 만든다 (15층 건물도 가볍게)
+    const loft = ['house', 'apartment', 'villa', 'home', 'hotel'].includes(kind) && !tall;
     const big = ['church', 'factory', 'casino', 'pool', 'gym', 'dealer', 'barn'].includes(kind);
     const W = clamp(Math.round(b.w * 0.8), big ? 20 : 14, big ? 34 : 28), D = clamp(Math.round(b.d * 0.75), big ? 18 : 12, big ? 28 : 22);
     const H = loft ? 6.6 : (kind === 'church' || kind === 'factory' || kind === 'barn' || kind === 'casino') ? 8 : 4.2;
@@ -136,27 +164,52 @@ const INTERIOR = {
     const R = (a, c) => a + (c - a) * rnd2(); const RP = (a) => a[Math.floor(rnd2() * a.length)];
     const mb = new MB(); const cols = []; const plats = []; const items = []; const group = new THREE.Group(); const extra = [];
     const X = (lx) => O.x + lx, Z = (lz) => O.z + lz;
-    const box = (lx, ly, lz, w, h, d, col, solid) => { mb.box(X(lx), O.y + ly, Z(lz), w, h, d, typeof col === 'number' ? C(col) : col); if (solid) cols.push(addCollider(X(lx) - w / 2, Z(lz) - d / 2, X(lx) + w / 2, Z(lz) + d / 2, O.y + ly + h, 'int', null, O.y + ly - 0.3)); };
+    const FH = H + 0.4, LV = (k) => k * FH; // 층 높이 (바닥 슬래브 0.4 포함)
+    const hw0 = W / 2, hd0 = D / 2;
+    // 높은 건물: 오른쪽 벽 = 계단실(2줄 왕복 계단), 왼쪽 안쪽 모서리 = 엘리베이터 승강로
+    const ST = tall ? { ax0: hw0 - 1.35, ax1: hw0 - 0.05, bx0: hw0 - 2.75, bx1: hw0 - 1.45, z0: -hd0 + 1.6, z1: -hd0 + 1.6 + Math.min(7.5, D - 4.6) } : null;
+    const SH = tall ? { x0: -hw0, x1: -hw0 + 2.4, z0: -hd0, z1: -hd0 + 2.2, dx: -hw0 + 1.2 } : null;
+    const reserved = tall ? [{ x0: ST.bx0 - 0.4, x1: hw0 + 1, z0: ST.z0 - 1.6, z1: ST.z1 + 1.6 }, { x0: -hw0 - 1, x1: SH.x1 + 0.5, z0: -hd0 - 1, z1: SH.z1 + 1.8 }] : [];
+    const inRes = (lx, lz, w = 0, d = 0) => reserved.some(r => lx + w / 2 > r.x0 && lx - w / 2 < r.x1 && lz + d / 2 > r.z0 && lz - d / 2 < r.z1);
+    let furn = false; // 가구 배치 중에는 계단실·승강로 자리를 피한다
+    const box = (lx, ly, lz, w, h, d, col, solid, bo) => { if (furn && inRes(lx, lz, w, d)) return; mb.box(X(lx), O.y + ly, Z(lz), w, h, d, typeof col === 'number' ? C(col) : col, null, bo ? { bottom: true } : undefined); if (solid) cols.push(addCollider(X(lx) - w / 2, Z(lz) - d / 2, X(lx) + w / 2, Z(lz) + d / 2, O.y + ly + h, 'int', null, O.y + ly - 0.3)); };
     const cyl = (lx, ly, lz, r, h, col, seg = 12, r2) => mb.cyl(X(lx), O.y + ly, Z(lz), r, h, C(col), seg, r2 ?? r);
-    const item = (lx, lz, label, fn, r = 1.8, ly = 0) => items.push({ x: X(lx), z: Z(lz), y: O.y + ly, label, fn, r });
+    const item = (lx, lz, label, fn, r = 1.8, ly = 0) => { if (furn && inRes(lx, lz)) { lx = 0; lz = hd0 - 3.2; } items.push({ x: X(lx), z: Z(lz), y: O.y + ly, label, fn, r }); };
     const T = this.theme(kind);
-    // 바닥 · 벽 · 천장
-    box(0, -0.4, 0, W + 0.6, 0.4, D + 0.6, T.floor); plats.push({ x0: X(-W / 2 - 0.3), x1: X(W / 2 + 0.3), z0: Z(-D / 2 - 0.3), z1: Z(D / 2 + 0.3), y: O.y });
-    if (T.tiles) for (let i = -W / 2 + 1; i < W / 2; i += 2) box(i, 0.005, 0, 0.04, 0.01, D, T.tiles);
+    // 바닥 · 벽 · 천장 (층마다)
     const wallT = 0.3, WH = H + 0.2;
-    box(0, 0, -D / 2 - wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
-    box(-W / 2 - wallT / 2, 0, 0, wallT, WH, D, T.wall, true); box(W / 2 + wallT / 2, 0, 0, wallT, WH, D, T.wall, true);
-    box(-(W / 4 + 0.6), 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true); box(W / 4 + 0.6, 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true);
-    box(0, 2.6, D / 2 + wallT / 2, 2.4, WH - 2.6, wallT, T.wall, true);
-    box(0, 0, D / 2 + wallT + 0.4, 2.4, 2.6, 0.2, 0x111111, true); // 문 밖은 막혀 있음 (출구 표시)
-    box(0, 2.62, D / 2 - 0.05, 1.4, 0.35, 0.1, 0x18c860); // 비상구 표시
-    box(0, H, 0, W + 0.6, 0.25, D + 0.6, T.ceil); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + H + 0.4, 'roof', null, O.y + H));
-    for (let i = -W / 2 + 0.05; i <= W / 2; i += W - 0.1) box(i, 0, 0, 0.06, 0.18, D, T.trim); // 걸레받이
-    box(0, 0, -D / 2 + 0.02, W, 0.18, 0.06, T.trim);
-    for (let lx = -W / 2 + 3; lx < W / 2 - 1; lx += 5) for (let lz = -D / 2 + 3; lz < D / 2 - 1; lz += 5) box(lx, H - 0.06, lz, 1.4, 0.05, 0.6, 0xfffbe8);
+    const full = { x0: -W / 2 - 0.3, x1: W / 2 + 0.3, z0: -D / 2 - 0.3, z1: D / 2 + 0.3 };
+    const laneR = (L) => L === 'A' ? { x0: ST.ax0, x1: ST.ax1, z0: ST.z0, z1: ST.z1 } : { x0: ST.bx0, x1: ST.bx1, z0: ST.z0, z1: ST.z1 };
+    const laneOf = (k) => k % 2 ? 'B' : 'A'; // k층에서 올라가는 계단 줄
+    const holes = (k) => !tall || k === 0 ? [] : [{ x0: SH.x0 - 0.3, x1: SH.x1, z0: SH.z0 - 0.3, z1: SH.z1 }, laneR(laneOf(k - 1))];
+    const slab = (k, asFloor) => { // k층 바닥판 (구멍 뚫린 곳 제외) = 아래층 천장
+      for (const r of rectMinus(full, holes(k))) {
+        const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+        box(cx, LV(k) - 0.4, cz, w, 0.4, d, k === 0 ? T.floor : T.ceil, false, true);
+        if (k > 0) { box(cx, LV(k) + 0.002, cz, w, 0.01, d, T.floor); cols.push(addCollider(X(r.x0), Z(r.z0), X(r.x1), Z(r.z1), O.y + LV(k), 'roof', null, O.y + LV(k) - 0.4)); }
+        if (asFloor) plats.push({ x0: X(r.x0), x1: X(r.x1), z0: Z(r.z0), z1: Z(r.z1), y: O.y + LV(k) });
+      }
+    };
+    for (let k = lo; k <= hi; k++) {
+      const y = LV(k); slab(k, true);
+      if (T.tiles) for (let i = -W / 2 + 1; i < W / 2; i += 2) box(i, y + 0.005, 0, 0.04, 0.01, D, T.tiles);
+      box(0, y, -D / 2 - wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
+      box(-W / 2 - wallT / 2, y, 0, wallT, WH, D, T.wall, true); box(W / 2 + wallT / 2, y, 0, wallT, WH, D, T.wall, true);
+      if (k === 0) {
+        box(-(W / 4 + 0.6), 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true); box(W / 4 + 0.6, 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true);
+        box(0, 2.6, D / 2 + wallT / 2, 2.4, WH - 2.6, wallT, T.wall, true);
+        box(0, 0, D / 2 + wallT + 0.4, 2.4, 2.6, 0.2, 0x111111, true); // 문 밖은 막혀 있음 (출구 표시)
+        box(0, 2.62, D / 2 - 0.05, 1.4, 0.35, 0.1, 0x18c860); // 비상구 표시
+      } else box(0, y, D / 2 + wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
+      for (let i = -W / 2 + 0.05; i <= W / 2; i += W - 0.1) box(i, y, 0, 0.06, 0.18, D, T.trim); // 걸레받이
+      box(0, y, -D / 2 + 0.02, W, 0.18, 0.06, T.trim);
+      for (let lx = -W / 2 + 3; lx < W / 2 - 1; lx += 5) for (let lz = -D / 2 + 3; lz < D / 2 - 1; lz += 5) if (!tall || !inRes(lx, lz, 1.4, 0.6)) box(lx, y + H - 0.06, lz, 1.4, 0.05, 0.6, 0xfffbe8, false, true);
+    }
+    if (hi < NF - 1) slab(hi + 1, false); // 위층 바닥 = 천장
+    else { box(0, LV(hi) + H, 0, W + 0.6, 0.25, D + 0.6, T.ceil, false, true); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + LV(hi) + H + 0.4, 'roof', null, O.y + LV(hi) + H)); }
     // 간판 (안쪽 벽)
     const title = fac ? fac.name : b.name;
-    { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(title, T.sub, T.sign) })); sg.position.set(X(0), O.y + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
+    for (let k = lo; k <= hi; k++) { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(k ? `${k + 1}층` : title, k ? title : T.sub, T.sign) })); sg.position.set(X(tall ? 1 : 0), O.y + LV(k) + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
     // 종류별 가구
     const facItem = (lx, lz, label) => { if (fac) item(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, () => UI.openFacility(fac), 2.4); };
     const desk = (lx, lz, col = 0x8a6a4a, mon = true) => { box(lx, 0, lz, 1.6, 0.76, 0.8, col, true); if (mon) { box(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); } box(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); box(lx, 0.45, lz + 0.98, 0.5, 0.55, 0.06, 0x2a2a30); };
@@ -169,6 +222,7 @@ const INTERIOR = {
     const plant = (lx, lz) => { cyl(lx, 0, lz, 0.25, 0.45, 0x8a5a3a, 8, 0.2); box(lx, 0.45, lz, 0.6, 0.9, 0.6, 0x3a8a3a); };
     const bars = (x0, z0, x1, z1, h = 3) => { const len = Math.hypot(x1 - x0, z1 - z0); const n = Math.floor(len / 0.3); for (let i = 0; i <= n; i++) { const t = i / n; box(lerp(x0, x1, t), 0, lerp(z0, z1, t), 0.06, h, 0.06, 0x2a2c30); } cols.push(addCollider(X(Math.min(x0, x1)) - 0.12, Z(Math.min(z0, z1)) - 0.12, X(Math.max(x0, x1)) + 0.12, Z(Math.max(z0, z1)) + 0.12, O.y + h, 'int', null, O.y - 0.3)); };
     const hw = W / 2, hd = D / 2;
+    if (lo === 0) { furn = true;
     switch (kind) {
       case 'police': case 'guard': {
         counter(0, -hd + 3.2, Math.min(8, W - 6), 0x30508f); facItem(0, -hd + 4.6, fac ? '🚓 민원실 (출소카드·수배 해제)' : undefined);
@@ -326,20 +380,60 @@ const INTERIOR = {
       if (b.plot && b.plot.owner === ME.id) item(0, hd - 5, '📍 내 집을 스폰 지점으로', () => { ME.homePlot = b.plot.id; toast('📍 집이 스폰 지점이 되었다'); saveGame(); }, 1.6);
       if (fac) facItem(0, hd - 6);
     }
-    // 엘리베이터 (높은 건물 → 옥상)
-    let elev = null;
-    if (this.tall(b)) {
-      const ex = -hw + 1.6, ez = -hd + 0.4; box(ex, 0, ez, 2.2, 2.6, 0.1, 0xb8bcc4); box(ex - 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 1.3, 1.1, ez + 0.08, 0.15, 0.3, 0.04, 0xffd34a);
-      elev = { x: X(ex), z: Z(ez + 1.4) };
-      const floors = b.floors || Math.max(2, Math.round((b.top - b.y0) / FLOOR_H));
-      item(ex, ez + 1.4, `🛗 엘리베이터 — 옥상 (${floors}층 · ${Math.round(b.top - b.y0)}m)`, () => this.exit(true), 1.6);
+    furn = false; }
+    // 높은 건물: 계단실 · 엘리베이터 승강로 · 위층 가구
+    const dyn = { doors: {}, lo, hi };
+    if (tall) {
+      const zm = (ST.z0 + ST.z1) / 2, run = ST.z1 - ST.z0, n = 14;
+      const top = LV(hi) + FH + 1;
+      // 두 계단 줄 사이 칸막이 + 계단실 바깥벽 (끝은 열려 있어 드나들 수 있다)
+      box(hw0 - 1.4, LV(lo), zm, 0.08, top - LV(lo), run, 0xd8d4cc, true); box(ST.bx0 - 0.08, LV(lo), zm, 0.12, top - LV(lo), run, 0xd8d4cc, true);
+      for (let k = lo; k <= hi; k++) {
+        const y = LV(k);
+        if (k < NF - 1) { // k층 → k+1층 계단
+          const L = laneOf(k), r = laneR(L), cx = (r.x0 + r.x1) / 2, up = L === 'A' ? -1 : 1; // A: +z 끝에서 -z 쪽으로 올라감, B: 반대
+          for (let i = 0; i < n; i++) { const z = up < 0 ? ST.z1 - (i + 0.5) * run / n : ST.z0 + (i + 0.5) * run / n; box(cx, y, z, r.x1 - r.x0, (i + 1) * FH / n, run / n + 0.01, i % 2 ? 0x9a9690 : 0xa8a49e); }
+          plats.push({ ramp: true, x0: X(r.x0), x1: X(r.x1), z0: Z(ST.z0), z1: Z(ST.z1), y0: O.y + (up < 0 ? LV(k + 1) : y), y1: O.y + (up < 0 ? y : LV(k + 1)) });
+          const hz0 = up < 0 ? ST.z0 : zm, hz1 = up < 0 ? zm : ST.z1; // 계단 밑 (머리 닿는 쪽)은 막는다
+          cols.push(addCollider(X(r.x0), Z(hz0), X(r.x1), Z(hz1), O.y + y + FH * 0.5, 'int', null, O.y + y - 0.3));
+          const lowZ = up < 0 ? ST.z1 + 0.6 : ST.z0 - 0.6; box(cx, y + 0.01, lowZ, r.x1 - r.x0, 0.01, 0.5, 0xf2c23a); // 계단 시작 표시
+        } else { // 꼭대기 층: 옥상 출입문
+          const L = laneOf(k), r = laneR(L), cx = (r.x0 + r.x1) / 2, dz = L === 'A' ? ST.z1 - 0.2 : ST.z0 + 0.2;
+          box(cx, y, dz, r.x1 - r.x0 - 0.1, 2.3, 0.12, 0x5a5e66, true); box(cx, y + 2.35, dz, 0.9, 0.25, 0.14, 0x18c860);
+          item(cx, L === 'A' ? ST.z1 + 0.8 : ST.z0 - 0.8, '🚪 옥상으로 나가기 (계단)', () => this.exit(true), 1.4, y);
+        }
+        if (k > 0) { // 아래층 계단 구멍 앞 난간 (막힌 쪽 끝)
+          const L = laneOf(k - 1), r = laneR(L), rz = L === 'A' ? ST.z1 : ST.z0;
+          box((r.x0 + r.x1) / 2, y, rz, r.x1 - r.x0, 1.05, 0.08, 0x8a8e96, true);
+        }
+        // 엘리베이터 승강로 (층마다 문)
+        box(SH.x1 + 0.06, y, (SH.z0 + SH.z1) / 2, 0.12, FH, SH.z1 - SH.z0, 0xb8bcc4, true);
+        box((SH.x0 + SH.dx - 0.6) / 2, y, SH.z1 + 0.06, SH.dx - 0.6 - SH.x0, FH, 0.12, 0xb8bcc4, true);
+        box((SH.dx + 0.6 + SH.x1 + 0.12) / 2, y, SH.z1 + 0.06, SH.x1 + 0.12 - SH.dx - 0.6, FH, 0.12, 0xb8bcc4, true);
+        box(SH.dx, y + 2.4, SH.z1 + 0.06, 1.2, FH - 2.4, 0.12, 0xb8bcc4, true);
+        box(SH.dx, y + 2.45, SH.z1 + 0.14, 0.7, 0.28, 0.04, 0x111418); // 층 표시창
+        box(SH.dx + 0.95, y + 1.1, SH.z1 + 0.14, 0.16, 0.3, 0.04, 0xffd34a); // 호출 버튼
+        { const fs = textSprite(`🛗 ${k + 1}층`, '#ffd34a'); fs.position.set(X(SH.dx), O.y + y + 2.95, Z(SH.z1 + 0.2)); fs.scale.multiplyScalar(0.7); group.add(fs); }
+        const dm = new THREE.MeshBasicMaterial({ color: 0x9aa0aa }); const dl = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm), dr = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.05), dm);
+        dl.position.set(X(SH.dx - 0.3), O.y + y + 1.2, Z(SH.z1 + 0.02)); dr.position.set(X(SH.dx + 0.3), O.y + y + 1.2, Z(SH.z1 + 0.02)); group.add(dl, dr);
+        dyn.doors[k] = { dl, dr, x: X(SH.dx), y: O.y + y, col: null };
+        if (k > 0) { // 위층: 사무실 / 객실 / 병실
+          furn = true; const rr = mulberry32(hashStr('fl' + b.id + ':' + k));
+          const style = ['hotel', 'apartment'].includes(kind) ? 'rooms' : kind === 'hospital' ? 'ward' : 'office';
+          if (style === 'office') { for (let lz = -hd0 + 4.4; lz < hd0 - 2; lz += 3) for (let lx = -hw0 + 4; lx < hw0 - 3.5; lx += 3.2) { if (rr() < 0.15) continue; box(lx, y, lz, 1.6, 0.76, 0.8, 0xd8d4cc, true); box(lx, y + 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, y + 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); box(lx, y, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); } }
+          else if (style === 'ward') { for (let lx = -hw0 + 4; lx < hw0 - 4; lx += 2.6) for (const lz of [-hd0 + 1.6, hd0 - 1.8]) { box(lx, y, lz, 1.0, 0.55, 2.0, 0xe8eef2, true); box(lx, y + 0.55, lz, 0.95, 0.12, 1.9, 0x9ad0f0); } }
+          else { for (let lx = -hw0 + 4.2; lx < hw0 - 4; lx += 3.4) { box(lx, y, -hd0 + 1.4, 1.5, 0.5, 2.1, 0x6a4a2a, true); box(lx, y + 0.5, -hd0 + 1.4, 1.45, 0.16, 2.0, C(rr() < 0.5 ? 0x5a7ab8 : 0xb85a7a)); box(lx + 1.7, y, -hd0 + 1.5, 0.08, 2.4, 2.6, 0xe8e0d0, true); } for (let lx = -hw0 + 4.5; lx < hw0 - 4; lx += 4.5) sofa(lx, hd0 - 2, C(0x6a7a8a), y); }
+          box(-hw0 + 3.6, y, hd0 - 1, 0.6, 0.9, 0.6, 0x3a8a3a); box(hw0 - 4, y, hd0 - 0.8, 0.4, 1.2, 0.4, 0xcfe8f4);
+          furn = false;
+        }
+      }
     }
     // 메쉬 (조명은 굽기: 위쪽 면은 밝고 옆·아래는 어둡게 → 라이트 없이도 실내 느낌, 저사양 폰도 가볍게)
     const g = mb.geo(); const nor = g.attributes.normal, col = g.attributes.color;
     for (let i = 0; i < col.count; i++) { const ny = nor.getY(i), nx = nor.getX(i), nz = nor.getZ(i); const f = ny > 0.5 ? 1.0 : ny < -0.5 ? 0.78 : 0.84 + nx * 0.06 + nz * 0.04; col.setXYZ(i, col.getX(i) * f * T.bright, col.getY(i) * f * T.bright, col.getZ(i) * f * T.bright); }
     const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true })); group.add(mesh);
     scene.add(group);
-    const I = { b, O, W, D, H, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: elev || { x: X(0), z: Z(hd - 1.6) } };
+    const I = { b, O, W, D, H, FH, NF, center, lo, hi, tall, ST, SH, dyn, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: tall ? { x: X(SH.dx), z: Z(SH.z1 + 1.0) } : { x: X(0), z: Z(hd - 1.6) } };
     return I;
   },
   theme(kind) {

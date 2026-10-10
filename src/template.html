@@ -84,6 +84,17 @@ button{font-family:inherit;cursor:pointer}
 #invCount{font-size:12px;color:var(--dim);margin-top:8px}
 #invCount a{color:var(--acc2);text-decoration:underline;cursor:pointer}
 /* 친구 초대 창: 화면 전체 반투명 막(바깥 누르면 닫힘) + 작은 카드. 터치 버튼(#touch z12)·메뉴(z40)보다 위 */
+#repBtn{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:30;border:0;border-radius:999px;padding:7px 14px;background:linear-gradient(180deg,#ff4a5a,#c81a2a);color:#fff;font:800 14px 'Noto Sans KR',sans-serif;box-shadow:0 6px 18px rgba(200,20,40,.45);cursor:pointer;display:flex;gap:6px;align-items:center}
+#repBtn b{background:#fff;color:#c81a2a;border-radius:999px;padding:0 7px;font-size:12px}#repBtn small{opacity:.8;font-size:11px;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:0 4px}
+#repBtn.hidden{display:none}#repBtn.pulse{animation:repP .9s ease 3}@keyframes repP{50%{transform:translateX(-50%) scale(1.12)}}
+body.touch #repBtn{top:auto;bottom:16px;left:auto;right:290px;transform:none;padding:8px 12px}body.touch #repBtn.pulse{animation:none}
+#verdict{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:46;width:min(380px,92vw);max-height:calc(100vh - 24px);overflow:auto;padding:12px 14px;border-radius:14px;background:rgba(14,16,26,.96);border:1px solid rgba(255,211,74,.5);display:none;font-size:13.5px}
+#verdict h3{margin:0 0 6px;font-family:'Black Han Sans';font-weight:400;font-size:20px}#verdict .vx{position:absolute;top:6px;right:8px;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:16px;cursor:pointer}
+#verdict .vb{display:inline-block;padding:2px 10px;border-radius:999px;background:#555;font-weight:800;margin-bottom:6px}#verdict .vb.bad{background:#c81a2a}#verdict .vb.ok{background:#1a8a4a}#verdict .vs{opacity:.85;margin-bottom:4px}
+#verdict .vr{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid rgba(255,255,255,.08)}#verdict .vr span{opacity:.7;white-space:nowrap}#verdict .vr b{text-align:right;font-weight:700}
+@media(max-height:500px){#verdict{font-size:12px;padding:8px 12px;top:6px}#verdict h3{font-size:16px;margin-bottom:2px}#verdict .vr{padding:2px 0}}
+#flChip{position:fixed;top:64px;right:12px;z-index:22;padding:5px 11px;border-radius:999px;background:rgba(14,16,26,.85);border:1px solid rgba(160,200,255,.4);color:#fff;font:700 13px 'Noto Sans KR',sans-serif;pointer-events:none;display:none}
+body.touch #flChip{top:auto;bottom:212px;right:auto;left:50%;transform:translateX(-50%);font-size:12px}
 #share{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);pointer-events:auto;touch-action:manipulation;padding:8px}
 #share .sbox{position:relative;width:min(340px,88vw);max-height:100%;overflow:auto;padding:12px 14px;border-radius:16px;text-align:center;background:rgba(14,16,26,.97)}
 #share h3{margin:0;font-family:'Black Han Sans';font-weight:400;font-size:19px}

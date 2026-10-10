@@ -237,6 +237,7 @@ const UI = {
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
+      { ic: '🚔', t: '경찰 신고 (112)', p: 0, d: POLICE.pending().length ? `신고할 사건 ${POLICE.pending().length}건 · 단축키 J` : '나를 공격한 사람·갱단원 신고 · 단축키 J', fn: () => setTimeout(() => POLICE.open(), 30) },
       { ic: '🔗', t: '친구 초대 (방 코드 · 링크)', p: 0, d: G.online ? `방 ${PUBLIC_ROOMS.includes(G.room) ? '공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1) : G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 비공개방을 만들고 코드·링크가 나와요', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },

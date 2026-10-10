@@ -6,14 +6,16 @@ const ME = {
   skills: { shoot: 0, fight: 0, drive: 0, fit: 0, swim: 0, study: 0 }, garage: [], outfit: null, vehicle: null, seat: null, dead: false, deadT: 0, spawn: null,
   char: null, grudge: {}, drunk: 0, dance: -1, action: null, actionT: 1, aiming: false, swim: false, knockT: 0, sitBench: null, reloadT: 0, fireT: 0, punchSide: 0,
   combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
-  takeDamage(amt, from) {
+  takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (this.armor > 0) { const a = Math.min(this.armor, amt * 0.65); this.armor -= a; amt -= a; }
     this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);
-    if (this.hp <= 0 && this.wanted > 0 && !this.jail && PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - this.x, q.z - this.z) < 35)) { this.hp = 25; LAW.arrest(); return; }
+    const rec = () => { if (typeof POLICE !== 'undefined') POLICE.onHurt(from, amt, w); }; // 신고용 피해 기록
+    if (this.hp <= 0 && this.wanted > 0 && !this.jail && PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - this.x, q.z - this.z) < 35)) { this.hp = 25; rec(); LAW.arrest(); return; }
     if (this.hp <= 0) this.die(from);
+    rec();
   },
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
@@ -28,6 +30,7 @@ const ME = {
     if (!sp) { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } } sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 }; }
     this.x = sp.x; this.z = sp.z; this.y = groundHeight(this.x, this.z) + 0.1; this.vx = this.vz = this.vy = 0;
     $('#death').classList.add('hidden'); toast(`🏥 병원비 ${fmtMoney(fee)} 지불`); G.godT = G.t + 3;
+    if (this.warrant) { this.wanted = 2; toast('🚨 체포 영장은 아직 유효하다 — 경찰이 찾고 있다', 3000); }
   },
 };
 const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
@@ -52,6 +55,7 @@ function initInput() {
     if (k === 'h' && ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); }
     if (k === 'l' && ME.vehicle && ME.vehicle.M.police) ME.vehicle.siren = !ME.vehicle.siren;
     if (k === 'u') COMFORT.unstick(true);
+    if (k === 'j') POLICE.open();
     if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1;
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
@@ -104,17 +108,24 @@ function raycastWorld(o, d, maxD, opt = {}) {
 // ----- damage routing -----
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
-  if (tg.kind === 'me') { if (from !== ME.id) ME.takeDamage(amt, from); return; }
+  if (tg.kind === 'me') {
+    if (from === ME.id) return; const hb = ME.hp; ME.takeDamage(amt, from, opts.w);
+    if (G.isHost && /^n\d+$/.test(String(from))) POLICE.hostSelfHit(String(from), opts.w, opts.kind, hb - Math.max(0, ME.hp)); // 방장 화면의 NPC가 방장을 때림 → 사건 기록
+    return;
+  }
   // PvP: 피해는 오직 맞은 사람에게만 — 공격자 자신(같은 id)은 절대 피해를 받지 않는다. 맞은 쪽이 hitAck로 결과를 돌려준다.
   if (tg.kind === 'player') {
     if (!tg.id || tg.id === ME.id || tg.id === from) return;
     const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
-    NET.send({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind }); return;
+    const w = opts.w || (opts.kind === 'car' ? 'car' : opts.kind === 'boom' ? 'boom' : from === ME.id ? ME.weapon : '');
+    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w }); return;
   }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
   if (tg.kind === 'veh') { const v = vehicles.get(tg.id); if (v) v.damage(amt, from); }
 }
+// 플레이어 피해 메시지 전송 (방장은 보내는 순간 사건 기록 → 신고 수사의 근거)
+function sendDmg(msg) { NET.send(msg); if (G.isHost && typeof POLICE !== 'undefined') POLICE.hostSee(msg, ME.id); }
 function notifyPlayer(id, msg) { if (id === ME.id) handlePersonal(msg); else { msg.to = id; NET.send(msg); } }
 function handlePersonal(m) {
   if (m.t === 'wanted') addWanted(m.add);
@@ -133,7 +144,7 @@ function damageArea(x, y, z, r, dmg, by) {
   if (G.isHost) {
     for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked') continue; const d = Math.hypot(p.x - x, p.z - z); if (d < r) pedDamage(p, dmg * (1 - d / r), from, { kind: 'gun' }); }
     for (const a of ANIMALS) { const d = Math.hypot(a.x - x, a.z - z); if (d < r) animalDamage(a, dmg * (1 - d / r), from); }
-    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
+    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) sendDmg({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom', w: 'boom' }); }
   }
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
