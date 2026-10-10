@@ -134,7 +134,7 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #mini{width:170px;height:170px;border-radius:50%;border:3px solid rgba(255,255,255,.22);box-shadow:0 8px 24px rgba(0,0,0,.5);background:#0a0f1a}
 .hbar{width:170px;height:9px;border-radius:6px;background:rgba(0,0,0,.55);overflow:hidden;border:1px solid rgba(255,255,255,.12)}
 .hbar i{display:block;height:100%;width:100%;transition:width .2s}
-#hpBar i{background:linear-gradient(90deg,#ff3d4f,#ff8a5a)}
+#hpBar i{background:linear-gradient(90deg,#ff3d4f,#ff8a5a)}#hpBar{position:relative}#hpBar.inf i{background:linear-gradient(90deg,#ffd34a,#ff8a3a,#ffd34a)}#hpBar.inf::after{content:'∞';position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:#ffd34a;font:900 15px sans-serif;text-shadow:0 1px 3px #000}
 #arBar i{background:linear-gradient(90deg,#4fb6ff,#9adfff)}
 #stBar i{background:linear-gradient(90deg,#ffd84a,#fff2a0)}
 #weapon{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));padding:10px 14px;text-align:right;min-width:150px}
@@ -173,6 +173,7 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #chatIn{pointer-events:auto;margin-top:4px}
 #dmgFlash{position:absolute;inset:0;background:radial-gradient(circle,transparent 45%,rgba(255,0,30,.55));opacity:0;transition:opacity .25s}
 #drunk{position:absolute;inset:0;backdrop-filter:blur(1.5px) hue-rotate(40deg);opacity:0;transition:opacity 1s}
+#deathLoss{margin-top:14px;font:600 14px 'Noto Sans KR',sans-serif;color:#ffe0e0;text-shadow:0 1px 4px #000;background:rgba(0,0,0,.55);border:1px solid rgba(255,80,90,.45);border-radius:12px;padding:10px 16px;max-width:min(520px,90vw);max-height:40vh;overflow:auto;text-align:left}#deathLoss b{display:block;color:#ff6a78;font-size:15px;margin-bottom:4px}#deathLoss div{padding:2px 0}#deathLoss:empty{display:none}@media(max-height:500px){#death{font-size:40px}#deathLoss{font-size:12px;padding:6px 12px;margin-top:6px}}
 #death{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;flex-direction:column;background:radial-gradient(circle,rgba(80,0,0,.35),rgba(0,0,0,.85));font-family:'Black Han Sans';font-size:64px;color:#ff3d4f;text-shadow:0 0 30px #900}
 #death small{font-family:'Noto Sans KR';font-size:15px;color:#ddd}
 /* menus */
@@ -189,6 +190,12 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 .item.dis{opacity:.45}
 .item .ic{font-size:24px}
 #menu .close{margin-top:12px;width:100%}
+#menu.side{justify-content:flex-start;background:linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,0) 70%)}#menu.side .box{width:min(400px,52vw);max-height:92vh}
+.ctabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}.ctab{border:1px solid var(--line);background:#151a2c;color:var(--txt);border-radius:999px;padding:5px 10px;font:700 12.5px 'Noto Sans KR',sans-serif;cursor:pointer}.ctab.on{background:#ffd34a;color:#1a1408;border-color:#ffd34a}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;max-height:44vh;overflow:auto}.citem{display:flex;align-items:center;gap:7px;background:#151a2c;border:1px solid var(--line);border-radius:11px;padding:7px 8px;color:var(--txt);text-align:left;cursor:pointer;flex-wrap:wrap}
+.citem .t{flex:1;font-size:12.5px;font-weight:700;min-width:70px}.citem .p{font-size:11.5px;color:#ffd34a;width:100%;padding-left:25px}.citem.on{border-color:#3ad07a}.citem.on .p{color:#3ad07a}.citem.pv{border-color:#ffd34a;background:#2a2410}
+.sw{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.6);flex:none}.cact{display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap}.cact b{flex:1;font-size:14px}.cact .btn{padding:8px 14px}
+@media(max-height:500px){#menu.side .box{max-height:96vh;padding:9px 11px}#menu.side h2{font-size:19px}#menu.side .desc{font-size:11px;margin-bottom:6px}.clist{max-height:42vh}.ctab{padding:3px 8px;font-size:11.5px}.citem{padding:5px 7px}.cact{margin-top:6px}#menu.side .close{margin-top:6px;padding:6px}}
 #menu .xbtn{position:sticky;top:0;float:right;z-index:3;width:34px;height:34px;margin:-4px -4px 0 8px;border-radius:50%;border:1px solid var(--line);background:rgba(30,34,50,.95);color:#fff;font-size:16px;font-weight:700;cursor:pointer;line-height:1;padding:0}
 #menu .xbtn:hover{background:#c0392b}
 #leaveBtn{position:absolute;right:10px;bottom:10px}
@@ -277,7 +284,7 @@ body.touch #prompt{bottom:auto;top:58%}
 
 <div id="share" class="hidden"><div class="sbox panel"><button type="button" id="shareX" aria-label="닫기">✕</button><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button type="button" class="btn" id="shareCopy">📋 링크 복사</button><button type="button" class="btn b2" id="shareShare">📤 공유하기</button></div><button type="button" class="btn b3" id="shareClose">닫기</button></div></div>
 
-<div id="death" class="hidden">사망<small id="deathSub">병원으로 이송 중…</small></div>
+<div id="death" class="hidden">사망<small id="deathSub">병원으로 이송 중…</small><div id="deathLoss"></div></div>
 <div id="menu" class="hidden"><div class="box" id="menuBox"></div></div>
 <div id="bigmap" class="hidden"><canvas id="bigmapC" width="1400" height="900"></canvas><button class="btn b3 x" id="mapClose">닫기 ✕</button></div>
 

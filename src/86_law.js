@@ -34,7 +34,7 @@ Object.assign(ADMIN, {
   },
   finish(hostOk) {
     if (!this.on || !this.pending) return; this.pending = false; this.ready = true; clearTimeout(this._pT);
-    this.status('ok', '👑 관리자 모드 완료', hostOk ? (G.online ? '이 방의 방장 · 무한 돈·탄약 · 체포 면제' : '무한 돈·탄약 · 체포 면제') : '방장 권한은 아직 못 받았어요 (관리자 기능은 사용 가능)');
+    this.status('ok', '👑 관리자 모드 완료', hostOk ? (G.online ? '이 방의 방장 · 체력 무한 · 무한 돈·탄약 · 체포 면제' : '체력 무한 · 무한 돈·탄약 · 체포 면제') : '방장 권한은 아직 못 받았어요 (관리자 기능은 사용 가능)');
     sfx('levelup'); UI.updateHud && G.started && UI.updateHud();
   },
   onHostGranted() { if (!this.on || !this.sk) return; G.adminId = ME.id; if (this.pending) this.finish(true); }, // 비번으로 로그인한 본인만
@@ -196,6 +196,7 @@ const LAW = {
   },
 };
 // ---- 이름표 / 배지: 방장이 서명으로 검증한 관리자(G.adminId)에게만 '👑관리자' 배지 ----
+function adminGod() { return !!(ADMIN.on && ADMIN.ready); } // 인증된 관리자만 체력 무한
 function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id && id !== ME.id); }
 function displayName(id, name) { return (isAdminId(id) ? '👑관리자 ' : '') + (name || ''); }
 function refreshRemoteName(rp) {

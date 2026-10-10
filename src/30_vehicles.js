@@ -93,11 +93,47 @@ const VMODELS = {
 for (const k in VMODELS) { const m = VMODELS[k]; if (m.base) VMODELS[k] = Object.assign({}, VMODELS[m.base], m); }
 const CAR_COLORS = ['#d8d8dc', '#1a1a1e', '#b01818', '#1a3a8a', '#f2f2f2', '#6a6e74', '#2a5a3a', '#e0a020', '#8a1a4a', '#3ac0e0', '#ff6a1a', '#4a4a8a'];
 const vehicles = new Map();
+// ---- 차량 디테일 지오메트리 캐시: 알로이 휠(스포크), 그릴/문틈/사이드스커트 (모델당 1번만 만든다) ----
+const VGEO = new Map();
+function rimGeo(wr) {
+  const k = 'rim' + wr; if (VGEO.has(k)) return VGEO.get(k);
+  const parts = []; const R = wr * 0.64;
+  const barrel = new THREE.CylinderGeometry(R, R, 0.22, 18, 1, true); barrel.rotateX(Math.PI / 2); parts.push(barrel);
+  for (const zs of [1, -1]) {
+    const lip = new THREE.TorusGeometry(R, 0.018, 6, 22); lip.translate(0, 0, zs * 0.115); parts.push(lip);
+    const hub = new THREE.CylinderGeometry(R * 0.26, R * 0.3, 0.05, 10); hub.rotateX(Math.PI / 2); hub.translate(0, 0, zs * 0.11); parts.push(hub);
+    for (let i = 0; i < 5; i++) { const sp = new THREE.BoxGeometry(R * 0.8, 0.055, 0.03); sp.translate(R * 0.5, 0, zs * 0.105); sp.rotateZ(i / 5 * Math.PI * 2); parts.push(sp); }
+    for (let i = 0; i < 5; i++) { const nut = new THREE.CylinderGeometry(0.012, 0.012, 0.02, 6); nut.rotateX(Math.PI / 2); nut.translate(Math.cos(i / 5 * 6.283 + 0.6) * R * 0.17, Math.sin(i / 5 * 6.283 + 0.6) * R * 0.17, zs * 0.14); parts.push(nut); }
+  }
+  const g = mergeAttrGeos(parts); VGEO.set(k, g); return g;
+}
+function tireGeo(wr) {
+  const k = 'tire' + wr; if (VGEO.has(k)) return VGEO.get(k);
+  const tread = new THREE.CylinderGeometry(wr - 0.03, wr - 0.03, 0.2, 24, 1, true); tread.rotateX(Math.PI / 2);
+  const parts = [tread]; for (const zs of [1, -1]) { const side = new THREE.TorusGeometry(wr - 0.06, 0.06, 8, 24); side.translate(0, 0, zs * 0.085); parts.push(side); const wall = new THREE.RingGeometry(wr * 0.62, wr - 0.04, 24); if (zs < 0) wall.rotateY(Math.PI); wall.translate(0, 0, zs * 0.13); parts.push(wall); }
+  const g = mergeAttrGeos(parts); VGEO.set(k, g); return g;
+}
+function carTrimGeo(Mo) { // 그릴 슬랫 + 문틈 + 사이드 스커트 + 와이퍼 (어두운 재질 한 덩어리)
+  const k = 'trim' + Mo.name; if (VGEO.has(k)) return VGEO.get(k);
+  const L = Mo.L / 2, W = Mo.W, c = Mo.clear; const parts = [];
+  const bx = (x, y, z, sx, sy, sz, rz = 0) => { const g = new THREE.BoxGeometry(sx, sy, sz); if (rz) g.rotateZ(rz); g.translate(x, y, z); parts.push(g); };
+  const gy = Mo.hood - 0.3; for (let i = 0; i < 3; i++) bx(L + 0.035, gy + i * 0.055 - 0.05, 0, 0.03, 0.022, W * 0.42); // 그릴 슬랫
+  for (const zs of [1, -1]) {
+    const z = zs * (W / 2 + 0.002);
+    bx(0, c + 0.12, z, Mo.L * 0.62, 0.06, 0.02); // 사이드 스커트
+    const dx = (Mo.cabF + Mo.cabR) / 2; bx(dx + 0.02, (c + Mo.deck) / 2 + 0.12, z, 0.012, Math.max(0.3, Mo.deck - c - 0.25), 0.012); // 앞뒤 문 틈
+    bx(Mo.cabF - 0.08, (c + Mo.hood) / 2 + 0.12, z, 0.012, Math.max(0.3, Mo.hood - c - 0.25), 0.012);
+    if (!Mo.bed) bx(Mo.cabR + 0.12, (c + Mo.deck) / 2 + 0.12, z, 0.012, Math.max(0.3, Mo.deck - c - 0.25), 0.012);
+    bx(Mo.wb[0], c + 0.52, z, 0.05, 0.035, 0.012); bx(Mo.wb[1], c + 0.52, z, 0.05, 0.035, 0.012); // 휠아치 위 몰딩
+  }
+  bx(Mo.cabF + 0.02, Mo.hood + 0.08, 0.25, 0.02, 0.015, 0.5, 0); bx(Mo.cabF + 0.02, Mo.hood + 0.08, -0.25, 0.02, 0.015, 0.5, 0); // 와이퍼
+  const g = mergeAttrGeos(parts); VGEO.set(k, g); return g;
+}
 let plateTex = null;
 function buildCarMesh(Mo, color, v) {
   const root = new THREE.Group(); const inner = new THREE.Group(); inner.rotation.y = -Math.PI / 2; root.add(inner);
   const body = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color), metalness: 0.65, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 });
-  const dark = cmat('#141416', 0.6, 0.2), chrome = cmat('#d8dce0', 0.15, 1), glass = new THREE.MeshPhysicalMaterial({ color: 0x15202a, metalness: 0.2, roughness: 0.05, transmission: 0, transparent: true, opacity: 0.78, clearcoat: 1 });
+  const dark = cmat('#141416', 0.6, 0.2), tireM = cmat('#1b1b1d', 0.92, 0), chrome = cmat('#d8dce0', 0.15, 1), glass = new THREE.MeshPhysicalMaterial({ color: 0x15202a, metalness: 0.2, roughness: 0.05, transmission: 0, transparent: true, opacity: 0.78, clearcoat: 1 });
   const L = Mo.L / 2, W = Mo.W, c = Mo.clear, wr = Mo.wr;
   const pts = []; pts.push([-L + 0.05, c + 0.05]);
   for (const wx of [Mo.wb[1], Mo.wb[0]]) { const r = wr + 0.09; for (let i = 0; i <= 10; i++) { const a = Math.PI - i / 10 * Math.PI; pts.push([wx + Math.cos(a) * r, Math.max(c + 0.05, wr + Math.sin(a) * r)]); } }
@@ -138,12 +174,14 @@ function buildCarMesh(Mo, color, v) {
   if (Mo.taxi) { const t = B(new THREE.MeshStandardMaterial({ color: 0xffd23a, emissive: 0xffaa00, emissiveIntensity: 0.4 }), (Mo.roofF + Mo.roofR) / 2, Mo.roof + 0.14, 0, 0.3, 0.2, 0.7); v.taxiSign = t; }
   // wheels
   v.wheels = [];
-  const tireG = new THREE.CylinderGeometry(wr, wr, 0.24, 20); tireG.rotateX(Math.PI / 2);
-  const rimG = new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, 0.26, 10); rimG.rotateX(Math.PI / 2);
+  const hq = G.quality >= 1; const tireG = hq ? tireGeo(wr) : (() => { const g = new THREE.CylinderGeometry(wr, wr, 0.24, 14); g.rotateX(Math.PI / 2); return g; })();
+  const rimG = hq ? rimGeo(wr) : (() => { const g = new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, 0.26, 10); g.rotateX(Math.PI / 2); return g; })();
+  const rimM = Mo.police || Mo.taxi ? cmat('#9aa0a8', 0.35, 0.8) : chrome;
+  if (hq) { const tr = new THREE.Mesh(carTrimGeo(Mo), dark); inner.add(tr); }
   for (const [wx, front] of [[Mo.wb[0], true], [Mo.wb[1], false]]) for (const s of [1, -1]) {
     const pivot = new THREE.Group(); pivot.position.set(wx, wr, s * (W / 2 - 0.13)); inner.add(pivot);
-    const spin = new THREE.Group(); pivot.add(spin); spin.add(new THREE.Mesh(tireG, dark)); spin.add(new THREE.Mesh(rimG, chrome));
-    const sp = new THREE.Mesh(CG.box, dark); sp.scale.set(wr * 1.1, 0.06, 0.27); spin.add(sp);
+    const spin = new THREE.Group(); pivot.add(spin); spin.add(new THREE.Mesh(tireG, tireM)); spin.add(new THREE.Mesh(rimG, rimM));
+    if (!hq) { const sp = new THREE.Mesh(CG.box, dark); sp.scale.set(wr * 1.1, 0.06, 0.27); spin.add(sp); }
     v.wheels.push({ pivot, spin, front });
   }
   // driver seat position (in root space, +z forward)
@@ -151,6 +189,7 @@ function buildCarMesh(Mo, color, v) {
   v.seatP = new THREE.Vector3(-v.seat.x, v.seat.y, v.seat.z);
   v.bodyMat = body;
   root.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+  v.small = []; inner.traverse(m => { if (m.isMesh && m !== bm && m.geometry !== cg && m !== roof && m.geometry !== tireG && m.material !== v.headMat && m.material !== v.tailMat) v.small.push(m); }); v.lodFar = false; // 멀리 있으면 작은 부품 생략
   return root;
 }
 function buildBikeMesh(Mo, color, v) {

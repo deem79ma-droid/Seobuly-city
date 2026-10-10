@@ -18,7 +18,7 @@ const UI = {
   updateHud() {
     { const adm = ADMIN.on && ADMIN.ready; const k = ME.name + '|' + adm; const el = $('#myName'); if (el && el._k !== k) { el._k = k; el.innerHTML = '🙂 <span></span>' + (adm ? '<span class="admBadge">👑 관리자</span>' : ''); el.querySelector('span').textContent = ME.name; } }
     $('#money').textContent = fmtMoney(ME.money);
-    $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
+    { const god = adminGod(); const hb = $('#hpBar'); if (hb.classList.contains('inf') !== god) hb.classList.toggle('inf', god); $('#hpBar i').style.width = (god ? 100 : clamp(ME.hp, 0, 100)) + '%'; } $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
     const regionChanged = R !== this.lastRegion;
     if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
@@ -59,6 +59,7 @@ const UI = {
   chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
   // ---------- menu ----------
   openMenu(title, desc, items, opts = {}) {
+    { const f = this._onClose; this._onClose = null; if (f) f(); }
     this.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
     const box = $('#menuBox'); box.innerHTML = `<h2></h2><div class="desc"></div><div class="items"></div>${opts.extra || ''}<button class="btn b3 close">닫기</button>`;
     box.querySelector('h2').textContent = title; box.querySelector('.desc').innerHTML = desc || '';
@@ -73,7 +74,7 @@ const UI = {
     box.querySelector('.close').onclick = () => this.closeMenu();
     $('#menu').classList.remove('hidden'); if (opts.after) opts.after(box);
   },
-  closeMenu() { this.menuOpen = false; $('#menu').classList.add('hidden'); clearInterval(this._mg); },
+  closeMenu() { this.menuOpen = false; $('#menu').classList.add('hidden'); clearInterval(this._mg); const f = this._onClose; this._onClose = null; if (f) f(); },
   // ---------- facility ----------
   openFacility(f) {
     sfx('door'); const skillUp = (k, name) => { if (ME.skills[k] >= 5) { toast('이미 최고 레벨!'); return; } ME.skills[k]++; sfx('levelup'); toast(`📈 ${name} 레벨 ${ME.skills[k]}`); };
@@ -111,6 +112,7 @@ const UI = {
       case 'zoo': this.openMenu('🦁 동물원', `${REGIONS[f.region].name} 동물원 — 사자·코끼리·기린·얼룩말·곰·펭귄`, [{ ic: '🎟️', t: '입장권', p: 1000, d: '맹수 우리에 들어가면 위험!', fn: () => { ME.inv.ticket++; toast('🎟️ 즐거운 관람 되세요!'); } }, { ic: '🥕', t: '동물 사료', p: 200, d: '음식 +1 (동물에게 먹이 주기)', fn: () => ME.inv.food++ }]); break;
       case 'gun': this.openGun(); break;
       case 'clothes': this.openClothes(); break;
+      case 'parking': PARKING.open(f); break;
       case 'club': this.openMenu('🪩 클럽 네온 · 바', '플로어에서 G로 춤추기!', [
         { ic: '🍺', t: '맥주', p: 300, d: '취기 +', fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.3); ME.action = 'drink'; ME.actionT = 0; } },
         { ic: '🍸', t: '칵테일', p: 900, d: '취기 ++ · HP+5', fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.5); ME.hp = Math.min(100, ME.hp + 5); } },
@@ -137,7 +139,8 @@ const UI = {
     items.push({ ic: '🦺', t: '방탄복', p: 2500, d: '아머 100', fn: () => { ME.armor = 100; } });
     this.openMenu('🔫 총포사', '무기와 탄약 · 경찰 앞에서 쏘면 수배된다', items);
   },
-  openClothes() {
+  openClothes() { WARDROBE.open(); },
+  openClothesOld() {
     this.menuOpen = true; const o = Object.assign({}, ME.outfit);
     const box = $('#menuBox'); box.innerHTML = `<h2>👕 옷가게</h2><div class="desc">변경 비용 ₩1,500 · 실시간 미리보기</div><div class="cust" id="cust2" style="max-height:52vh"></div><div class="row" style="margin-top:12px"><button class="btn" id="buyCl">구매 (₩1,500)</button><button class="btn b3" id="cancelCl">취소</button></div>`;
     buildCustomizer($('#cust2'), o, (no) => { ME.char.setOutfit(no); });

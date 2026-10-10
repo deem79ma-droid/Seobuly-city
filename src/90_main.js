@@ -30,7 +30,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills })); } catch (e) { }
+  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills })); } catch (e) { }
 }
 function onResize() {
   if (!renderer) return; const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -54,7 +54,7 @@ function initThree() {
 // ---------- lobby ----------
 let preview = null, lobbyOutfit = null;
 function initLobby() {
-  const sv = loadSave(); let q = 3; try { const s = localStorage.getItem('sbc3d_q'); if (s !== null) q = +s; else if (IS_TOUCH) q = 2; } catch (e) { }
+  const sv = loadSave(); let q = 3; try { const s = localStorage.getItem('sbc3d_q'); if (s !== null) q = +s; else if (IS_TOUCH) q = ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4) ? 1 : 2; /* 기기 자동: 저사양 폰은 보통, 그 외 폰은 높음 */ } catch (e) { }
   $('#qualIn').value = q; $('#nameIn').value = sv?.name || ('시민' + Math.floor(Math.random() * 900 + 100));
   lobbyOutfit = sv?.outfit || randomOutfit(); const rc = URLP.get('room'); if (rc) $('#codeIn').value = rc.toUpperCase();
   const cv = $('#preview'); const pr = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); pr.setPixelRatio(Math.min(2, devicePixelRatio)); pr.outputColorSpace = THREE.SRGBColorSpace; pr.toneMapping = THREE.ACESFilmicToneMapping; pr.toneMappingExposure = 1.0;
@@ -147,7 +147,8 @@ async function loadWorld() {
   if (G.isHost) loadPlots();
   // player
   const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0 }); }
-  if (!ME.weapons.axe) { ME.weapons.axe = 1; }
+  if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
+  WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
   const sx = G.isHost ? 10 : -10; ME.x = sx; ME.z = 52; ME.y = groundHeight(ME.x, ME.z); ME.yaw = Math.PI; CAM.yaw = Math.PI;
   setLoad(1, '완료!'); await tick();
@@ -194,12 +195,13 @@ function frame(dt, noRender) {
   INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
-  const view2 = 520 * 520;
+  const vv = [240, 340, 460, 520][G.quality] || 520, view2 = vv * vv, lod2 = (G.quality >= 2 ? 90 : 55) ** 2; // 품질별 차량 표시 거리 + 디테일 LOD
   for (const v of vehicles.values()) {
     if (v.ctrl === 'remote') v.interp(dt);
     else if (!v.driver && !v.ai && (Math.abs(v.speed) > 0.05 || v.y > (v.groundY ?? v.y) + 0.05 || v.burnT > 0 || v.vy > 0.1)) v.drive(dt, { throttle: 0, steer: 0, brake: 1 });
     const d2 = dist2(v.x, v.z, _cam.x, _cam.z); let vis = d2 < view2; if (v.isTraffic && v.ai && v.ai.parked) vis = false; if (v.isTraffic && !v.ai && v.x === 0 && v.z < -2000) vis = false;
-    v.mesh.visible = vis; if (vis) { v.visual(dt); if (v.npcDriver && v.npcDriver.root.visible && d2 < 80 * 80) v.npcDriver.update(dt, { state: 'drive', steer: v.steer / (v.M.steer || 0.5), speed: 0 }); }
+    v.mesh.visible = vis; if (vis && v.small) { const far = d2 > lod2; if (far !== v.lodFar) { v.lodFar = far; for (const m of v.small) m.visible = !far; } }
+    if (vis) { v.visual(dt); if (v.npcDriver && v.npcDriver.root.visible && d2 < 80 * 80) v.npcDriver.update(dt, { state: 'drive', steer: v.steer / (v.M.steer || 0.5), speed: 0 }); }
   }
   renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
@@ -220,4 +222,4 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
+if (URLP.get("debug")) window.__SBC = { PARKING, PARKING_LOTS, WARDROBE, CLOTH, saveGame, winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
