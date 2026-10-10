@@ -18,7 +18,10 @@ const UI = {
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const R = ME.vehicle ? regionAt(ME.vehicle.x, ME.vehicle.z) : regionAt(ME.x, ME.z); const RG = REGIONS[R];
-    if (R !== this.lastRegion) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
+    const regionChanged = R !== this.lastRegion;
+    if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
+    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const dId = districtAt(px, pz);
+    if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
     this.updateStars(); this.updateInv();
@@ -203,10 +206,12 @@ const UI = {
   openPhone() {
     if (this.menuOpen) { this.closeMenu(); return; }
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
-    this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속` : '혼자 플레이 중'} · 킬 ${ME.kills}`, [
+    const dz = DISTRICTS[districtAt(ME.x, ME.z) - 1];
+    this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
-      { ic: '🚕', t: '택시 (지역 이동)', p: 0, d: '₩1,500', fn: () => { setTimeout(() => this.openMenu('🚕 택시 호출', '목적지를 고르면 바로 이동한다', regions.map(r => ({ ic: '📍', t: REGIONS[r].name, p: 1500, d: REGIONS[r].desc, fn: () => fastTravel(r) }))), 30); } },
+      { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
+      { ic: '🔗', t: '친구 초대 링크', p: 0, d: G.online ? `방 ${G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 방을 만들고 링크 생성', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
       { ic: '🐶', t: '반려동물 부르기', p: 0, dis: ME.petId === null, disMsg: '반려동물이 없다 (길강아지/고양이 입양)', fn: () => { const a = ANIMALS[ME.petId]; if (a && G.isHost) { a.x = ME.x + 1.5; a.z = ME.z + 1.5; } toast('🐶 이리 와!'); } },
@@ -237,6 +242,16 @@ const UI = {
     x.fillStyle = 'rgba(55,60,70,.9)'; for (const c2 of COLLIDERS) { if (c2.type !== 'bld' || c2.circle) continue; const [a, bb] = toP(c2.x0, c2.z0); x.fillRect(a, bb, Math.max(1, (c2.x1 - c2.x0) / HM.res), Math.max(1, (c2.z1 - c2.z0) / HM.res)); }
     x.strokeStyle = '#e8e6e0'; x.lineCap = 'round'; for (const e of EDGES) { const a = NODES[e.a], b = NODES[e.b]; x.lineWidth = e.w / HM.res; const [ax, az] = toP(a.x, a.z), [bx, bz] = toP(b.x, b.z); x.beginPath(); x.moveTo(ax, az); x.lineTo(bx, bz); x.stroke(); }
     this.worldImg = c;
+    // 16개 구역 경계 + 옅은 색
+    const zc = document.createElement('canvas'); const S2 = 2; const ZW = Math.ceil(W / S2), ZH = Math.ceil(H / S2); zc.width = ZW; zc.height = ZH; const zx = zc.getContext('2d'); const zd = zx.createImageData(ZW, ZH);
+    const ids = new Uint8Array(ZW * ZH); for (let j = 0; j < ZH; j++) for (let i = 0; i < ZW; i++) { const wx = HM.x0 + i * S2 * HM.res, wz = HM.z0 + j * S2 * HM.res; ids[j * ZW + i] = terrainH(wx, wz) < -0.2 ? 0 : districtAt(wx, wz); }
+    const rgb = DISTRICT_COLORS.map(h => { const c3 = new THREE.Color(h); return [c3.r * 255, c3.g * 255, c3.b * 255]; });
+    for (let j = 0; j < ZH; j++) for (let i = 0; i < ZW; i++) {
+      const k = j * ZW + i, id = ids[k]; if (!id) continue; const o = k * 4;
+      const edge = (i + 1 < ZW && ids[k + 1] && ids[k + 1] !== id) || (j + 1 < ZH && ids[k + ZW] && ids[k + ZW] !== id) || (i > 0 && ids[k - 1] && ids[k - 1] !== id) || (j > 0 && ids[k - ZW] && ids[k - ZW] !== id);
+      if (edge) { zd.data[o] = 255; zd.data[o + 1] = 255; zd.data[o + 2] = 255; zd.data[o + 3] = 200; } else { const c3 = rgb[id - 1]; zd.data[o] = c3[0]; zd.data[o + 1] = c3[1]; zd.data[o + 2] = c3[2]; zd.data[o + 3] = 34; }
+    }
+    zx.putImageData(zd, 0, 0); this.zoneImg = zc;
   },
   drawMini() {
     const cv = $('#mini'); const x = cv.getContext('2d'); const S = cv.width; const cx = S / 2; const scale = (ME.vehicle ? 0.65 : 1.0) * S / 340;
@@ -245,6 +260,7 @@ const UI = {
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, S, S); x.save(); x.beginPath(); x.arc(cx, cx, cx, 0, TAU); x.clip(); x.fillStyle = '#1c3c5c'; x.fillRect(0, 0, S, S);
     x.setTransform(a, b, c, d, cx - (a * px + c * pz), cx - (b * px + d * pz));
     x.imageSmoothingEnabled = true; x.drawImage(this.worldImg, HM.x0, HM.z0, HM.W * HM.res, HM.H * HM.res);
+    if (this.zoneImg) { x.globalAlpha = 0.55; x.drawImage(this.zoneImg, HM.x0, HM.z0, HM.W * HM.res, HM.H * HM.res); x.globalAlpha = 1; }
     x.setTransform(1, 0, 0, 1, 0, 0);
     const toS = (wx, wz) => { const dx = wx - px, dz = wz - pz; return [cx + a * dx + c * dz, cx + b * dx + d * dz]; };
     const R = cx - 10; const clampS = (p) => { const dx = p[0] - cx, dy = p[1] - cx, l = Math.hypot(dx, dy); return l > R ? [cx + dx / l * R, cx + dy / l * R, true] : [p[0], p[1], false]; };
@@ -254,6 +270,7 @@ const UI = {
     if (ME.wanted) for (const q of PEDS) if (q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked') { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = Math.floor(G.t * 4) % 2 ? '#ff3030' : '#3060ff'; x.beginPath(); x.arc(s[0], s[1], S / 70, 0, TAU); x.fill(); }
     for (const q of PEDS) if (q.state === 'fight' && q.kind.startsWith('gang')) { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = q.kind === 'gangA' ? '#ff4040' : '#4080ff'; x.beginPath(); x.arc(s[0], s[1], S / 90, 0, TAU); x.fill(); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = clampS(toS(v.x, v.z)); x.fillText('🚘', s[0], s[1]); }
+    TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
     if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
     if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
     for (const rp of G.players.values()) { const s = clampS(toS(rp.x, rp.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
@@ -271,15 +288,19 @@ const UI = {
     const ww = HM.W * HM.res, wh = HM.H * HM.res; const k = Math.min(W / ww, H / wh); const ox = (W - ww * k) / 2 - HM.x0 * k, oy = (H - wh * k) / 2 - HM.z0 * k; this._ms = { k, ox, oy };
     x.fillStyle = '#16324a'; x.fillRect(0, 0, W, H); x.drawImage(this.worldImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     const P = (wx, wz) => [ox + wx * k, oy + wz * k];
+    if (this.zoneImg) x.drawImage(this.zoneImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 26px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.strokeText(R.name, p[0], p[1] - 34); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 34); }
+    for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 24px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.globalAlpha = 0.85; x.strokeText(R.name, p[0], p[1] - 40); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 40); x.globalAlpha = 1; }
+    const myD = districtAt(ME.x, ME.z);
+    for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
     x.font = '15px sans-serif'; for (const f of FACILITIES) { const p = P(f.x, f.z); x.fillText(f.icon, p[0], p[1]); }
     x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
+    TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
     for (const rp of G.players.values()) { const s = P(rp.x, rp.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
     const me = P(ME.x, ME.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
-    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
+    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 숫자 = 16개 구역 (택시 목적지) · 🚕 내 택시 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
   },
   // ---------- touch ----------
   buildTouch() {
@@ -315,7 +336,7 @@ const UI = {
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
-    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? '🚪<small>하차</small>' : '🚗<small>탑승</small>';
+    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? '🚪<small>세워주세요</small>' : '🚪<small>하차</small>') : '🚗<small>탑승</small>';
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
@@ -355,3 +376,36 @@ function applyQualityLive() {
   const q = Q(); renderer.setPixelRatio(Math.min(devicePixelRatio, q.pr)); composer && composer.setPixelRatio && composer.setPixelRatio(Math.min(devicePixelRatio, q.pr));
   if (bloomPass) bloomPass.enabled = q.bloom; renderer.shadowMap.enabled = !!q.shadow; onResize();
 }
+
+// ---------- 원클릭 초대: 링크 만들기 / 복사 / 공유 ----------
+const SHARE = {
+  async open() {
+    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 방을 연다
+      toast('🌐 방 만드는 중…');
+      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
+      if (!G.online) return;
+    }
+    this.show();
+  },
+  show() {
+    const el = $('#share'); if (!el) return; const link = inviteLink(G.room);
+    $('#shareLink').value = link; $('#shareCode').textContent = G.room; el.classList.remove('hidden');
+    $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : (G.isHost ? '이 링크를 카톡/문자로 보내면 친구가 누르자마자 들어와요' : '이 링크로 다른 사람도 이 방을 찾을 수 있어요');
+    if (document.pointerLockElement) document.exitPointerLock();
+  },
+  hide() { const el = $('#share'); if (el) el.classList.add('hidden'); },
+  async copy() {
+    const link = inviteLink(G.room); let ok = false;
+    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { const i = $('#shareLink'); i.focus(); i.select(); try { ok = document.execCommand('copy'); } catch (e2) { } }
+    toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '링크를 길게 눌러 복사해 주세요'); sfx('coin');
+  },
+  async share() {
+    const link = inviteLink(G.room);
+    if (navigator.share) { try { await navigator.share({ title: '서부리 시티 3D', text: `서부리 시티 같이 하자! 링크 누르면 바로 들어와 (방 ${G.room})`, url: link }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    this.copy();
+  },
+  init() {
+    $('#shareCopy').onclick = () => this.copy(); $('#shareShare').onclick = () => this.share(); $('#shareClose').onclick = () => this.hide();
+    $('#shareLink').onclick = e => e.target.select();
+  },
+};

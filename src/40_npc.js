@@ -235,7 +235,7 @@ function panicAround(x, z, r) {
   for (const an of ANIMALS) if (!an.S.predator && an.state !== 'dead' && an.state !== 'follow' && Math.abs(an.x - x) < r && Math.abs(an.z - z) < r) { an.state = 'flee'; an.timer = 6; an.fx = x; an.fz = z; }
 }
 function spawnPickup(x, z, amount, id) {
-  id = id || 'k' + (pickupSeq++) + (G.isHost ? '' : 'g'); const y = groundHeight(x, z) + 0.4;
+  id = id || 'k' + (pickupSeq++) + '_' + (typeof ME !== 'undefined' ? String(ME.id).slice(-5) : ''); const y = groundHeight(x, z) + 0.4;
   const m = new THREE.Group(); const bill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.18), new THREE.MeshStandardMaterial({ color: 0x3aa04a, emissive: 0x1a6a2a, emissiveIntensity: 0.8 })); m.add(bill);
   const b2 = bill.clone(); b2.position.y = 0.07; b2.rotation.y = 0.4; m.add(b2); m.position.set(x, y, z); scene.add(m);
   PICKUPS.set(id, { id, x, y, z, amount, mesh: m });
@@ -301,6 +301,13 @@ function trafficPlace(v, e, t, dir) {
   v.ai.e = e; v.ai.dir = dir; v.ai.next = -1; v.ai.parked = false; v.ai.stuck = 0; v.hp = v.M.hp; v.dead = false; v.burnT = 0; v.deadT = 0; v.waterT = 0;
   if (v.bodyMat) { v.bodyMat.color.set(v.color); v.bodyMat.metalness = 0.65; v.bodyMat.roughness = 0.28; v.bodyMat.clearcoat = 1; }
   v.driver = null; v.npcDriver.root.visible = true; v.mesh.visible = true; v.siren = false;
+}
+// 방장이 바뀌었을 때: 게스트 화면에서 보이던 교통 차량을 가장 가까운 도로에 다시 태운다
+function trafficAdopt(v) {
+  let best = null, bd = 1e9; for (const e of EDGES) { const a = NODES[e.a], b = NODES[e.b]; const d = distSeg(v.x, v.z, a.x, a.z, b.x, b.z); if (d < bd) { bd = d; best = e; } }
+  if (!best || bd > 30 || (v.x === 0 && v.z < -2000)) { v.ai = { e: 0, dir: 1, next: -1, parked: true, stuck: 0 }; v.mesh.visible = false; if (v.npcDriver) v.npcDriver.root.visible = false; return; }
+  const a = NODES[best.a], b = NODES[best.b]; const dir = (Math.sin(v.yaw) * (b.x - a.x) + Math.cos(v.yaw) * (b.z - a.z)) >= 0 ? 1 : -1;
+  v.ai = { e: best.id, dir, next: -1, parked: false, stuck: 0 }; if (v.npcDriver) v.npcDriver.root.visible = true;
 }
 function edgeEndNode(v) { const E = EDGES[v.ai.e]; return v.ai.dir > 0 ? NODES[E.b] : NODES[E.a]; }
 function chooseNext(v) {

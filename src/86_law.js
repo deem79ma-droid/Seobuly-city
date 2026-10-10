@@ -8,8 +8,8 @@ const DOC_ADMIN = ['관리자 님입니까? 즉시 치료해드리겠습니다!'
 
 Object.assign(ADMIN, {
   prev: null, bonus: 0,
-  preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (pw && this.check(pw)) { this.pw = pw; this.pre = true; } } catch (e) { } },
-  autoLogin() { if (this.pre && this.pw && !this.on) this.enter(); },
+  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const sk = await this.check(pw); if (sk) { this.sk = sk; this.pre = true; } else toastLater('❌ 관리자 비밀번호가 틀렸다'); } catch (e) { } },
+  autoLogin() { if (this.pre && this.sk && !this.on) this.enter(); },
   enter() {
     this.on = true; this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
     if (ME.char) { ME.outfit = Object.assign({}, ME.outfit, ADMIN_SUIT); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); }
@@ -19,17 +19,34 @@ Object.assign(ADMIN, {
   announce() {
     if (!G.online) return;
     if (G.isHost) { G.adminId = ME.id; NET.send({ t: 'admin', aid: ME.id }); }
-    else NET.send({ t: 'admAuth', pw: this.pw });
+    else if (NET.helloSent) NET.send({ t: 'admClaim' }); // 방장이 nonce를 보내면 서명으로 증명 → 자동으로 방장 권한 이전
   },
   exit() {
-    this.on = false; this.pw = null; this.pre = false; ME.god = false; ME.fly = false; ME.speedMul = 1;
+    this.on = false; this.sk = null; this.pre = false; ME.god = false; ME.fly = false; ME.speedMul = 1;
     if (this.prev) { ME.outfit = this.prev.outfit; if (ME.char) { ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); } ME.money = Math.min(ME.money, Math.max(this.prev.money, 50000)); }
     if (G.adminId === ME.id) { G.adminId = null; NET.send({ t: 'admin', aid: null }); }
     toast('🔒 관리자 모드 OFF');
   },
-  onAuth(m, conn) { // host side: 게스트가 관리자 비번 제시
-    if (!G.isHost) return;
-    if (this.check(m.pw)) { conn.admin = true; G.adminId = m.f; NET.send({ t: 'admin', aid: m.f }); const rp = G.players.get(m.f); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a'); announce('👑 관리자 입장', (rp ? rp.name : '') + '님이 방장 권한을 가져갑니다'); }
+  // ----- 방장 쪽: 관리자 증명 요청/검증 -----
+  challenge(conn, banned) {
+    if (!G.isHost || !this.enabled() || !conn || conn.chal) return;
+    conn.chal = randHex(32); conn.chalBan = !!banned; clearTimeout(conn.chalT);
+    conn.chalT = setTimeout(() => { if (conn.chal) { conn.chal = null; if (conn.chalBan) NET.kick(conn, true); } }, 15000);
+    try { conn.send({ t: 'admChal', n: conn.chal, h: ME.id, r: G.room, f: ME.id }); } catch (e) { }
+  },
+  async onProof(m, conn) {
+    if (!G.isHost || !conn || !conn.chal || !conn.pid) return; const n = conn.chal; conn.chal = null; clearTimeout(conn.chalT);
+    const ok = await ACRYPTO.verify(ADMIN_PUB, m.s, `sbc3d-admin-v2|${G.room}|${ME.id}|${conn.pid}|${n}`);
+    if (!ok) { try { conn.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1 }); } catch (e) { } if (conn.chalBan) NET.kick(conn, true); return; }
+    conn.admin = true;
+    if (this.on && G.adminId === ME.id) { try { conn.send({ t: 'chat', m: '👑 이 방은 이미 관리자가 방장입니다', sys: 1 }); } catch (e) { } return; }
+    NET.transferHostTo(conn); // 승인 절차 없이 무조건 방장 이전
+  },
+  // ----- 관리자 쪽: nonce에 서명만 돌려준다 (비번/개인키는 전송하지 않음) -----
+  async prove(m, conn) {
+    if (!this.on || !this.sk || conn !== NET.hostConn) return;
+    const sig = await ACRYPTO.sign(this.sk, `sbc3d-admin-v2|${m.r}|${m.h}|${ME.id}|${m.n}`);
+    try { conn.send({ t: 'admProof', s: sig, f: ME.id }); } catch (e) { }
   },
   onAdminMsg(m) { if (G.isHost) return; G.adminId = m.aid || null; if (m.aid) { const rp = G.players.get(m.aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a'); if (m.aid !== ME.id) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다'); } },
   hostPower() { return G.adminId ? G.adminId === ME.id : G.isHost; },
@@ -37,7 +54,7 @@ Object.assign(ADMIN, {
     let n = 0;
     for (const c of NET.conns.slice()) {
       if (c.admin || (c.pid && c.pid === G.adminId)) continue; if (G.adminId && G.adminId !== ME.id && !c.pid) continue;
-      if (ban && c.pid) { BANS.add(c.pid); saveBans(); } try { c.send({ t: 'kicked', ban: !!ban }); } catch (e) { } setTimeout(() => { try { c.close && c.close(); } catch (e) { } }, 500); n++;
+      NET.kick(c, ban); n++;
     }
     toast(n ? (ban ? '⛔ 밴했다' : '👢 추방했다') : '대상이 없다');
   },

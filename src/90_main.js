@@ -45,22 +45,49 @@ function initLobby() {
   $('#randBtn').onclick = () => { lobbyOutfit = randomOutfit(); ch.setOutfit(lobbyOutfit); buildCustomizer($('#cust'), lobbyOutfit, (o) => ch.setOutfit(o)); };
   const loopP = () => { if (G.started) { pr.dispose(); return; } requestAnimationFrame(loopP); const w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== Math.floor(w * pr.getPixelRatio())) { pr.setSize(w, h, false); pc.aspect = w / h; pc.updateProjectionMatrix(); } preview.t += 0.016; ch.root.rotation.y = Math.sin(preview.t * 0.5) * 0.8; ch.update(0.016, { speed: 0, grounded: true, state: 'normal', dance: Math.floor(preview.t / 6) % 3 === 2 ? Math.floor(preview.t / 18) % 8 : -1, idleLook: 0.6 }); pr.render(ps, pc); };
   loopP();
-  $('#soloBtn').onclick = () => startGame('solo'); $('#hostBtn').onclick = () => startGame('host'); $('#joinBtn').onclick = () => { const c = $('#codeIn').value.trim().toUpperCase(); if (c.length < 4) { $('#lobbyMsg').textContent = '방 코드를 입력하세요'; return; } startGame('join', c); };
+  $('#soloBtn').onclick = () => startGame('solo'); $('#hostBtn').onclick = () => startGame('host'); $('#quickBtn').onclick = () => startGame('quick');
+  $('#joinBtn').onclick = () => { const c = $('#codeIn').value.trim().toUpperCase(); if (c.length < 4) { $('#lobbyMsg').textContent = '방 코드를 입력하세요'; return; } startGame('join', c); };
+  $('#codeIn').onkeydown = e => { if (e.key === 'Enter') $('#joinBtn').click(); };
+  // 초대 링크(?room=CODE)로 들어오면: 큰 "바로 참가" 버튼 + 5초 뒤 자동 참가
+  if (rc) {
+    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = code;
+    let left = 5; const cnt = $('#invCount');
+    const stop = () => { clearInterval(LOBBY.cd); LOBBY.cd = 0; cnt.textContent = '닉네임/외형을 바꾼 뒤 버튼을 눌러 참가하세요'; };
+    const tickCd = () => { if (left <= 0) { stop(); startGame('join', code); return; } cnt.innerHTML = `${left}초 뒤 자동으로 참가해요 · <a id="invCancel">잠깐, 외형부터 꾸밀래요</a>`; $('#invCancel').onclick = stop; left--; };
+    $('#invJoin').onclick = () => { stop(); startGame('join', code); };
+    tickCd(); LOBBY.cd = setInterval(tickCd, 1000);
+    for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
+  } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
 }
+const LOBBY = { cd: 0, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin'], lock(on) { for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } } };
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
-  ME.id = uid(); G.name = ME.name; ADMIN.preAuth();
-  $('#lobbyMsg').textContent = mode === 'join' ? '방에 접속 중…' : mode === 'host' ? '방 만드는 중…' : '';
-  ['soloBtn', 'hostBtn', 'joinBtn'].forEach(id => $('#' + id).disabled = true);
+  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd);
+  const msg = t => { $('#lobbyMsg').textContent = t; };
+  if ($('#admIn') && $('#admIn').value) { msg('🔐 관리자 확인 중…'); await ADMIN.preAuth(); }
+  msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : '');
   G.isHost = mode !== 'join';
   try {
-    if (mode === 'host') { const c = NET.code(); await NET.host(c); }
-    if (mode === 'join') { await NET.join(code); }
+    if (mode === 'host') {
+      for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
+      G.online = true; G.isHost = true;
+    }
+    if (mode === 'join') {
+      let err = null;
+      for (let k = 0; k < 2; k++) { try { await NET.join(code); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
+      if (err) throw err; G.online = true; G.isHost = false; G.room = code;
+    }
+    if (mode === 'quick') { const r = await NET.quickMatch(msg); G.online = true; G.isHost = r.mode === 'host'; G.room = r.room; }
   } catch (e) {
-    if (mode === 'join') { $('#lobbyMsg').textContent = '❌ ' + (e.message || e); ['soloBtn', 'hostBtn', 'joinBtn'].forEach(id => $('#' + id).disabled = false); G.online = false; return; }
-    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ')');
+    if (mode === 'join' || mode === 'quick') {
+      msg('❌ ' + (e.message || e)); LOBBY.lock(false); G.online = false; G.isHost = true;
+      if (mode === 'join') { $('#invJoin').innerHTML = '🔁 다시 시도'; $('#invCount').textContent = '친구 화면이 게임 안에 있는지 확인해 주세요 · 안 되면 "친구랑 같이하기"로 내가 방을 만들어 링크를 보내도 돼요'; }
+      return;
+    }
+    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ') · P ▶ 친구 초대 링크로 다시 시도 가능');
   }
+  G.hostId = G.isHost ? ME.id : null;
   $('#lobby').classList.add('hidden'); $('#loading').classList.remove('hidden');
   try { await loadWorld(); } catch (e) { console.error(e); $('#loadTxt').textContent = '오류: ' + e.message; return; }
 }
@@ -83,12 +110,16 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
-  $('#roomInfo').innerHTML = G.online ? (G.isHost ? `🌐 방 코드 <b>${G.room}</b> (친구에게 알려줘)` : `🌐 ${G.room} 방 접속`) : '혼자 플레이';
+  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서부리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
   _later.forEach(m => toast(m, 5000)); _later = [];
-  if (G.online && G.isHost) { UI.chatLine(null, `방 코드: ${G.room} — 친구가 로비에서 이 코드로 참가하면 됩니다`); }
+  if (G.online && G.isHost) {
+    UI.chatLine(null, `방 ${G.room} — 초대 링크를 친구에게 보내면 누르자마자 들어옵니다 (P ▶ 친구 초대 링크)`);
+    if (!G.players.size && !PUBLIC_ROOMS.includes(G.room)) setTimeout(() => { if (!G.players.size) SHARE.show(); }, 600);
+    if (PUBLIC_ROOMS.includes(G.room)) toast(`⚡ 공개방 ${G.room}을 열었다 — 다른 사람이 빠른 참가를 누르면 들어온다`, 5000);
+  }
   if (IS_TOUCH) toast('🕹️ 왼쪽 조이스틱 이동 · 오른쪽 드래그로 시점', 4000); else toast('🖱️ 화면 클릭 → 마우스 시점 · WASD 이동 · F1 조작법', 5000);
   requestAnimationFrame(loop);
   setInterval(() => { saveGame(); savePlots(); }, 30000);
@@ -115,7 +146,7 @@ function loop() {
 function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t += dt; frame(dt, true); } }
 function frame(dt, noRender) {
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  LAW.tick(dt); COMFORT.tick(dt);
+  LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -144,4 +175,4 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };
+if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };

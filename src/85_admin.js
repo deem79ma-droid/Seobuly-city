@@ -1,28 +1,51 @@
 
 // ================= ADMIN MODE + HELP + SETTINGS =================
-// 관리자 비밀번호는 코드에 없음. 빌드할 때 ADMIN_PW(또는 ADMIN_HASH) 환경변수로 해시만 주입된다.
-const ADMIN_HASH = '__ADMIN_HASH__';
-function sha256hex(str) {
-  const K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
-  const b = new TextEncoder().encode(str), l = b.length, n = ((l + 9 + 63) >> 6) << 6, m = new Uint8Array(n); m.set(b); m[l] = 0x80;
-  const dv = new DataView(m.buffer); dv.setUint32(n - 4, (l * 8) >>> 0); dv.setUint32(n - 8, Math.floor(l * 8 / 4294967296));
-  let h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]; const w = new Array(64);
-  const R = (x, c) => (x >>> c) | (x << (32 - c));
-  for (let o = 0; o < n; o += 64) {
-    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
-    for (let i = 16; i < 64; i++) { const s0 = R(w[i - 15], 7) ^ R(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = R(w[i - 2], 17) ^ R(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0; }
-    let [a, bb, c, d, e, f, g, hh] = h;
-    for (let i = 0; i < 64; i++) { const S1 = R(e, 6) ^ R(e, 11) ^ R(e, 25), ch = (e & f) ^ (~e & g), t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0, S0 = R(a, 2) ^ R(a, 13) ^ R(a, 22), mj = (a & bb) ^ (a & c) ^ (bb & c), t2 = (S0 + mj) >>> 0; hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = bb; bb = a; a = (t1 + t2) >>> 0; }
-    h = [h[0] + a, h[1] + bb, h[2] + c, h[3] + d, h[4] + e, h[5] + f, h[6] + g, h[7] + hh].map(x => x >>> 0);
-  }
-  return h.map(x => x.toString(16).padStart(8, '0')).join('');
-}
+// 관리자 비밀번호는 코드/저장소 어디에도 없다.
+// 빌드할 때 ADMIN_PW(시크릿)로부터 "공개키"만 계산해서 넣는다:
+//   seed = PBKDF2-SHA256(비번, 'sbc3d-admin-ed25519-v2', 150000회) → Ed25519 개인키(관리자 브라우저 메모리에만 존재)
+//   ADMIN_PUB = 그 개인키의 공개키 (빌드에 포함, 누구나 볼 수 있음)
+// 방장은 관리자에게 무작위 nonce를 보내고, 관리자는 개인키로 서명만 돌려준다.
+// → 비밀번호·개인키는 관리자 브라우저 밖으로 절대 나가지 않고, 방장은 서명을 검증만 할 수 있을 뿐 흉내낼 수 없다.
+const ADMIN_PUB = '__ADMIN_PUB__';
+const hexOf = b => Array.from(new Uint8Array(b), x => x.toString(16).padStart(2, '0')).join('');
+const unhex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
+const b64uDec = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+function randHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return hexOf(a); }
+const ACRYPTO = {
+  native: null, noble: null,
+  async nativeOk() {
+    if (this.native !== null) return this.native;
+    try { await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']); this.native = true; } catch (e) { this.native = false; }
+    return this.native;
+  },
+  async lib() { if (!this.noble) this.noble = await import('https://cdn.jsdelivr.net/npm/@noble/ed25519@2.3.0/+esm'); return this.noble; },
+  pk8(seed) { const o = new Uint8Array(48); o.set(unhex('302e020100300506032b657004220420')); o.set(seed, 16); return o; },
+  async seedFromPw(pw) {
+    const enc = new TextEncoder(); const k = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode('sbc3d-admin-ed25519-v2'), iterations: 150000 }, k, 256));
+  },
+  async pubFromSeed(seed) {
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('pkcs8', this.pk8(seed), { name: 'Ed25519' }, true, ['sign']); const j = await crypto.subtle.exportKey('jwk', k); if (j.x) return hexOf(b64uDec(j.x)); } catch (e) { } }
+    const ed = await this.lib(); return hexOf(await ed.getPublicKeyAsync(seed));
+  },
+  async sign(seed, msg) {
+    const m = new TextEncoder().encode(msg);
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('pkcs8', this.pk8(seed), { name: 'Ed25519' }, false, ['sign']); return hexOf(await crypto.subtle.sign({ name: 'Ed25519' }, k, m)); } catch (e) { } }
+    const ed = await this.lib(); return hexOf(await ed.signAsync(m, seed));
+  },
+  async verify(pubHex, sigHex, msg) {
+    if (!/^[0-9a-f]{128}$/.test(sigHex || '')) return false; const m = new TextEncoder().encode(msg);
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('raw', unhex(pubHex), { name: 'Ed25519' }, false, ['verify']); return await crypto.subtle.verify({ name: 'Ed25519' }, k, unhex(sigHex), m); } catch (e) { } }
+    try { const ed = await this.lib(); return await ed.verifyAsync(unhex(sigHex), m, unhex(pubHex)); } catch (e) { return false; }
+  },
+};
 try { G.sens = parseFloat(localStorage.getItem('sbc3d_sens')) || 1; } catch (e) { G.sens = 1; }
 
 const ADMIN = {
-  on: false, pw: null, fails: 0, lockT: 0,
-  enabled() { return ADMIN_HASH.length === 64; },
-  check(pw) { return this.enabled() && sha256hex('sbc3d-admin:' + pw) === ADMIN_HASH; },
+  on: false, sk: null, fails: 0, lockT: 0, busy: false,
+  enabled() { return /^[0-9a-f]{64}$/.test(ADMIN_PUB); },
+  // 비번이 맞으면 개인키 seed(메모리 전용)를 돌려준다. 비번 자체는 저장하지 않는다.
+  async check(pw) { if (!this.enabled() || !pw) return null; try { const seed = await ACRYPTO.seedFromPw(pw); return (await ACRYPTO.pubFromSeed(seed)) === ADMIN_PUB ? seed : null; } catch (e) { console.warn(e); return null; } },
   open() {
     if (!this.enabled()) { toast('🔒 관리자 모드가 설정되지 않은 빌드'); return; }
     if (this.on) this.panel(); else this.login();
@@ -30,16 +53,18 @@ const ADMIN = {
   login() {
     UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px">' });
     const inp = $('#admPw'); setTimeout(() => inp && inp.focus(), 50);
-    const go = () => {
+    const go = async () => {
       if (performance.now() < this.lockT) { toast('⏳ 잠시 후 다시 시도'); return; }
-      if (this.check(inp.value)) { this.pw = inp.value; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
-      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); inp.value = ''; }
+      if (this.busy) return; this.busy = true; toast('🔐 확인 중…', 1200);
+      const sk = await this.check(inp.value); this.busy = false; inp.value = '';
+      if (sk) { this.sk = sk; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
+      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); }
     };
     inp.onkeydown = e => { if (e.key === 'Enter') go(); };
   },
   logout() { this.exit(); },
-  // 호스트 권한이 필요한 동작은 호스트에게 비밀번호와 함께 요청
-  remote(a, v) { if (G.isHost || !G.online) this.apply(a, v); else NET.send({ t: 'adm', a, v, pw: this.pw }); },
+  // 방장 권한이 필요한 동작: 관리자는 곧바로 방장이 되므로 보통 로컬에서 실행. (이전 중이면 서명 인증된 연결로만 요청)
+  remote(a, v) { if (G.isHost || !G.online) this.apply(a, v); else NET.send({ t: 'adm', a, v }); },
   apply(a, v) {
     if (a === 'time') { G.time = clamp(+v, 0, 23.99); toast('⏰ 시간 변경'); }
     else if (a === 'weather') { G.weather = v; G.weatherT = 600; toast('🌦️ 날씨 변경'); }
@@ -48,7 +73,7 @@ const ADMIN = {
     else if (a === 'ban') this.kickOthers(true);
     else if (a === 'unban') { BANS.clear(); saveBans(); toast('✅ 밴 목록 초기화'); }
   },
-  onNet(m) { if (!G.isHost) return; if (this.check(m.pw)) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
+  onNet(m, conn) { if (!G.isHost) return; if (conn && conn.admin) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
   tp(x, z) {
     if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
     const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z; toast('📍 이동');
@@ -79,9 +104,10 @@ const ADMIN = {
       { ic: '⛔', t: '상대 밴 (재입장 차단)', p: '', dis: !G.online, disMsg: '혼자 플레이 중', fn: () => { this.remote('ban'); } },
       { ic: '♻️', t: '밴 목록 초기화', p: '', fn: () => { this.remote('unban'); } },
       { ic: '🔓', t: '상대 수감자 무료 석방', p: '', dis: !G.online, disMsg: '혼자 플레이 중', fn: () => this.freeOther() },
+      { ic: '👑', t: '방장 권한 가져오기', p: G.isHost ? '방장임' : '', d: '관리자는 자동으로 방장이 된다 (안 됐을 때만)', dis: !G.online || G.isHost, disMsg: G.online ? '이미 방장이다' : '혼자 플레이 중', fn: () => { NET.send({ t: 'admClaim' }); toast('👑 방장 권한 요청 (서명 인증)'); } },
       { ic: '🔒', t: '관리자 로그아웃', p: '', fn: () => this.logout() },
     ];
-    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">F2 또는 /admin 으로 열기${G.online && !G.isHost ? ' · 시간/날씨/습격은 방장에게 요청됨' : ''}</small>`, items, { refresh: R });
+    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">F2 또는 /admin 으로 열기 · ${G.online ? (G.isHost ? '👑 내가 방장' : '⏳ 방장 권한 이전 중…') : '혼자 플레이'}</small>`, items, { refresh: R });
   },
   timeMenu() { UI.openMenu('⏰ 시간', '', [[6, '🌅 아침 06시'], [12, '☀️ 정오 12시'], [18, '🌇 저녁 18시'], [22, '🌃 밤 22시'], [0, '🌌 자정 00시'], [3, '🌠 새벽 03시']].map(([h, t]) => ({ t, p: '', fn: () => { this.remote('time', h); } }))); },
   weatherMenu() { UI.openMenu('🌦️ 날씨', '', [['clear', '☀️ 맑음'], ['cloudy', '☁️ 흐림'], ['rain', '🌧️ 비']].map(([k, t]) => ({ t, p: '', fn: () => { this.remote('weather', k); } }))); },
@@ -94,7 +120,7 @@ const ADMIN = {
     } })));
   },
   tpMenu() {
-    const items = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'].map(r => ({ ic: '📍', t: REGIONS[r].name, p: '', fn: () => fastTravel(r) }));
+    const items = DISTRICTS.map(d => ({ ic: '📍', t: `${d.id}구역 ${d.name}`, p: '', fn: () => { const n = ROUTE.nearestOnRoad(d.cx, d.cz); const E = EDGES[n.e]; this.tp(n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2.5), n.z + (E.axis === 'x' ? E.w / 2 + 2.5 : 0)); } }));
     items.push({ ic: '🚩', t: '웨이포인트로', p: '', dis: !UI.waypoint, disMsg: '지도(M)에서 웨이포인트를 먼저 찍어줘', fn: () => this.tp(UI.waypoint.x, UI.waypoint.z) });
     const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => this.tp(o.x + 1.5, o.z + 1.5) });
     UI.openMenu('📍 텔레포트', '', items);
@@ -108,6 +134,8 @@ UI.openHelp = function () {
   const pc = sec('이동') + row('W|A|S|D', '이동 (방향키도 가능)') + row('Shift', '달리기') + row('Space', '점프') + row('V', '1인칭 / 3인칭')
     + sec('전투') + row('좌클릭', '공격') + row('우클릭', '조준') + row('1~8|휠|Q', '무기 선택 · 이전 무기') + row('R', '재장전')
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
+    + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
+    + sec('멀티') + row('P', '휴대폰 ▶ 친구 초대 링크 (복사/공유)')
     + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');

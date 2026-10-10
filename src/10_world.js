@@ -21,6 +21,38 @@ function regionAt(x, z) {
   if (x < -720) return 'disanbay';
   return z < 0 ? 'jiolle' : 'kaengjibe';
 }
+// ---- 16개 구역 (지역을 잘게 나눈 행정구역) ----
+const DISTRICTS = [
+  { id: 1, name: '이벤트광장', region: 'plaza', cx: 0, cz: 0 },
+  { id: 2, name: '서벌리 북부 주거지', region: 'seoburi', cx: 480, cz: -440 },
+  { id: 3, name: '서벌리 금융가', region: 'seoburi', cx: 1000, cz: -440 },
+  { id: 4, name: '서벌리 다운타운', region: 'seoburi', cx: 760, cz: 0 },
+  { id: 5, name: '서벌리 남부 상가', region: 'seoburi', cx: 480, cz: 440 },
+  { id: 6, name: '서벌리 항구', region: 'seoburi', cx: 1120, cz: 440 },
+  { id: 7, name: '지올르 서부 공단', region: 'jiolle', cx: -520, cz: -800 },
+  { id: 8, name: '지올르 물류단지', region: 'jiolle', cx: -40, cz: -800 },
+  { id: 9, name: '지올르 주택가', region: 'jiolle', cx: -360, cz: -360 },
+  { id: 10, name: '캥지베 시장통', region: 'kaengjibe', cx: -360, cz: 360 },
+  { id: 11, name: '레드 크루 구역', region: 'kaengjibe', cx: -520, cz: 800 },
+  { id: 12, name: '블루 독스 구역', region: 'kaengjibe', cx: -40, cz: 800 },
+  { id: 13, name: '디산베이 호숫가', region: 'disanbay', cx: -1050, cz: -560 },
+  { id: 14, name: '디산베이 읍내', region: 'disanbay', cx: -1050, cz: 0 },
+  { id: 15, name: '디산베이 목장', region: 'disanbay', cx: -1150, cz: 440 },
+  { id: 16, name: '시모느 아일랜드', region: 'simone', cx: 2000, cz: 560 },
+];
+const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0'];
+function districtAt(x, z) { // 1..16, 0 = 바다
+  const r = regionAt(x, z);
+  switch (r) {
+    case 'plaza': return 1;
+    case 'seoburi': return z < -200 ? (x < 760 ? 2 : 3) : z <= 200 ? 4 : (x < 760 ? 5 : 6);
+    case 'jiolle': return z < -540 ? (x < -280 ? 7 : 8) : 9;
+    case 'kaengjibe': return z > 540 ? (x < -280 ? 11 : 12) : 10;
+    case 'disanbay': return z < -220 ? 13 : z <= 220 ? 14 : 15;
+    case 'simone': return 16;
+  }
+  return 0;
+}
 // ---- road graph ----
 const NODES = [], EDGES = []; const nodeIdx = new Map();
 function rnode(x, z) { const k = Math.round(x) + ',' + Math.round(z); if (nodeIdx.has(k)) return nodeIdx.get(k); const n = { id: NODES.length, x, z, edges: [], light: false }; NODES.push(n); nodeIdx.set(k, n); return n; }

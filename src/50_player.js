@@ -226,6 +226,7 @@ function toggleVehicle() {
   const v = nearestVehicle(); if (v) enterVehicle(v);
 }
 function enterVehicle(v) {
+  if (v.taxiCab) { if (v.taxiOwner === ME.id) TAXI.board(); else toast('🚕 다른 손님이 부른 택시다'); return; }
   if (v.locked) { toast('🚗 판매용 전시 차량 — 판매점에서 구매하세요'); return; }
   if (v.driver && v.driver !== ME.id) {
     if (G.players.has(v.driver)) { if (v.passenger) { toast('빈 자리가 없다'); return; } v.passenger = ME.id; ME.vehicle = v; ME.seat = 'p'; NET.send({ t: 'seat', v: v.id, s: 'p' }); toast('🧍 동승했다 (F 하차 · 우클릭 조준 사격 가능)'); return; }
@@ -249,6 +250,8 @@ function ejectNpcDriver(v) {
 }
 function exitVehicle(force) {
   const v = ME.vehicle; if (!v) return;
+  const myCab = v.taxiCab && v.taxiOwner === ME.id && !TAXI._exiting;
+  if (myCab && !force) { TAXI.stopHere(); return; } // 택시: 기사님이 세워준 뒤 내린다
   if (!force && Math.abs(v.speed) > 8 && v.kind !== 'horse') { toast('속도를 줄여야 내릴 수 있다'); return; }
   const side = ME.seat === 'p' ? -1 : 1; const off = v.kind === 'car' ? v.M.W / 2 + 0.7 : 0.9;
   ME.x = v.x + Math.cos(v.yaw) * off * side; ME.z = v.z - Math.sin(v.yaw) * off * side; ME.y = groundHeight(ME.x, ME.z, v.y + 1) + 0.05; ME.yaw = v.yaw; ME.vx = ME.vz = 0; ME.vy = 0;
@@ -256,17 +259,23 @@ function exitVehicle(force) {
   if (ME.seat === 'd') { v.driver = null; v.brake = true; } else v.passenger = null;
   NET.send({ t: 'seat', v: v.id, s: null }); ME.vehicle = null; ME.seat = null; ENG.set(false, 0); sfx('door');
   if (v.siren && !v.ai) v.siren = false;
+  if (myCab) TAXI.onExit(true);
 }
 // ----- interaction -----
 let curInteract = null;
 function findInteract() {
   if (ME.jail) return (ME.inv.card | 0) > 0 ? { label: `🪪 출소카드 사용 (보유 ${ME.inv.card}장)`, key: 'E', fn: () => { ME.inv.card--; LAW.release('🪪 출소카드로 즉시 출소했다'); } } : null;
-  if (ME.dead) return null; if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
+  if (ME.dead) return null;
+  if (ME.vehicle && ME.vehicle.taxiCab) return { label: TAXI.phase === 'ride' ? '🚕 여기서 세워주세요 (요금 정산 후 하차)' : '🚕 택시에서 내리기', key: 'E', fn: () => TAXI.stopHere() };
+  if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
   let best = null, bd = 99;
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
   for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
-  const v = nearestVehicle(2.8); if (v) cand(1.2, { label: v.locked ? '🚗 판매용 차량' : v.kind === 'horse' ? '🐎 말 타기' : v.ai ? `🔑 차량 탈취 (${v.M.name})` : v.driver && v.driver !== ME.id ? '🧍 동승하기' : `🚗 탑승 (${v.M.name})`, key: 'E', vehicle: 1, fn: () => enterVehicle(v) });
+  const v = nearestVehicle(2.8);
+  if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });
+  else if (v && v.isTraffic && v.ai && v.model === 'taxi' && !v.dead) cand(1.0, { label: '🚕 택시 잡기 (F: 탈취)', key: 'E', vehicle: 1, fn: () => TAXI.hail(v) });
+  else if (v) cand(1.2, { label: v.locked ? '🚗 판매용 차량' : v.kind === 'horse' ? '🐎 말 타기' : v.ai ? `🔑 차량 탈취 (${v.M.name})` : v.driver && v.driver !== ME.id ? '🧍 동승하기' : `🚗 탑승 (${v.M.name})`, key: 'E', vehicle: 1, fn: () => enterVehicle(v) });
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead' || p.state === 'fight') continue; const d = Math.hypot(p.x - ME.x, p.z - ME.z); if (d < 2.2) cand(d + 0.3, { label: `💬 ${p.kind === 'police' ? '경찰' : p.kind.startsWith('gang') ? '갱단원' : '시민'}과 상호작용`, key: 'E', fn: () => UI.openPed(p) }); }
   for (const a of ANIMALS) { if (a.state === 'dead') continue; const d = Math.hypot(a.x - ME.x, a.z - ME.z); const r = a.S.biped ? 1.6 : 1.4 + a.S.body[0] * 0.5; if (d < r) cand(d, { label: `🐾 ${a.S.name}`, key: 'E', fn: () => UI.openAnimal(a) }); }
   for (const b of BENCHES) { const d = Math.hypot(b.x - ME.x, b.z - ME.z); if (d < 1.4) cand(d + 0.4, { label: '🪑 앉기', key: 'E', fn: () => { ME.sitBench = b; ME.dance = -1; } }); }
@@ -380,7 +389,7 @@ function updateCamera(dt) {
   let tx, ty, tz, dist, sh = 0;
   if (v) {
     tx = v.x; ty = v.y + (v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * 0.03;
-    if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && ME.seat === 'd') { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
+    if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && (ME.seat === 'd' || v.taxiCab)) { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
     if (ME.aiming) { dist = 3.2; sh = 0.6; }
   } else {
     tx = ME.x; ty = ME.y + (ME.swim ? 0.9 : ME.sitBench ? 1.2 : 1.6); tz = ME.z; dist = ME.aiming ? 2.0 : 4.3; sh = ME.aiming ? 0.62 : 0.38;

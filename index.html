@@ -52,6 +52,25 @@ button{font-family:inherit;cursor:pointer}
 #regionSub{font-size:11.5px;color:var(--dim)}
 #clock{font-size:12px;color:#cfe6ff;margin-top:2px}
 #roomInfo{font-size:11px;color:var(--acc);margin-top:3px}
+#zoneName{font-size:12.5px;font-weight:900;margin-top:2px}
+.btn.big{width:100%;padding:16px;font-size:18px;display:flex;flex-direction:column;align-items:center;gap:2px;background:linear-gradient(100deg,#ffd84a,#ff8a3d);box-shadow:0 6px 0 #b0601a}
+.btn.big small{font-size:12px;font-weight:700;opacity:.8}
+.btn:disabled{filter:grayscale(.7);opacity:.6}
+#inviteBox{border:2px solid var(--acc);border-radius:16px;padding:14px;margin-bottom:14px;background:rgba(255,204,51,.08);text-align:center}
+#inviteBox .t{font-size:16px;font-weight:900;margin-bottom:10px}
+#inviteBox .t b{color:var(--acc);font-size:20px;letter-spacing:2px}
+#invCount{font-size:12px;color:var(--dim);margin-top:8px}
+#invCount a{color:var(--acc2);text-decoration:underline;cursor:pointer}
+#share{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);padding:18px;border-radius:18px;pointer-events:auto;z-index:25;text-align:center;background:rgba(14,16,26,.94)}
+#share h3{margin:0 0 4px;font-family:'Black Han Sans';font-weight:400;font-size:24px}
+#share .code{font-size:30px;font-weight:900;letter-spacing:6px;color:var(--acc);margin:6px 0}
+#shareSub{color:var(--dim);font-size:12.5px;margin-bottom:10px}
+#shareLink{font-size:13px;margin-bottom:10px;text-align:center}
+#taxiHud{position:absolute;left:50%;top:max(64px,env(safe-area-inset-top));transform:translateX(-50%);padding:9px 14px;font-size:14px;text-align:center;pointer-events:auto;line-height:1.9;max-width:94vw;border-color:rgba(255,210,58,.55)}
+#taxiHud kbd{background:var(--acc);color:#111;border-radius:6px;padding:1px 6px;font-family:inherit}
+.tb2{display:inline-block;margin:2px 4px 0;padding:3px 10px;border-radius:9px;background:#2a2f45;border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer}
+.tb2.on{background:var(--acc);color:#111}
+body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #topR{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 #money{font-family:'Black Han Sans';font-size:26px;color:#7dff9a;text-shadow:0 2px 0 #0a3a1a,0 0 14px rgba(70,224,138,.35);padding:4px 12px}
 #stars{font-size:22px;letter-spacing:2px;color:#444b62;text-shadow:0 2px 3px #000}
@@ -129,6 +148,7 @@ body.touch #chat{bottom:auto;top:110px;left:12px;width:min(300px,38vw)}
 body.touch #topL{padding:6px 10px;min-width:0}
 body.touch #regionName{font-size:17px}
 body.touch #toasts{top:64px}
+body.touch #zoneName{font-size:11px}
 body.touch #bars{bottom:max(10px,env(safe-area-inset-bottom))}
 body.touch #mini{width:120px;height:120px}
 body.touch .hbar{width:120px}
@@ -145,14 +165,16 @@ body.touch #prompt{bottom:auto;top:58%}
   <div>
    <div class="logo">서부리 시티<small>SEOBULY CITY 3D · ONLINE</small></div>
    <div class="sub">서벌리 · 지올르 · 이벤트광장 · 디산베이 · 캥지베, 그리고 시모느 아일랜드.<br>총, 도끼, 차, 오토바이, 말, 춤, 건축 의뢰까지 — 하고 싶은 거 다 해.</div>
+   <div id="inviteBox" class="hidden"><div class="t">🎉 친구의 방 <b id="invCode"></b> 에 초대받았어요!</div><button class="btn big" id="invJoin">👉 바로 참가하기</button><div id="invCount"></div></div>
    <div class="field" id="admField" style="display:none"><label>관리자</label><input id="admIn" class="inp" type="password" autocomplete="off" placeholder="비밀번호 (관리자만)"></div>
    <div class="field"><label>닉네임</label><input id="nameIn" class="inp" maxlength="12" placeholder="이름"></div>
    <div class="field"><label>그래픽 품질</label>
     <select id="qualIn" class="inp"><option value="3">최고 (울트라 · 그림자 4K · 블룸 · 잔디)</option><option value="2">높음</option><option value="1">보통</option><option value="0">낮음 (저사양 폰)</option></select></div>
-   <div class="row" style="margin-bottom:12px"><button class="btn" id="soloBtn">혼자 플레이</button><button class="btn b2" id="hostBtn">방 만들기</button></div>
-   <div class="row"><input id="codeIn" class="inp" maxlength="6" placeholder="방 코드" style="text-transform:uppercase"><button class="btn b3" id="joinBtn">코드로 참가</button></div>
+   <div style="margin-bottom:12px"><button class="btn big" id="hostBtn">👫 친구랑 같이하기<small>누르면 방이 생기고 초대 링크가 나와요 (카톡으로 보내기)</small></button></div>
+   <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">⚡ 빠른 참가 (공개방)</button><button class="btn" id="soloBtn">🎮 혼자 플레이</button></div>
+   <div class="row"><input id="codeIn" class="inp" maxlength="6" placeholder="방 코드 (5자리)" style="text-transform:uppercase"><button class="btn b3" id="joinBtn">코드로 참가</button></div>
    <div id="lobbyMsg" class="tip" style="color:#ffcf5a"></div>
-   <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴 · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
+   <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴(🚕 택시 · 🔗 초대) · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
   </div>
   <div>
    <canvas id="preview"></canvas>
@@ -163,7 +185,7 @@ body.touch #prompt{bottom:auto;top:58%}
 </div>
 
 <div id="hud" class="hidden">
- <div id="topL" class="panel"><div id="regionName">-</div><div id="regionSub"></div><div id="clock"></div><div id="roomInfo"></div></div>
+ <div id="topL" class="panel"><div id="regionName">-</div><div id="zoneName"></div><div id="regionSub"></div><div id="clock"></div><div id="roomInfo"></div></div>
  <div id="topR"><div id="money" class="panel">₩0</div><div id="stars"></div><div id="inv" class="panel"></div></div>
  <div id="toasts"></div>
  <div id="bigMsg"></div>
@@ -173,6 +195,8 @@ body.touch #prompt{bottom:auto;top:58%}
  <div id="speedo" class="hidden">0<small>km/h</small></div>
  <div id="bars"><canvas id="mini" width="340" height="340"></canvas><div class="hbar" id="hpBar"><i></i></div><div class="hbar" id="arBar"><i></i></div><div class="hbar" id="stBar"><i></i></div></div>
  <div id="weapon" class="panel"><div id="wName">주먹</div><div id="wAmmo"></div><div id="hotbar"></div></div>
+ <div id="taxiHud" class="panel hidden"></div>
+ <div id="share" class="panel hidden"><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button class="btn" id="shareCopy">📋 링크 복사</button><button class="btn b2" id="shareShare">📤 공유하기</button></div><button class="btn b3" id="shareClose" style="width:100%;margin-top:10px">닫기 (P ▶ 친구 초대 링크로 다시 열기)</button></div>
  <div id="dmgFlash"></div><div id="drunk"></div>
 </div>
 
@@ -185,7 +209,7 @@ body.touch #prompt{bottom:auto;top:58%}
 <div id="menu" class="hidden"><div class="box" id="menuBox"></div></div>
 <div id="bigmap" class="hidden"><canvas id="bigmapC" width="1400" height="900"></canvas><button class="btn b3 x" id="mapClose">닫기 ✕</button></div>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -373,6 +397,38 @@ function regionAt(x, z) {
   if (x >= 212) return 'seoburi';
   if (x < -720) return 'disanbay';
   return z < 0 ? 'jiolle' : 'kaengjibe';
+}
+// ---- 16개 구역 (지역을 잘게 나눈 행정구역) ----
+const DISTRICTS = [
+  { id: 1, name: '이벤트광장', region: 'plaza', cx: 0, cz: 0 },
+  { id: 2, name: '서벌리 북부 주거지', region: 'seoburi', cx: 480, cz: -440 },
+  { id: 3, name: '서벌리 금융가', region: 'seoburi', cx: 1000, cz: -440 },
+  { id: 4, name: '서벌리 다운타운', region: 'seoburi', cx: 760, cz: 0 },
+  { id: 5, name: '서벌리 남부 상가', region: 'seoburi', cx: 480, cz: 440 },
+  { id: 6, name: '서벌리 항구', region: 'seoburi', cx: 1120, cz: 440 },
+  { id: 7, name: '지올르 서부 공단', region: 'jiolle', cx: -520, cz: -800 },
+  { id: 8, name: '지올르 물류단지', region: 'jiolle', cx: -40, cz: -800 },
+  { id: 9, name: '지올르 주택가', region: 'jiolle', cx: -360, cz: -360 },
+  { id: 10, name: '캥지베 시장통', region: 'kaengjibe', cx: -360, cz: 360 },
+  { id: 11, name: '레드 크루 구역', region: 'kaengjibe', cx: -520, cz: 800 },
+  { id: 12, name: '블루 독스 구역', region: 'kaengjibe', cx: -40, cz: 800 },
+  { id: 13, name: '디산베이 호숫가', region: 'disanbay', cx: -1050, cz: -560 },
+  { id: 14, name: '디산베이 읍내', region: 'disanbay', cx: -1050, cz: 0 },
+  { id: 15, name: '디산베이 목장', region: 'disanbay', cx: -1150, cz: 440 },
+  { id: 16, name: '시모느 아일랜드', region: 'simone', cx: 2000, cz: 560 },
+];
+const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0'];
+function districtAt(x, z) { // 1..16, 0 = 바다
+  const r = regionAt(x, z);
+  switch (r) {
+    case 'plaza': return 1;
+    case 'seoburi': return z < -200 ? (x < 760 ? 2 : 3) : z <= 200 ? 4 : (x < 760 ? 5 : 6);
+    case 'jiolle': return z < -540 ? (x < -280 ? 7 : 8) : 9;
+    case 'kaengjibe': return z > 540 ? (x < -280 ? 11 : 12) : 10;
+    case 'disanbay': return z < -220 ? 13 : z <= 220 ? 14 : 15;
+    case 'simone': return 16;
+  }
+  return 0;
 }
 // ---- road graph ----
 const NODES = [], EDGES = []; const nodeIdx = new Map();
@@ -2647,7 +2703,7 @@ function panicAround(x, z, r) {
   for (const an of ANIMALS) if (!an.S.predator && an.state !== 'dead' && an.state !== 'follow' && Math.abs(an.x - x) < r && Math.abs(an.z - z) < r) { an.state = 'flee'; an.timer = 6; an.fx = x; an.fz = z; }
 }
 function spawnPickup(x, z, amount, id) {
-  id = id || 'k' + (pickupSeq++) + (G.isHost ? '' : 'g'); const y = groundHeight(x, z) + 0.4;
+  id = id || 'k' + (pickupSeq++) + '_' + (typeof ME !== 'undefined' ? String(ME.id).slice(-5) : ''); const y = groundHeight(x, z) + 0.4;
   const m = new THREE.Group(); const bill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.18), new THREE.MeshStandardMaterial({ color: 0x3aa04a, emissive: 0x1a6a2a, emissiveIntensity: 0.8 })); m.add(bill);
   const b2 = bill.clone(); b2.position.y = 0.07; b2.rotation.y = 0.4; m.add(b2); m.position.set(x, y, z); scene.add(m);
   PICKUPS.set(id, { id, x, y, z, amount, mesh: m });
@@ -2713,6 +2769,13 @@ function trafficPlace(v, e, t, dir) {
   v.ai.e = e; v.ai.dir = dir; v.ai.next = -1; v.ai.parked = false; v.ai.stuck = 0; v.hp = v.M.hp; v.dead = false; v.burnT = 0; v.deadT = 0; v.waterT = 0;
   if (v.bodyMat) { v.bodyMat.color.set(v.color); v.bodyMat.metalness = 0.65; v.bodyMat.roughness = 0.28; v.bodyMat.clearcoat = 1; }
   v.driver = null; v.npcDriver.root.visible = true; v.mesh.visible = true; v.siren = false;
+}
+// 방장이 바뀌었을 때: 게스트 화면에서 보이던 교통 차량을 가장 가까운 도로에 다시 태운다
+function trafficAdopt(v) {
+  let best = null, bd = 1e9; for (const e of EDGES) { const a = NODES[e.a], b = NODES[e.b]; const d = distSeg(v.x, v.z, a.x, a.z, b.x, b.z); if (d < bd) { bd = d; best = e; } }
+  if (!best || bd > 30 || (v.x === 0 && v.z < -2000)) { v.ai = { e: 0, dir: 1, next: -1, parked: true, stuck: 0 }; v.mesh.visible = false; if (v.npcDriver) v.npcDriver.root.visible = false; return; }
+  const a = NODES[best.a], b = NODES[best.b]; const dir = (Math.sin(v.yaw) * (b.x - a.x) + Math.cos(v.yaw) * (b.z - a.z)) >= 0 ? 1 : -1;
+  v.ai = { e: best.id, dir, next: -1, parked: false, stuck: 0 }; if (v.npcDriver) v.npcDriver.root.visible = true;
 }
 function edgeEndNode(v) { const E = EDGES[v.ai.e]; return v.ai.dir > 0 ? NODES[E.b] : NODES[E.a]; }
 function chooseNext(v) {
@@ -3075,6 +3138,7 @@ function toggleVehicle() {
   const v = nearestVehicle(); if (v) enterVehicle(v);
 }
 function enterVehicle(v) {
+  if (v.taxiCab) { if (v.taxiOwner === ME.id) TAXI.board(); else toast('🚕 다른 손님이 부른 택시다'); return; }
   if (v.locked) { toast('🚗 판매용 전시 차량 — 판매점에서 구매하세요'); return; }
   if (v.driver && v.driver !== ME.id) {
     if (G.players.has(v.driver)) { if (v.passenger) { toast('빈 자리가 없다'); return; } v.passenger = ME.id; ME.vehicle = v; ME.seat = 'p'; NET.send({ t: 'seat', v: v.id, s: 'p' }); toast('🧍 동승했다 (F 하차 · 우클릭 조준 사격 가능)'); return; }
@@ -3098,6 +3162,8 @@ function ejectNpcDriver(v) {
 }
 function exitVehicle(force) {
   const v = ME.vehicle; if (!v) return;
+  const myCab = v.taxiCab && v.taxiOwner === ME.id && !TAXI._exiting;
+  if (myCab && !force) { TAXI.stopHere(); return; } // 택시: 기사님이 세워준 뒤 내린다
   if (!force && Math.abs(v.speed) > 8 && v.kind !== 'horse') { toast('속도를 줄여야 내릴 수 있다'); return; }
   const side = ME.seat === 'p' ? -1 : 1; const off = v.kind === 'car' ? v.M.W / 2 + 0.7 : 0.9;
   ME.x = v.x + Math.cos(v.yaw) * off * side; ME.z = v.z - Math.sin(v.yaw) * off * side; ME.y = groundHeight(ME.x, ME.z, v.y + 1) + 0.05; ME.yaw = v.yaw; ME.vx = ME.vz = 0; ME.vy = 0;
@@ -3105,17 +3171,23 @@ function exitVehicle(force) {
   if (ME.seat === 'd') { v.driver = null; v.brake = true; } else v.passenger = null;
   NET.send({ t: 'seat', v: v.id, s: null }); ME.vehicle = null; ME.seat = null; ENG.set(false, 0); sfx('door');
   if (v.siren && !v.ai) v.siren = false;
+  if (myCab) TAXI.onExit(true);
 }
 // ----- interaction -----
 let curInteract = null;
 function findInteract() {
   if (ME.jail) return (ME.inv.card | 0) > 0 ? { label: `🪪 출소카드 사용 (보유 ${ME.inv.card}장)`, key: 'E', fn: () => { ME.inv.card--; LAW.release('🪪 출소카드로 즉시 출소했다'); } } : null;
-  if (ME.dead) return null; if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
+  if (ME.dead) return null;
+  if (ME.vehicle && ME.vehicle.taxiCab) return { label: TAXI.phase === 'ride' ? '🚕 여기서 세워주세요 (요금 정산 후 하차)' : '🚕 택시에서 내리기', key: 'E', fn: () => TAXI.stopHere() };
+  if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
   let best = null, bd = 99;
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
   for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
-  const v = nearestVehicle(2.8); if (v) cand(1.2, { label: v.locked ? '🚗 판매용 차량' : v.kind === 'horse' ? '🐎 말 타기' : v.ai ? `🔑 차량 탈취 (${v.M.name})` : v.driver && v.driver !== ME.id ? '🧍 동승하기' : `🚗 탑승 (${v.M.name})`, key: 'E', vehicle: 1, fn: () => enterVehicle(v) });
+  const v = nearestVehicle(2.8);
+  if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });
+  else if (v && v.isTraffic && v.ai && v.model === 'taxi' && !v.dead) cand(1.0, { label: '🚕 택시 잡기 (F: 탈취)', key: 'E', vehicle: 1, fn: () => TAXI.hail(v) });
+  else if (v) cand(1.2, { label: v.locked ? '🚗 판매용 차량' : v.kind === 'horse' ? '🐎 말 타기' : v.ai ? `🔑 차량 탈취 (${v.M.name})` : v.driver && v.driver !== ME.id ? '🧍 동승하기' : `🚗 탑승 (${v.M.name})`, key: 'E', vehicle: 1, fn: () => enterVehicle(v) });
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead' || p.state === 'fight') continue; const d = Math.hypot(p.x - ME.x, p.z - ME.z); if (d < 2.2) cand(d + 0.3, { label: `💬 ${p.kind === 'police' ? '경찰' : p.kind.startsWith('gang') ? '갱단원' : '시민'}과 상호작용`, key: 'E', fn: () => UI.openPed(p) }); }
   for (const a of ANIMALS) { if (a.state === 'dead') continue; const d = Math.hypot(a.x - ME.x, a.z - ME.z); const r = a.S.biped ? 1.6 : 1.4 + a.S.body[0] * 0.5; if (d < r) cand(d, { label: `🐾 ${a.S.name}`, key: 'E', fn: () => UI.openAnimal(a) }); }
   for (const b of BENCHES) { const d = Math.hypot(b.x - ME.x, b.z - ME.z); if (d < 1.4) cand(d + 0.4, { label: '🪑 앉기', key: 'E', fn: () => { ME.sitBench = b; ME.dance = -1; } }); }
@@ -3229,7 +3301,7 @@ function updateCamera(dt) {
   let tx, ty, tz, dist, sh = 0;
   if (v) {
     tx = v.x; ty = v.y + (v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * 0.03;
-    if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && ME.seat === 'd') { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
+    if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && (ME.seat === 'd' || v.taxiCab)) { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
     if (ME.aiming) { dist = 3.2; sh = 0.6; }
   } else {
     tx = ME.x; ty = ME.y + (ME.swim ? 0.9 : ME.sitBench ? 1.2 : 1.6); tz = ME.z; dist = ME.aiming ? 2.0 : 4.3; sh = ME.aiming ? 0.62 : 0.38;
@@ -3278,6 +3350,278 @@ function renderRemotes(dt) {
     c.setWeapon(rp.w || 'fist');
   }
 }
+
+
+// ================= ROUTING: 도로 그래프 최단경로 (A*) =================
+const ROUTE = {
+  // 점에서 가장 가까운 도로 위 지점 (정확한 투영)
+  nearestOnRoad(x, z, filter) {
+    let best = null, bd = 1e9;
+    for (const e of EDGES) {
+      if (filter && !filter(e)) continue; const a = NODES[e.a], b = NODES[e.b]; const dx = (b.x - a.x) / e.len, dz = (b.z - a.z) / e.len;
+      const t = clamp((x - a.x) * dx + (z - a.z) * dz, 0, e.len); const px = a.x + dx * t, pz = a.z + dz * t; const d = Math.hypot(px - x, pz - z);
+      if (d < bd) { bd = d; best = { e: e.id, t, x: px, z: pz, d }; }
+    }
+    return best;
+  },
+  // A*: from/to = {e,t,x,z} (도로 위 지점) → 노드열 (최단 거리)
+  astar(from, to) {
+    const fE = EDGES[from.e], tE = EDGES[to.e];
+    if (from.e === to.e) return { nodes: [], len: Math.abs(to.t - from.t) };
+    const N = NODES.length; const g = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const heap = []; // [f, node]
+    const push = (f, i) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+    const pop = () => { const top = heap[0]; const last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+    const h = i => Math.hypot(NODES[i].x - to.x, NODES[i].z - to.z);
+    const seed = (i, c) => { if (c < g[i]) { g[i] = c; prev[i] = -1; push(c + h(i), i); } };
+    seed(fE.a, from.t); seed(fE.b, fE.len - from.t);
+    let bestCost = Infinity, bestEnd = -1;
+    while (heap.length) {
+      const [f, i] = pop(); if (closed[i]) continue; closed[i] = 1; if (f >= bestCost) break;
+      if (i === tE.a && g[i] + to.t < bestCost) { bestCost = g[i] + to.t; bestEnd = i; }
+      if (i === tE.b && g[i] + tE.len - to.t < bestCost) { bestCost = g[i] + tE.len - to.t; bestEnd = i; }
+      for (const eid of NODES[i].edges) {
+        const E = EDGES[eid]; const j = E.a === i ? E.b : E.a; if (closed[j]) continue;
+        const ng = g[i] + E.len; if (ng < g[j]) { g[j] = ng; prev[j] = i; push(ng + h(j), j); }
+      }
+    }
+    if (bestEnd < 0) return null;
+    const nodes = []; for (let i = bestEnd; i >= 0; i = prev[i]) nodes.push(i); nodes.reverse();
+    return { nodes, len: bestCost };
+  },
+  edgeBetween(i, j) { for (const e of NODES[i].edges) { const E = EDGES[e]; if ((E.a === i && E.b === j) || (E.b === i && E.a === j)) return E; } return null; },
+  // 실제 주행 경로: 오른쪽 차선 중앙선을 따라가는 폴리라인 (+ 구간별 제한속도)
+  plan(x0, z0, x1, z1) {
+    const ok = e => true;
+    const from = this.nearestOnRoad(x0, z0, ok), to = this.nearestOnRoad(x1, z1, ok); if (!from || !to) return null;
+    const r = this.astar(from, to); if (!r) return null;
+    const raw = [{ x: from.x, z: from.z, E: EDGES[from.e] }];
+    let lastNode = -1;
+    for (let k = 0; k < r.nodes.length; k++) {
+      const n = NODES[r.nodes[k]]; const E = k === 0 ? EDGES[from.e] : this.edgeBetween(r.nodes[k - 1], r.nodes[k]);
+      raw[raw.length - 1].E = E || raw[raw.length - 1].E; raw.push({ x: n.x, z: n.z, E: null }); lastNode = r.nodes[k];
+    }
+    raw[raw.length - 1].E = EDGES[to.e]; raw.push({ x: to.x, z: to.z, E: EDGES[to.e] });
+    const pts = []; for (const p of raw) { const q = pts[pts.length - 1]; if (q && Math.hypot(q.x - p.x, q.z - p.z) < 0.5) { if (p.E) q.E = p.E; continue; } pts.push(p); }
+    if (pts.length < 2) pts.push({ x: to.x + 0.6, z: to.z + 0.6, E: EDGES[to.e] });
+    // 오른쪽 차선으로 오프셋 (교차로는 두 구간 오프셋의 평균)
+    const lane = E => (E ? E.w / 4 + 0.2 : 3);
+    const seg = []; for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; const L = Math.hypot(b.x - a.x, b.z - a.z) || 1; const dx = (b.x - a.x) / L, dz = (b.z - a.z) / L; const w = lane(a.E); seg.push({ dx, dz, ox: -dz * w, oz: dx * w, E: a.E }); }
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]; const s0 = seg[Math.max(0, i - 1)], s1 = seg[Math.min(seg.length - 1, i)];
+      let ox = (s0.ox + s1.ox) / 2, oz = (s0.oz + s1.oz) / 2; if (i === 0) { ox = s1.ox; oz = s1.oz; } if (i === pts.length - 1) { ox = s0.ox; oz = s0.oz; }
+      const E = s1.E; const sp = !E ? 12 : E.bridge ? 22 : E.region === 'disanbay' ? 18 : E.w >= 16 ? 15 : 13;
+      out.push({ x: p.x + ox, z: p.z + oz, sp });
+    }
+    let s = 0; for (let i = 0; i < out.length; i++) { if (i) s += Math.hypot(out[i].x - out[i - 1].x, out[i].z - out[i - 1].z); out[i].s = s; }
+    for (let i = 1; i < out.length - 1; i++) { const a = out[i - 1], b = out[i], c = out[i + 1]; out[i].turn = Math.abs(angDiff(Math.atan2(b.x - a.x, b.z - a.z), Math.atan2(c.x - b.x, c.z - b.z))); }
+    return { pts: out, len: s, roadLen: r.len + from.d + to.d, end: { x: to.x, z: to.z } };
+  },
+  pointAt(P, s) {
+    const pts = P.pts; if (s <= 0) return pts[0]; if (s >= P.len) return pts[pts.length - 1];
+    let lo = 0, hi = pts.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m].s <= s) lo = m; else hi = m; }
+    const a = pts[lo], b = pts[hi]; const k = (s - a.s) / ((b.s - a.s) || 1); return { x: lerp(a.x, b.x, k), z: lerp(a.z, b.z, k) };
+  },
+};
+
+// ================= TAXI: 호출 → 실제 탑승 → AI 기사가 최단경로로 운전 → 요금 정산 =================
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const TAXI = {
+  cab: null, phase: null, dest: null, route: null, seg: 0, fast: false, traveled: 0, waitT: 0, stuckT: 0, revT: 0, stuckN: 0, hudT: 0, reT: 0, lastX: 0, lastZ: 0, pickup: null, leaveT: 0, honkT: 0,
+  BASE: 3000, PER_KM: 1200,
+  fareFor(m) { return Math.round((this.BASE + m / 1000 * this.PER_KM) / 100) * 100; },
+  makeCab(id, x, z, yaw, owner) {
+    const v = new Vehicle(id, 'taxi', '#f0c020', x, z, yaw); v.taxiCab = true; v.taxiOwner = owner; v.driver = owner;
+    v.npcDriver = new Character(randomOutfit(mulberry32(hashStr(id)), 'civ'), { shadow: false }); v.mesh.add(v.npcDriver.root); v.npcDriver.root.position.copy(v.seat); v.npcDriver.root.visible = true;
+    v.mesh.visible = true; return v;
+  },
+  removeCab(v) { if (!v) return; if (ME.vehicle === v) { ME.vehicle = null; ME.seat = null; } v.remove(); },
+  removeOwnedBy(id) { for (const v of [...vehicles.values()]) if (v.taxiCab && v.taxiOwner === id) this.removeCab(v); },
+  // ---- 목적지 목록: 16개 구역 + 웨이포인트 + 집 ----
+  destinations() {
+    const L = DISTRICTS.map(d => ({ ic: d.id + '', name: `${d.id}구역 ${d.name}`, short: d.name, x: d.cx, z: d.cz, district: d.id }));
+    if (UI.waypoint) L.unshift({ ic: '📍', name: '지도에 찍은 목적지', short: '웨이포인트', x: UI.waypoint.x, z: UI.waypoint.z });
+    const hp = ME.homePlot != null && PLOTS[ME.homePlot]; if (hp && hp.state === 'done' && hp.owner === ME.id) L.unshift({ ic: '🏠', name: '우리 집', short: '집', x: hp.x, z: hp.z });
+    return L;
+  },
+  openMenu() {
+    if (ME.jail) { toast('수감 중에는 택시를 부를 수 없다'); return; }
+    const inCab = this.cab && ME.vehicle === this.cab;
+    const from = this.cab ? this.cab : ME; const here = districtAt(from.x, from.z);
+    const items = this.destinations().map(d => {
+      const P = ROUTE.plan(from.x, from.z, d.x, d.z); const km = P ? P.len / 1000 : 0; const same = d.district && d.district === here;
+      return { ic: d.district ? '🚕' : d.ic, t: d.name, p: P ? fmtMoney(this.fareFor(P.len)) : '-', d: P ? `최단경로 ${km.toFixed(1)}km · 약 ${Math.max(1, Math.round(P.len / 13 / 60))}분${same ? ' · 현재 구역' : ''}` : '경로 없음', dis: !P, disMsg: '도로로 갈 수 없는 곳이다', fn: () => this.setDest(d) };
+    });
+    const extra = [];
+    if (this.cab) extra.push({ ic: '❌', t: '택시 취소', p: '', d: inCab ? '지금까지 요금만 내고 하차' : '호출 취소', fn: () => this.cancel() });
+    UI.openMenu(this.cab ? '🚕 택시 — 목적지 변경' : '🚕 택시 호출', `기본요금 ${fmtMoney(this.BASE)} + 1km당 ${fmtMoney(this.PER_KM)} · AI 기사님이 <b>최단경로</b>로 운전합니다<br><small style="opacity:.75">${this.cab ? '' : '목적지를 고르면 가까운 택시가 데리러 온다 · 길가의 노란 택시에 다가가 E로 바로 잡아도 된다'}</small>`, [...extra, ...items]);
+  },
+  setDest(d) {
+    this.dest = { name: d.name, short: d.short, x: d.x, z: d.z };
+    if (!this.cab) { this.call(); return; }
+    if (ME.vehicle === this.cab) this.startRide();
+    else { if (this.phase === 'leave') { this.phase = 'approach'; this.waitT = 0; this.goPickup(); } toast(`🚕 목적지: ${d.short} — 택시에 타면 출발`); }
+  },
+  // ---- 호출: 근처 도로에서 택시가 출발해 내 위치로 온다 ----
+  call() {
+    const r = edgeNearPoint(ME.x, ME.z, 70, 160, e => !e.bridge) || edgeNearPoint(ME.x, ME.z, 25, 320);
+    let x, z, yaw;
+    if (r) { const E = EDGES[r.e]; const a = NODES[E.a], b = NODES[E.b]; const dir = Math.random() < 0.5 ? 1 : -1; const dx = (b.x - a.x) / E.len * dir, dz = (b.z - a.z) / E.len * dir; const lane = E.w / 4 + 0.2; const px = a.x + (b.x - a.x) / E.len * r.t, pz = a.z + (b.z - a.z) / E.len * r.t; x = px - dz * lane; z = pz + dx * lane; yaw = Math.atan2(dx, dz); }
+    else { const n = ROUTE.nearestOnRoad(ME.x, ME.z); x = n.x; z = n.z; yaw = 0; }
+    this.cab = this.makeCab('TX_' + ME.id + '_' + Date.now().toString(36), x, z, yaw, ME.id); this.cab.ctrl = 'local';
+    this.goPickup(); this.phase = 'approach'; this.waitT = 0;
+    const eta = this.route ? Math.max(5, Math.round(this.route.len / 11)) : 10;
+    toast(`🚕 택시 호출 완료! 약 ${eta}초 후 도착 (지도에 🚕 표시)`, 4000); sfx('ui');
+  },
+  goPickup() {
+    const p = ROUTE.nearestOnRoad(ME.x, ME.z); this.pickup = p;
+    this.setRoute(ROUTE.plan(this.cab.x, this.cab.z, p.x, p.z));
+  },
+  setRoute(P) { this.route = P; this.seg = 0; this.stuckT = 0; this.revT = 0; this.stuckN = 0; },
+  // ---- 길에서 달리는 택시 잡기 ----
+  hail(tv) {
+    if (this.cab) this.dispose(true);
+    const v = this.makeCab('TX_' + ME.id + '_' + Date.now().toString(36), tv.x, tv.z, tv.yaw, ME.id); v.ctrl = 'local'; v.speed = 0; this.cab = v;
+    if (G.isHost) this.parkTraffic(tv); else { NET.send({ t: 'taxiHail', v: tv.id }); tv.mesh.visible = false; }
+    this.phase = 'wait'; this.route = null; this.dest = null; sfx('horn', v.x, v.z, 0.5); this.board();
+  },
+  parkTraffic(tv) { if (!tv || !tv.isTraffic || !tv.ai) return; tv.ai.parked = true; tv.mesh.visible = false; if (tv.npcDriver) tv.npcDriver.root.visible = false; tv.x = 0; tv.z = -3000; tv.speed = 0; },
+  board() {
+    const v = this.cab; if (!v || ME.dead || ME.jail) return;
+    ME.vehicle = v; ME.seat = 'p'; v.passenger = ME.id; ME.dance = -1; ME.sitBench = null; NET.send({ t: 'seat', v: v.id, s: 'p' }); sfx('door');
+    CAM.yaw = v.yaw; CAM.lookT = 0;
+    if (this.dest) this.startRide(); else { this.phase = 'wait'; v.speed = 0; toast('🚕 기사님: "어디로 모실까요?"', 3000); setTimeout(() => { if (ME.vehicle === v && !this.dest) this.openMenu(); }, 250); }
+  },
+  startRide() {
+    const v = this.cab; const P = ROUTE.plan(v.x, v.z, this.dest.x, this.dest.z);
+    if (!P) { toast('도로로 갈 수 없는 목적지다'); return; }
+    this.setRoute(P); this.phase = 'ride'; this.traveled = this.traveled || 0; this.lastX = v.x; this.lastZ = v.z;
+    toast(`🚕 ${this.dest.short}까지 ${(P.len / 1000).toFixed(1)}km — 출발합니다! (Shift: 빨리 · E: 내리기)`, 4000);
+  },
+  // E / F: 주행 중이면 세워서 내리기
+  stopHere() { if (this.phase === 'ride') { this.phase = 'stopping'; toast('🚕 기사님: "여기서 세워 드릴게요"'); } else this.dropOff(false); },
+  onExit(forced) { // 강제로 내렸을 때 (사망·체포 등)
+    if (this.phase === 'ride' || this.phase === 'stopping') this.pay(true);
+    this.phase = 'leave'; this.leaveT = 0; this.cab && (this.cab.passenger = null); this.dest = null; this.goAway();
+  },
+  pay(partial) {
+    const fare = this.fareFor(this.traveled); const paid = Math.min(ME.money, fare); ME.money -= paid; sfx('cash');
+    toast(`🧾 택시 요금 ${fmtMoney(paid)}${partial ? ' (중간 하차)' : ''} · ${(this.traveled / 1000).toFixed(1)}km`, 4000); this.traveled = 0; return paid;
+  },
+  dropOff(arrived) {
+    const v = this.cab; if (!v) return;
+    if (ME.vehicle === v) {
+      if (this.phase === 'ride' || this.phase === 'stopping' || arrived) this.pay(!arrived);
+      this._exiting = true; exitVehicle(true); this._exiting = false;
+      if (arrived) announce('🚕 도착', this.dest ? this.dest.short : '');
+    }
+    v.passenger = null; this.phase = 'leave'; this.leaveT = 0; this.dest = null; this.goAway();
+  },
+  goAway() { const v = this.cab; if (!v) return; const r = edgeNearPoint(v.x, v.z, 180, 320); if (r) { const E = EDGES[r.e]; const a = NODES[E.a], b = NODES[E.b]; this.setRoute(ROUTE.plan(v.x, v.z, a.x + (b.x - a.x) / E.len * r.t, a.z + (b.z - a.z) / E.len * r.t)); } else this.route = null; },
+  cancel() {
+    if (!this.cab) return;
+    if (ME.vehicle === this.cab) { if (Math.abs(this.cab.speed) > 3) { this.stopHere(); return; } this.dropOff(false); }
+    else { toast('🚕 택시 호출 취소'); this.phase = 'leave'; this.leaveT = 0; this.dest = null; this.goAway(); }
+  },
+  dispose(silent) {
+    const v = this.cab; if (!v) return; if (ME.vehicle === v) { this._exiting = true; exitVehicle(true); this._exiting = false; }
+    NET.send({ t: 'taxiRm', id: v.id }); this.removeCab(v); this.cab = null; this.phase = null; this.route = null; this.dest = null; this.hud(false);
+  },
+  // ---- 네트워크: 상대가 부른 택시를 화면에 그대로 재현 ----
+  onNet(m, f) {
+    const s = m.s; if (!s || !f) return; let v = vehicles.get(s[0]);
+    if (!v) v = this.makeCab(s[0], s[1], s[3], s[4], f);
+    if (!v.taxiCab || v.taxiOwner !== f) return;
+    v.ctrl = 'remote'; v.driver = f; v.applyState(s); v.mesh.visible = true;
+  },
+  onRemove(m, f) { const v = vehicles.get(m.id); if (v && v.taxiCab && v.taxiOwner === f) this.removeCab(v); },
+  // ---- AI 기사: 경로 추종 (pure pursuit) + 코너 감속 + 장애물 정지 + 끼임 탈출 ----
+  drive(dt) {
+    const v = this.cab, P = this.route;
+    if (!P || this.phase === 'wait' || this.phase === 'arrived') { v.drive(dt, { throttle: 0, steer: 0, brake: 1 }); return { remain: 0 }; }
+    const pts = P.pts;
+    let t = 0;
+    for (;;) {
+      const a = pts[this.seg], b = pts[this.seg + 1]; const L = (b.s - a.s) || 1; const dx = (b.x - a.x) / L, dz = (b.z - a.z) / L;
+      t = ((v.x - a.x) * dx + (v.z - a.z) * dz) / L; if (t >= 1 && this.seg < pts.length - 2) { this.seg++; continue; } break;
+    }
+    const a = pts[this.seg], b = pts[this.seg + 1]; const s = a.s + clamp(t, 0, 1) * (b.s - a.s); const remain = P.len - s;
+    // 경로에서 너무 벗어나면 재탐색
+    const off = distSeg(v.x, v.z, a.x, a.z, b.x, b.z);
+    if (off > 22 && (this.reT -= dt) <= 0) { this.reT = 2; const end = pts[pts.length - 1]; this.setRoute(ROUTE.plan(v.x, v.z, end.x, end.z)); return { remain }; }
+    const fast = this.fast || KEYS['shift'] || KEYS['ShiftLeft'];
+    const look = 6 + Math.abs(v.speed) * 0.45; const tgt = ROUTE.pointAt(P, s + look);
+    const desired = Math.atan2(tgt.x - v.x, tgt.z - v.z); const ad = angDiff(v.yaw, desired);
+    let steer = clamp(ad * 2.4, -1, 1);
+    let want = a.sp * (fast ? 1.9 : 1);
+    // 다가오는 코너 감속
+    for (let k = this.seg + 1; k < pts.length - 1; k++) { const dC = pts[k].s - s; if (dC > 90) break; const tr = pts[k].turn || 0; if (tr > 0.35) { const vc = (tr > 1.2 ? 7 : 10) * (fast ? 1.25 : 1); want = Math.min(want, Math.sqrt(vc * vc + 2 * 5.5 * Math.max(0, dC - 3))); } }
+    // 목적지 감속
+    want = Math.min(want, Math.sqrt(2 * 4 * Math.max(0, remain - 2.5)) + (remain > 3 ? 1 : 0));
+    if (this.phase === 'stopping') want = 0;
+    want *= clamp(1 - Math.abs(ad) * 0.8, 0.3, 1);
+    // 장애물 (차량·사람)
+    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
+    const chk = (ox, oz, r) => { const dx = ox - v.x, dz = oz - v.z; const f = dx * fx + dz * fz; if (f < 0 || f > 16) return; const l = Math.abs(dx * fz - dz * fx); if (l < 1.5 + r) want = Math.min(want, Math.max(0, (f - 5.5) * 1.3)); };
+    for (const o of vehicles.values()) if (o !== v && o.mesh.visible && Math.abs(o.x - v.x) < 18 && Math.abs(o.z - v.z) < 18) chk(o.x, o.z, 0.8);
+    for (const q of PEDS) if (q.state !== 'parked' && q.state !== 'dead' && Math.abs(q.x - v.x) < 16 && Math.abs(q.z - v.z) < 16) chk(q.x, q.z, 0.3);
+    for (const rp of G.players.values()) if (!rp.veh) chk(rp.x, rp.z, 0.3);
+    if (ME.vehicle !== v && !ME.dead) chk(ME.x, ME.z, 0.3);
+    // 끼임: 후진 → 그래도 안 되면 경로 위로 순간이동
+    if (this.revT > 0) { this.revT -= dt; v.drive(dt, { throttle: -1, steer: -steer, brake: 0 }); return { remain }; }
+    const thr = v.speed < want - 0.4 ? (want - v.speed > 4 ? 1 : 0.6) : 0; const brk = v.speed > want + 0.8;
+    v.drive(dt, { throttle: thr, steer, brake: brk });
+    if (Math.abs(v.speed) < 0.4 && want > 3) { this.stuckT += dt; if (this.stuckT > 2.5) { this.stuckT = 0; this.stuckN++; this.revT = 1.3; if (this.stuckN >= 3) { this.stuckN = 0; this.revT = 0; const p2 = ROUTE.pointAt(P, s + 14), p3 = ROUTE.pointAt(P, s + 18); v.x = p2.x; v.z = p2.z; v.yaw = Math.atan2(p3.x - p2.x, p3.z - p2.z); v.y = groundHeight(v.x, v.z) + 0.2; v.speed = 0; v.vy = 0; } } } else if (Math.abs(v.speed) > 1) this.stuckT = 0;
+    return { remain };
+  },
+  update(dt) {
+    const v = this.cab; if (!v) return;
+    if (v.dead || !vehicles.has(v.id)) { if (ME.vehicle === v) { this._exiting = true; exitVehicle(true); this._exiting = false; toast('💥 택시가 부서졌다!'); } this.leaveT += dt; if (this.leaveT > 8 || !vehicles.has(v.id)) this.dispose(true); return; }
+    v.ctrl = 'local'; v.driver = ME.id; if (v.hp < v.M.hp * 0.5 && !v.burnT) v.hp = v.M.hp * 0.5 + 1; // 기사님이 조심히 운전 (쉽게 안 터짐)
+    const inCab = ME.vehicle === v;
+    const r = this.drive(dt);
+    if (inCab) { this.traveled += Math.hypot(v.x - this.lastX, v.z - this.lastZ) * (this.phase === 'ride' || this.phase === 'stopping' ? 1 : 0); ENG.set(true, clamp(Math.abs(v.speed) / v.M.max, 0, 1), 'car'); }
+    this.lastX = v.x; this.lastZ = v.z;
+    if (this.phase === 'approach') {
+      this.waitT += dt;
+      if (this.pickup && Math.hypot(ME.x - this.pickup.x, ME.z - this.pickup.z) > 35 && (this.reT -= dt) <= 0) { this.reT = 3; this.goPickup(); }
+      if (r.remain < 3 && Math.abs(v.speed) < 0.8) { this.phase = 'wait'; this.waitT = 0; this.route = null; sfx('horn', v.x, v.z, 0.8); toast('🚕 택시 도착! 가까이 가서 E로 탑승', 4000); }
+      if (this.waitT > 180) { toast('🚕 택시가 오지 못했다 — 다시 불러줘'); this.dispose(true); }
+    } else if (this.phase === 'wait' && !inCab) {
+      this.waitT += dt; if ((this.honkT -= dt) <= 0 && Math.hypot(ME.x - v.x, ME.z - v.z) < 60) { this.honkT = 12; sfx('horn', v.x, v.z, 0.4); }
+      if (this.waitT > 120 || Math.hypot(ME.x - v.x, ME.z - v.z) > 400) { toast('🚕 택시가 기다리다 떠났다'); this.phase = 'leave'; this.leaveT = 0; this.goAway(); }
+    } else if (this.phase === 'ride' && inCab) {
+      if (r.remain < 3 && Math.abs(v.speed) < 0.6) this.dropOff(true);
+    } else if (this.phase === 'stopping' && inCab) {
+      if (Math.abs(v.speed) < 0.6) this.dropOff(false);
+    } else if (this.phase === 'leave') {
+      this.leaveT += dt; const d = Math.hypot(ME.x - v.x, ME.z - v.z);
+      if (!this.route || r.remain < 4 || this.leaveT > 45 || (d > 220 && this.leaveT > 4)) this.dispose(true);
+    }
+    if ((this.hudT -= dt) <= 0) { this.hudT = 0.25; this.hud(true); }
+  },
+  hud(show) {
+    const el = $('#taxiHud'); if (!el) return; const v = this.cab;
+    if (!show || !v) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden'); const inCab = ME.vehicle === v; const P = this.route;
+    let s = 0; if (P) { const a = P.pts[this.seg]; s = a ? a.s + Math.hypot(v.x - a.x, v.z - a.z) : 0; }
+    const remain = P ? Math.max(0, P.len - s) : 0; const kmh = Math.round(Math.abs(v.speed) * 3.6);
+    let html;
+    if (this.phase === 'approach') html = `🚕 택시가 오는 중 · <b>${Math.round(Math.hypot(v.x - ME.x, v.z - ME.z))}m</b> 거리 <span class="tb2" data-a="cancel">❌ 취소</span>`;
+    else if (this.phase === 'wait' && !inCab) html = `🚕 택시 대기 중 — 가까이 가서 <kbd>E</kbd> 탑승 <span class="tb2" data-a="cancel">❌ 취소</span>`;
+    else if (inCab && (this.phase === 'ride' || this.phase === 'stopping')) html = `🚕 <b>${this.dest ? this.dest.short : ''}</b> · 남은 거리 <b>${(remain / 1000).toFixed(2)}km</b> · ${kmh}km/h · 요금 <b style="color:#7dff9a">${fmtMoney(this.fareFor(this.traveled))}</b><br><span class="tb2${this.fast ? ' on' : ''}" data-a="fast">⏩ 빨리 ${IS_TOUCH ? '' : '(Shift)'}</span><span class="tb2" data-a="dest">🗺️ 목적지 변경</span><span class="tb2" data-a="stop">🚪 내리기 ${IS_TOUCH ? '' : '(E)'}</span>`;
+    else if (inCab) html = `🚕 기사님: "어디로 모실까요?" <span class="tb2" data-a="dest">🗺️ 목적지 고르기</span><span class="tb2" data-a="stop">🚪 내리기</span>`;
+    else { el.classList.add('hidden'); return; }
+    if (el._h !== html) { el._h = html; el.innerHTML = html; el.querySelectorAll('[data-a]').forEach(b => b.onclick = (e) => { e.stopPropagation(); AU.init(); sfx('ui'); const a = b.dataset.a; if (a === 'fast') { this.fast = !this.fast; this.hudT = 0; } else if (a === 'dest') this.openMenu(); else if (a === 'stop') this.stopHere(); else if (a === 'cancel') this.cancel(); }); }
+  },
+  // 미니맵/지도에 남은 경로
+  drawRoute(x, toS) {
+    if (!this.cab || !this.route || this.phase === 'leave') return; const P = this.route; const pts = P.pts;
+    x.save(); x.strokeStyle = this.phase === 'approach' ? 'rgba(255,210,58,.75)' : 'rgba(255,210,58,.95)'; x.lineWidth = 5; x.lineJoin = 'round'; x.setLineDash([10, 7]); x.beginPath();
+    const c = toS(this.cab.x, this.cab.z); x.moveTo(c[0], c[1]); for (let i = this.seg + 1; i < pts.length; i++) { const q = toS(pts[i].x, pts[i].z); x.lineTo(q[0], q[1]); } x.stroke(); x.restore();
+  },
+};
 
 
 // ================= CONSTRUCTION (건축 의뢰) =================
@@ -3438,68 +3782,194 @@ function hostPlotRequest(m, fromId, fromName) {
 function plotRequest(m) { if (G.isHost) hostPlotRequest(m, ME.id, ME.name); else NET.send(m); }
 
 
-// ================= NETWORK (PeerJS, host-authoritative) =================
+// ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 2;
+const ROOM_PREFIX = 'sbc3d-v1-';
+const PUBLIC_ROOMS = ['PUB01', 'PUB02', 'PUB03', 'PUB04', 'PUB05', 'PUB06', 'PUB07', 'PUB08'];
+const NET_ERR = {
+  'peer-unavailable': '방을 찾을 수 없어요 — 친구가 게임 화면을 켜 두었는지 확인해 주세요',
+  'unavailable-id': '이미 사용 중인 방 코드예요', full: '방이 가득 찼어요 (최대 2명)', allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
+  network: '매칭 서버에 연결할 수 없어요 (인터넷 연결 확인)', 'server-error': '매칭 서버 오류 — 잠시 후 다시 시도해 주세요', 'socket-error': '매칭 서버 연결 오류 — 다시 시도해 주세요', 'socket-closed': '매칭 서버 연결이 끊겼어요',
+  'browser-incompatible': '이 브라우저는 P2P(WebRTC)를 지원하지 않아요 — 크롬/사파리 최신 버전을 써 주세요', webrtc: 'P2P 연결 실패 (방화벽/공유기 문제) — 와이파이↔LTE를 바꿔서 다시 시도해 보세요',
+  timeout: '연결 시간 초과 — 네트워크를 확인하고 다시 시도해 주세요', nopeer: 'PeerJS를 불러오지 못했어요 (네트워크 확인 후 새로고침)',
+};
+function netErr(code) { const e = new Error(NET_ERR[code] || ('네트워크 오류: ' + code)); e.code = code; return e; }
+function peerOpts() {
+  const o = { debug: 0, config: { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }] } };
+  const h = URLP.get('peerhost'); // 테스트/자체 서버용 (기본은 PeerJS 공개 클라우드 서버, https)
+  if (h) { o.host = h; o.port = +(URLP.get('peerport') || 443); o.path = URLP.get('peerpath') || '/'; o.secure = URLP.has('peersecure') ? URLP.get('peersecure') === '1' : o.port === 443; }
+  return o;
+}
+function inviteLink(room) { const u = new URL(location.href); u.hash = ''; for (const k of ['debug', 'quick']) u.searchParams.delete(k); u.searchParams.set('room', room); return u.toString(); }
+function cleanUrl() { const u = new URL(location.href); u.hash = ''; for (const k of ['room', 'quick']) u.searchParams.delete(k); return u.toString(); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const NET = {
-  peer: null, conns: [], ready: false, lastP: 0, lastW: 0, bc: null,
+  peer: null, peerRoom: null, // 방 코드를 내가 점유할 때(방장 대기)의 Peer
+  gpeer: null,                // 다른 방에 참가할 때의 임시 Peer
+  conns: [], hostConn: null, lastP: 0, lastW: 0, bc: null, recovering: false, kicked: false, helloSent: false,
   send(m) {
     if (!G.online) return; m.f = m.f || ME.id;
     for (const c of this.conns) { if (m.to && G.isHost && c.pid && c.pid !== m.to) continue; try { c.send(m); } catch (e) { } }
   },
   relay(m, from) { if (!G.isHost) return; for (const c of this.conns) if (c !== from) { if (m.to && c.pid !== m.to) continue; try { c.send(m); } catch (e) { } } },
   code() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; },
-  // ---- local test transport (same browser tabs) ----
+  ownsRoom() { if (this.bc) return this.localId === 'HOST'; return !!(this.peer && this.peer.open && !this.peer.destroyed); },
+  // ---- 같은 브라우저 탭끼리 테스트 (?local=1) ----
   localTransport(room, host) {
     const bc = new BroadcastChannel('sbc3d-' + room); this.bc = bc; const self = this;
-    const mk = (peerId) => ({ pid: null, peerId, open: true, send(m) { bc.postMessage({ to: peerId, from: self.localId, m }); }, close() { } });
+    const mk = (peerId) => ({ pid: null, peerId, open: true, lastRx: performance.now(), send(m) { bc.postMessage({ to: peerId, from: self.localId, m }); }, close() { } });
     this.localId = host ? 'HOST' : 'G' + Math.random().toString(36).slice(2, 7);
     bc.onmessage = (e) => {
-      const d = e.data; if (d.to !== self.localId) { if (!(d.to === '*' )) return; }
+      const d = e.data; if (d.to !== self.localId) return;
       let c = self.conns.find(x => x.peerId === d.from);
       if (!c) { if (!host) return; if (self.conns.length >= MAX_PLAYERS - 1) { bc.postMessage({ to: d.from, from: self.localId, m: { t: 'full' } }); return; } c = mk(d.from); self.conns.push(c); }
-      self.onData(d.m, c);
+      c.lastRx = performance.now(); self.onData(d.m, c);
     };
-    if (!host) { const c = mk('HOST'); this.conns.push(c); return Promise.resolve(c); }
+    if (!host) { const c = mk('HOST'); this.conns.push(c); this.hostConn = c; return Promise.resolve(c); }
     return Promise.resolve(null);
   },
-  async host(room) {
-    G.online = true; G.isHost = true; G.room = room;
-    if (URLP.get('local')) { await this.localTransport(room, true); return true; }
-    if (!window.Peer) throw new Error('PeerJS 로드 실패 (네트워크 확인)');
+  // ---- 방 코드 점유 (내가 방장으로 대기) ----
+  listen(room) {
+    if (URLP.get('local')) return this.localTransport(room, true).then(() => true);
+    if (!window.Peer) return Promise.reject(netErr('nopeer'));
+    if (this.ownsRoom() && this.peerRoom === room) return Promise.resolve(true);
+    try { this.peer && this.peer.destroy(); } catch (e) { }
     return new Promise((res, rej) => {
-      const peer = this.peer = new Peer('sbc3d-v1-' + room, { debug: 0 });
-      const to = setTimeout(() => rej(new Error('서버 연결 시간 초과')), 15000);
-      peer.on('open', () => { clearTimeout(to); res(true); });
-      peer.on('error', e => { clearTimeout(to); if (e.type === 'unavailable-id') rej(new Error('이미 사용 중인 방 코드')); else if (!G.started) rej(e); else toast('네트워크 오류: ' + e.type); });
-      peer.on('connection', conn => {
-        if (this.conns.length >= MAX_PLAYERS - 1) { conn.on('open', () => { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 500); }); return; }
-        conn.on('open', () => { this.conns.push(conn); });
-        conn.on('data', m => this.onData(m, conn));
-        conn.on('close', () => this.onClose(conn)); conn.on('error', () => this.onClose(conn));
-      });
-      peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { } });
+      const peer = this.peer = new Peer(ROOM_PREFIX + room, peerOpts()); this.peerRoom = room; let done = false;
+      const fail = code => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch (e) { } if (this.peer === peer) this.peer = null; rej(netErr(code)); };
+      const to = setTimeout(() => fail('timeout'), 15000);
+      peer.on('open', () => { if (done) return; done = true; clearTimeout(to); res(true); });
+      peer.on('error', e => { if (!done) fail(e.type); else console.warn('peer error', e.type); });
+      peer.on('connection', conn => this.accept(conn));
+      peer.on('disconnected', () => { if (!peer.destroyed) setTimeout(() => { try { if (!peer.destroyed && peer.disconnected) peer.reconnect(); } catch (e) { } }, 1500); });
     });
   },
-  async join(room) {
-    G.online = true; G.isHost = false; G.room = room;
-    if (URLP.get('local')) { const c = await this.localTransport(room, false); this.hostConn = c; return true; }
-    if (!window.Peer) throw new Error('PeerJS 로드 실패 (네트워크 확인)');
-    return new Promise((res, rej) => {
-      const peer = this.peer = new Peer({ debug: 0 }); const to = setTimeout(() => rej(new Error('방을 찾을 수 없음 (시간 초과)')), 15000);
-      peer.on('open', () => {
-        const conn = peer.connect('sbc3d-v1-' + room, { reliable: true, serialization: 'json' });
-        conn.on('open', () => { clearTimeout(to); this.conns.push(conn); this.hostConn = conn; res(true); });
-        conn.on('data', m => this.onData(m, conn)); conn.on('close', () => this.onClose(conn)); conn.on('error', () => this.onClose(conn));
-      });
-      peer.on('error', e => { clearTimeout(to); if (!G.started) rej(new Error(e.type === 'peer-unavailable' ? '방을 찾을 수 없음' : e.type)); else toast('네트워크 오류: ' + e.type); });
+  accept(conn) {
+    conn.on('open', () => {
+      if (this.conns.length >= MAX_PLAYERS - 1) { try { conn.send({ t: 'full' }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 600); return; }
+      this.recovering = false; if (!G.isHost) this.becomeAuthority();
+      conn.lastRx = performance.now(); this.conns.push(conn);
+      conn.on('data', m => { conn.lastRx = performance.now(); this.onData(m, conn); });
+      conn.on('close', () => this.onClose(conn)); conn.on('error', () => this.onClose(conn));
+      try { conn.send({ t: 'acc' }); } catch (e) { }
+      this.updateRoomInfo();
     });
+  },
+  // ---- 다른 사람 방에 참가 ----
+  join(room) {
+    if (URLP.get('local')) return this.localTransport(room, false).then(() => true);
+    if (!window.Peer) return Promise.reject(netErr('nopeer'));
+    try { this.gpeer && this.gpeer.destroy(); } catch (e) { }
+    return new Promise((res, rej) => {
+      const peer = this.gpeer = new Peer(peerOpts()); let done = false;
+      const fail = code => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch (e) { } if (this.gpeer === peer) this.gpeer = null; rej(netErr(code)); };
+      const to = setTimeout(() => fail('timeout'), 15000);
+      peer.on('open', () => {
+        const conn = peer.connect(ROOM_PREFIX + room, { reliable: true, serialization: 'json' });
+        conn.on('data', m => {
+          conn.lastRx = performance.now();
+          if (!done) { // 방장이 받아주면 'acc', 가득 차면 'full'
+            if (m && m.t === 'full') fail('full');
+            else if (m && m.t === 'acc') { done = true; clearTimeout(to); this.conns.push(conn); this.hostConn = conn; res(true); }
+            return;
+          }
+          this.onData(m, conn);
+        });
+        conn.on('close', () => { if (!done) fail('peer-unavailable'); else this.onClose(conn); });
+        conn.on('error', () => { if (!done) fail('webrtc'); else this.onClose(conn); });
+      });
+      peer.on('error', e => { if (!done) fail(e.type); else if (e.type !== 'peer-unavailable') console.warn('peer error', e.type); });
+      peer.on('disconnected', () => { if (!peer.destroyed && done) setTimeout(() => { try { if (!peer.destroyed && peer.disconnected) peer.reconnect(); } catch (e) { } }, 1500); });
+    });
+  },
+  host(room) { return this.listen(room); },
+  // ---- 빠른 참가: 공개방을 차례로 확인 → 사람이 기다리는 방이 있으면 참가, 없으면 내가 공개방을 연다 ----
+  async quickMatch(say) {
+    for (const r of PUBLIC_ROOMS) {
+      say && say(`⚡ 공개방 ${r} 확인 중…`);
+      try { await this.join(r); return { mode: 'join', room: r }; }
+      catch (e) { if (e.code === 'full' || e.code === 'timeout' || e.code === 'webrtc') continue; if (e.code !== 'peer-unavailable') throw e; }
+      try { await this.listen(r); return { mode: 'host', room: r }; }
+      catch (e) { if (e.code === 'unavailable-id') { try { await this.join(r); return { mode: 'join', room: r }; } catch (e2) { continue; } } throw e; }
+    }
+    throw netErr('allfull');
+  },
+  kick(c, ban) {
+    if (!c || c.admin || (c.pid && c.pid === G.adminId && G.adminId !== ME.id)) return false; // 관리자는 추방/밴 불가
+    if (ban && c.pid) { BANS.add(c.pid); saveBans(); }
+    try { c.send({ t: 'kicked', ban: !!ban }); } catch (e) { }
+    setTimeout(() => { try { c.close && c.close(); } catch (e) { } this.onClose(c); }, 500); return true;
   },
   onClose(conn) {
     const i = this.conns.indexOf(conn); if (i < 0) return; this.conns.splice(i, 1);
-    if (G.isHost) { if (conn.pid) { const rp = G.players.get(conn.pid); toast(`👋 ${rp ? rp.name : '플레이어'} 퇴장`); UI.chatLine(null, `${rp ? rp.name : '플레이어'}님이 나갔습니다`); removeRemote(conn.pid); this.relay({ t: 'bye', f: conn.pid }, conn); } }
-    else { toast('⚠ 호스트와 연결이 끊겼다 — 혼자 모드로 전환'); for (const id of [...G.players.keys()]) removeRemote(id); becomeHost(); }
+    try { conn.close && conn.close(); } catch (e) { }
+    const wasHostConn = conn === this.hostConn; if (wasHostConn) this.hostConn = null;
+    const names = [...G.players.values()].map(rp => rp.name); const nm = names[0] || '상대';
+    for (const id of [...G.players.keys()]) { removeRemote(id); TAXI.removeOwnedBy(id); }
+    if (G.adminId && G.adminId !== ME.id) G.adminId = null;
+    if (this.kicked) return;
+    UI.chatLine(null, `${nm}님과 연결이 끊겼습니다`);
+    if (!G.isHost) { this.becomeAuthority(); toast('⚠ 방장과 연결이 끊겼다 — 재접속 시도 중…', 4000); }
+    else toast(`👋 ${nm} 퇴장`);
+    if (G.online && !this.ownsRoom()) this.recover();
+    this.updateRoomInfo();
   },
-  hello() { this.send({ t: 'hello', id: ME.id, n: ME.name, o: ME.outfit, ap: ADMIN.on ? ADMIN.pw : undefined }); },
+  // ---- 연결이 끊겼을 때: 같은 방에 다시 접속 → 안 되면 내가 그 방 코드를 이어받아 기다린다 ----
+  async recover() {
+    if (this.recovering || this.kicked || !G.online || this.bc) return;
+    this.recovering = true; const room = G.room; this.updateRoomInfo();
+    for (let k = 0; k < 20 && this.recovering; k++) {
+      if (this.conns.length || this.ownsRoom()) break;
+      try { await this.join(room); if (!this.recovering && this.conns.length > 1) break; this.recovering = false; this.becomeGuest(); this.hello(); toast('✅ 방에 다시 접속했다'); UI.chatLine(null, '방에 다시 접속했습니다'); break; }
+      catch (e) { if (e.code === 'full') { toast('방이 가득 찼다'); break; } }
+      if (!this.recovering || this.conns.length) break;
+      try { await this.listen(room); toast(`🌐 방 ${room}을(를) 이어받았다 — 친구가 같은 링크로 다시 들어올 수 있다`, 5000); break; } catch (e) { }
+      await sleep(2500 + k * 700);
+    }
+    this.recovering = false; this.updateRoomInfo();
+  },
+  // 내가 방장(월드 시뮬레이션 담당)이 된다
+  becomeAuthority() {
+    if (G.isHost) return; G.isHost = true; G.hostId = ME.id;
+    for (const v of vehicles.values()) {
+      if (v.taxiCab && v.taxiOwner !== ME.id) continue;
+      if (v.driver && v.driver !== ME.id && G.players.has(v.driver)) continue;
+      if (v.driver && v.driver !== ME.id) v.driver = null;
+      if (v.ctrl === 'remote' && v.tx !== undefined && v !== ME.vehicle) { v.x = v.tx; v.y = v.ty; v.z = v.tz; v.yaw = v.tyaw; }
+      v.ctrl = 'local'; if (v.isTraffic && v.ai) trafficAdopt(v);
+    }
+    for (const p of PEDS) { if (p.tx !== undefined) { p.x = p.tx; p.y = p.ty; p.z = p.tz; } if (p.state !== 'parked' && p.state !== 'dead' && p.state !== 'club') { p.target = null; p.state = 'walk'; snapToNearestEdge(p); } }
+    for (const a of ANIMALS) if (a.tx2 !== undefined) { a.x = a.tx2; a.y = a.ty2; a.z = a.tz2; }
+    this.updateRoomInfo();
+  },
+  // 다른 사람이 방장이 된다 (나는 게스트)
+  becomeGuest() {
+    G.isHost = false;
+    for (const v of vehicles.values()) { if (v.driver === ME.id || (v.taxiCab && v.taxiOwner === ME.id)) continue; v.ctrl = 'remote'; v.netT = 0; v.tx = v.x; v.ty = v.y; v.tz = v.z; v.tyaw = v.yaw; }
+    for (const p of PEDS) { p.tx = p.x; p.ty = p.y; p.tz = p.z; p.tyaw = p.yaw; }
+    for (const a of ANIMALS) { a.tx2 = a.x; a.ty2 = a.y; a.tz2 = a.z; a.tyaw = a.yaw; }
+    this.updateRoomInfo();
+  },
+  // 방장(나) → 서명 검증된 관리자에게 방장 권한을 넘긴다 (승인 절차 없음)
+  transferHostTo(conn) {
+    const aid = conn.pid; G.adminId = aid;
+    try { conn.send({ t: 'hostTo', f: ME.id, plots: PLOTS.map(plotState), time: G.time, wt: G.weather }); } catch (e) { }
+    savePlots(); this.becomeGuest(); this.hostConn = conn; G.hostId = aid;
+    const rp = G.players.get(aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a');
+    announce('👑 관리자 입장', (rp ? rp.name : '관리자') + '님이 방장이 되었습니다'); UI.chatLine(null, '👑 방장 권한이 관리자에게 넘어갔습니다');
+    this.updateRoomInfo();
+  },
+  hello() { this.helloSent = true; this.send({ t: 'hello', id: ME.id, n: ME.name, o: ME.outfit, adm: ADMIN.on ? 1 : 0 }); },
+  heartbeat() {
+    if (!G.online) return; const now = performance.now();
+    for (const c of this.conns.slice()) { try { c.send({ t: 'hb', f: ME.id }); } catch (e) { } if (now - (c.lastRx || now) > 30000) { toast('⚠ 상대 응답 없음 — 연결 정리'); this.onClose(c); } }
+  },
+  updateRoomInfo() {
+    const el = $('#roomInfo'); if (!el || !G.started) return;
+    if (!G.online) { el.textContent = '혼자 플레이'; return; }
+    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room);
+    el.innerHTML = `${pub ? '⚡ 공개방' : '🌐 방'} <b>${G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}${G.isHost && n < MAX_PLAYERS ? ' · <u>P ▶ 초대 링크</u>' : ''}`;
+  },
   // ---- outgoing ticks ----
   tick(dt) {
     if (!G.online || !this.conns.length) return;
@@ -3512,6 +3982,7 @@ const NET = {
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
       veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
+    if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
   },
   worldMsg() {
@@ -3526,29 +3997,46 @@ const NET = {
   queue: [],
   flush() { const q = this.queue; this.queue = []; for (const [m, c] of q) this.onData(m, c); },
   onData(m, conn) {
+    if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
-    if (G.isHost && m.t !== 'hello' && m.t !== 'pdmg' && m.t !== 'admg' && m.t !== 'buyLand' && m.t !== 'build' && m.t !== 'collect' && m.t !== 'pick' && m.t !== 'jack' && m.t !== 'adopt' && m.t !== 'panic' && m.t !== 'adm' && m.t !== 'admAuth') this.relay(m, conn);
+    if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
     if (m.to && m.to !== ME.id) return;
     switch (m.t) {
       case 'full': toast('방이 가득 찼다 (최대 2명)'); break;
       case 'hello': {
-        if (!G.isHost) break;
-        if (BANS.has(m.id) && !(m.ap && ADMIN.check(m.ap))) { try { conn.send({ t: 'kicked', ban: true }); } catch (e) { } setTimeout(() => { try { conn.close && conn.close(); } catch (e) { } }, 400); break; }
-        if (m.ap && ADMIN.check(m.ap)) { conn.admin = true; G.adminId = m.id; } const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
-        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver).map(v => [v.id, v.driver, v.passenger]) });
-        if (conn.admin) { NET.send({ t: 'admin', aid: m.id }); rp.char.setName(m.n + ' 👑', '#ffd34a'); announce('👑 관리자 입장', m.n + '님이 방장 권한을 가져갑니다'); } else if (ADMIN.on) conn.send({ t: 'admin', aid: ME.id });
-        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); break;
+        if (!G.isHost || !conn) break;
+        const banned = BANS.has(m.id);
+        if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
+        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
+        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
+        if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
+        else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
+        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); SHARE.hide(); this.updateRoomInfo(); break;
       }
+      case 'admClaim': if (G.isHost && conn && conn.pid) ADMIN.challenge(conn, false); break;
+      case 'admChal': ADMIN.prove(m, conn); break;
+      case 'admProof': ADMIN.onProof(m, conn); break;
+      case 'hostTo': {
+        if (G.isHost || !conn || conn !== this.hostConn || !ADMIN.on) break;
+        conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id;
+        for (const s of m.plots || []) applyPlotState(s); if (m.time !== undefined) G.time = m.time; if (m.wt) G.weather = m.wt;
+        this.send({ t: 'admin', aid: ME.id }); announce('👑 방장 권한 획득', '관리자 인증 완료 — 이제 이 방의 방장입니다'); UI.chatLine(null, '👑 관리자 인증 완료: 방장 권한을 넘겨받았습니다');
+        if (BANS.has(m.f)) setTimeout(() => this.kick(conn, true), 800);
+        this.updateRoomInfo(); break;
+      }
+      case 'tc': TAXI.onNet(m, f); break;
+      case 'taxiRm': TAXI.onRemove(m, f); break;
+      case 'taxiHail': if (G.isHost) TAXI.parkTraffic(vehicles.get(m.v)); break;
       case 'welcome': {
         const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#ffd34a'); G.hostId = m.id;
         G.time = m.time; G.weather = m.wt; for (const s of m.plots) applyPlotState(s);
         for (const i of m.trees) if (TREES[i] && TREES[i].alive) setTreeVisible(TREES[i], false);
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
-        for (const p of m.picks) spawnPickup(p[1], p[2], p[3], p[0]);
+        for (const p of m.picks) if (!PICKUPS.has(p[0])) spawnPickup(p[1], p[2], p[3], p[0]);
         for (const s of m.seats) { const v = vehicles.get(s[0]); if (v) { v.driver = s[1]; v.passenger = s[2]; } }
-        toast(`✅ ${m.n}의 서부리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); break;
+        toast(`✅ ${m.n}의 서부리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
       }
       case 'bye': removeRemote(m.f); break;
       case 'p': {
@@ -3558,6 +4046,7 @@ const NET = {
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
+        if (m.tc) TAXI.onNet({ s: m.tc }, f);
         if (m.vs) { const v = vehicles.get(m.vs[0]); if (v) { if (v.driver !== f) { v.driver = f; } if (v.ai) { if (G.isHost) ejectNpcDriver(v); v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false; } v.ctrl = 'remote'; v.applyState(m.vs); v.mesh.visible = true; } }
         break;
       }
@@ -3604,11 +4093,10 @@ const NET = {
       case 'plots': for (const s of m.ps) applyPlotState(s); break;
       case 'ann': announce(m.a, m.b); break;
       case 'horn': { const rp = G.players.get(f); if (rp) sfx('horn', rp.x, rp.z); break; }
-      case 'admAuth': ADMIN.onAuth(m, conn); break;
       case 'admin': ADMIN.onAdminMsg(m); break;
       case 'free': if (m.to === ME.id) LAW.release('🔓 관리자님이 무료로 석방해 주셨다'); break;
-      case 'adm': ADMIN.onNet(Object.assign({}, m, { f })); break;
-      case 'kicked': if (!G.isHost && !ADMIN.on) { toast(m.ban ? '⛔ 밴당했다' : '👢 추방당했다'); setTimeout(() => location.reload(), 1500); } break;
+      case 'adm': ADMIN.onNet(Object.assign({}, m, { f }), conn); break;
+      case 'kicked': if (!G.isHost && !ADMIN.on && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce(m.ban ? '⛔ 밴당했다' : '👢 추방당했다', '로비로 돌아갑니다'); setTimeout(() => location.replace(cleanUrl()), 1800); } break;
       case 'panic': if (G.isHost) panicAround(m.x, m.z, 35); break;
       case 'adopt': if (G.isHost) { const a = ANIMALS[m.a]; if (a && !a.owner) { a.owner = f; a.state = 'follow'; notifyPlayer(f, { t: 'adopted', a: a.id }); } } break;
       case 'pet': { const a = ANIMALS[m.a]; if (a) FX.emoji('💕', a.x, a.y + 1.2, a.z); break; }
@@ -3617,12 +4105,7 @@ const NET = {
     }
   },
 };
-function becomeHost() {
-  G.isHost = true; G.online = false; NET.conns = [];
-  for (const v of vehicles.values()) if (v.driver !== ME.id) { v.ctrl = 'local'; if (v.driver) v.driver = null; }
-  for (const p of PEDS) { if (p.tx !== undefined) { p.x = p.tx; p.z = p.tz; } snapToNearestEdge(p); p.state = 'parked'; }
-  $('#roomInfo').textContent = '혼자 플레이';
-}
+const NO_RELAY = new Set(['hello', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct']);
 // tree regrowth (host)
 function hostTrees(dt) {
   if ((G._treeT = (G._treeT || 0) - dt) > 0) return; G._treeT = 5;
@@ -3649,7 +4132,10 @@ const UI = {
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const R = ME.vehicle ? regionAt(ME.vehicle.x, ME.vehicle.z) : regionAt(ME.x, ME.z); const RG = REGIONS[R];
-    if (R !== this.lastRegion) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
+    const regionChanged = R !== this.lastRegion;
+    if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
+    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const dId = districtAt(px, pz);
+    if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
     this.updateStars(); this.updateInv();
@@ -3834,10 +4320,12 @@ const UI = {
   openPhone() {
     if (this.menuOpen) { this.closeMenu(); return; }
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
-    this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속` : '혼자 플레이 중'} · 킬 ${ME.kills}`, [
+    const dz = DISTRICTS[districtAt(ME.x, ME.z) - 1];
+    this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
-      { ic: '🚕', t: '택시 (지역 이동)', p: 0, d: '₩1,500', fn: () => { setTimeout(() => this.openMenu('🚕 택시 호출', '목적지를 고르면 바로 이동한다', regions.map(r => ({ ic: '📍', t: REGIONS[r].name, p: 1500, d: REGIONS[r].desc, fn: () => fastTravel(r) }))), 30); } },
+      { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
+      { ic: '🔗', t: '친구 초대 링크', p: 0, d: G.online ? `방 ${G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 방을 만들고 링크 생성', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
       { ic: '🐶', t: '반려동물 부르기', p: 0, dis: ME.petId === null, disMsg: '반려동물이 없다 (길강아지/고양이 입양)', fn: () => { const a = ANIMALS[ME.petId]; if (a && G.isHost) { a.x = ME.x + 1.5; a.z = ME.z + 1.5; } toast('🐶 이리 와!'); } },
@@ -3868,6 +4356,16 @@ const UI = {
     x.fillStyle = 'rgba(55,60,70,.9)'; for (const c2 of COLLIDERS) { if (c2.type !== 'bld' || c2.circle) continue; const [a, bb] = toP(c2.x0, c2.z0); x.fillRect(a, bb, Math.max(1, (c2.x1 - c2.x0) / HM.res), Math.max(1, (c2.z1 - c2.z0) / HM.res)); }
     x.strokeStyle = '#e8e6e0'; x.lineCap = 'round'; for (const e of EDGES) { const a = NODES[e.a], b = NODES[e.b]; x.lineWidth = e.w / HM.res; const [ax, az] = toP(a.x, a.z), [bx, bz] = toP(b.x, b.z); x.beginPath(); x.moveTo(ax, az); x.lineTo(bx, bz); x.stroke(); }
     this.worldImg = c;
+    // 16개 구역 경계 + 옅은 색
+    const zc = document.createElement('canvas'); const S2 = 2; const ZW = Math.ceil(W / S2), ZH = Math.ceil(H / S2); zc.width = ZW; zc.height = ZH; const zx = zc.getContext('2d'); const zd = zx.createImageData(ZW, ZH);
+    const ids = new Uint8Array(ZW * ZH); for (let j = 0; j < ZH; j++) for (let i = 0; i < ZW; i++) { const wx = HM.x0 + i * S2 * HM.res, wz = HM.z0 + j * S2 * HM.res; ids[j * ZW + i] = terrainH(wx, wz) < -0.2 ? 0 : districtAt(wx, wz); }
+    const rgb = DISTRICT_COLORS.map(h => { const c3 = new THREE.Color(h); return [c3.r * 255, c3.g * 255, c3.b * 255]; });
+    for (let j = 0; j < ZH; j++) for (let i = 0; i < ZW; i++) {
+      const k = j * ZW + i, id = ids[k]; if (!id) continue; const o = k * 4;
+      const edge = (i + 1 < ZW && ids[k + 1] && ids[k + 1] !== id) || (j + 1 < ZH && ids[k + ZW] && ids[k + ZW] !== id) || (i > 0 && ids[k - 1] && ids[k - 1] !== id) || (j > 0 && ids[k - ZW] && ids[k - ZW] !== id);
+      if (edge) { zd.data[o] = 255; zd.data[o + 1] = 255; zd.data[o + 2] = 255; zd.data[o + 3] = 200; } else { const c3 = rgb[id - 1]; zd.data[o] = c3[0]; zd.data[o + 1] = c3[1]; zd.data[o + 2] = c3[2]; zd.data[o + 3] = 34; }
+    }
+    zx.putImageData(zd, 0, 0); this.zoneImg = zc;
   },
   drawMini() {
     const cv = $('#mini'); const x = cv.getContext('2d'); const S = cv.width; const cx = S / 2; const scale = (ME.vehicle ? 0.65 : 1.0) * S / 340;
@@ -3876,6 +4374,7 @@ const UI = {
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, S, S); x.save(); x.beginPath(); x.arc(cx, cx, cx, 0, TAU); x.clip(); x.fillStyle = '#1c3c5c'; x.fillRect(0, 0, S, S);
     x.setTransform(a, b, c, d, cx - (a * px + c * pz), cx - (b * px + d * pz));
     x.imageSmoothingEnabled = true; x.drawImage(this.worldImg, HM.x0, HM.z0, HM.W * HM.res, HM.H * HM.res);
+    if (this.zoneImg) { x.globalAlpha = 0.55; x.drawImage(this.zoneImg, HM.x0, HM.z0, HM.W * HM.res, HM.H * HM.res); x.globalAlpha = 1; }
     x.setTransform(1, 0, 0, 1, 0, 0);
     const toS = (wx, wz) => { const dx = wx - px, dz = wz - pz; return [cx + a * dx + c * dz, cx + b * dx + d * dz]; };
     const R = cx - 10; const clampS = (p) => { const dx = p[0] - cx, dy = p[1] - cx, l = Math.hypot(dx, dy); return l > R ? [cx + dx / l * R, cx + dy / l * R, true] : [p[0], p[1], false]; };
@@ -3885,6 +4384,7 @@ const UI = {
     if (ME.wanted) for (const q of PEDS) if (q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked') { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = Math.floor(G.t * 4) % 2 ? '#ff3030' : '#3060ff'; x.beginPath(); x.arc(s[0], s[1], S / 70, 0, TAU); x.fill(); }
     for (const q of PEDS) if (q.state === 'fight' && q.kind.startsWith('gang')) { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = q.kind === 'gangA' ? '#ff4040' : '#4080ff'; x.beginPath(); x.arc(s[0], s[1], S / 90, 0, TAU); x.fill(); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = clampS(toS(v.x, v.z)); x.fillText('🚘', s[0], s[1]); }
+    TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
     if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
     if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
     for (const rp of G.players.values()) { const s = clampS(toS(rp.x, rp.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
@@ -3902,15 +4402,19 @@ const UI = {
     const ww = HM.W * HM.res, wh = HM.H * HM.res; const k = Math.min(W / ww, H / wh); const ox = (W - ww * k) / 2 - HM.x0 * k, oy = (H - wh * k) / 2 - HM.z0 * k; this._ms = { k, ox, oy };
     x.fillStyle = '#16324a'; x.fillRect(0, 0, W, H); x.drawImage(this.worldImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     const P = (wx, wz) => [ox + wx * k, oy + wz * k];
+    if (this.zoneImg) x.drawImage(this.zoneImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 26px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.strokeText(R.name, p[0], p[1] - 34); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 34); }
+    for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 24px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.globalAlpha = 0.85; x.strokeText(R.name, p[0], p[1] - 40); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 40); x.globalAlpha = 1; }
+    const myD = districtAt(ME.x, ME.z);
+    for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
     x.font = '15px sans-serif'; for (const f of FACILITIES) { const p = P(f.x, f.z); x.fillText(f.icon, p[0], p[1]); }
     x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
+    TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
     for (const rp of G.players.values()) { const s = P(rp.x, rp.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
     const me = P(ME.x, ME.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
-    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
+    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 숫자 = 16개 구역 (택시 목적지) · 🚕 내 택시 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
   },
   // ---------- touch ----------
   buildTouch() {
@@ -3946,7 +4450,7 @@ const UI = {
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
-    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? '🚪<small>하차</small>' : '🚗<small>탑승</small>';
+    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? '🚪<small>세워주세요</small>' : '🚪<small>하차</small>') : '🚗<small>탑승</small>';
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
@@ -3987,31 +4491,87 @@ function applyQualityLive() {
   if (bloomPass) bloomPass.enabled = q.bloom; renderer.shadowMap.enabled = !!q.shadow; onResize();
 }
 
+// ---------- 원클릭 초대: 링크 만들기 / 복사 / 공유 ----------
+const SHARE = {
+  async open() {
+    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 방을 연다
+      toast('🌐 방 만드는 중…');
+      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
+      if (!G.online) return;
+    }
+    this.show();
+  },
+  show() {
+    const el = $('#share'); if (!el) return; const link = inviteLink(G.room);
+    $('#shareLink').value = link; $('#shareCode').textContent = G.room; el.classList.remove('hidden');
+    $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : (G.isHost ? '이 링크를 카톡/문자로 보내면 친구가 누르자마자 들어와요' : '이 링크로 다른 사람도 이 방을 찾을 수 있어요');
+    if (document.pointerLockElement) document.exitPointerLock();
+  },
+  hide() { const el = $('#share'); if (el) el.classList.add('hidden'); },
+  async copy() {
+    const link = inviteLink(G.room); let ok = false;
+    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { const i = $('#shareLink'); i.focus(); i.select(); try { ok = document.execCommand('copy'); } catch (e2) { } }
+    toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '링크를 길게 눌러 복사해 주세요'); sfx('coin');
+  },
+  async share() {
+    const link = inviteLink(G.room);
+    if (navigator.share) { try { await navigator.share({ title: '서부리 시티 3D', text: `서부리 시티 같이 하자! 링크 누르면 바로 들어와 (방 ${G.room})`, url: link }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    this.copy();
+  },
+  init() {
+    $('#shareCopy').onclick = () => this.copy(); $('#shareShare').onclick = () => this.share(); $('#shareClose').onclick = () => this.hide();
+    $('#shareLink').onclick = e => e.target.select();
+  },
+};
+
 
 // ================= ADMIN MODE + HELP + SETTINGS =================
-// 관리자 비밀번호는 코드에 없음. 빌드할 때 ADMIN_PW(또는 ADMIN_HASH) 환경변수로 해시만 주입된다.
-const ADMIN_HASH = '';
-function sha256hex(str) {
-  const K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
-  const b = new TextEncoder().encode(str), l = b.length, n = ((l + 9 + 63) >> 6) << 6, m = new Uint8Array(n); m.set(b); m[l] = 0x80;
-  const dv = new DataView(m.buffer); dv.setUint32(n - 4, (l * 8) >>> 0); dv.setUint32(n - 8, Math.floor(l * 8 / 4294967296));
-  let h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]; const w = new Array(64);
-  const R = (x, c) => (x >>> c) | (x << (32 - c));
-  for (let o = 0; o < n; o += 64) {
-    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
-    for (let i = 16; i < 64; i++) { const s0 = R(w[i - 15], 7) ^ R(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = R(w[i - 2], 17) ^ R(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0; }
-    let [a, bb, c, d, e, f, g, hh] = h;
-    for (let i = 0; i < 64; i++) { const S1 = R(e, 6) ^ R(e, 11) ^ R(e, 25), ch = (e & f) ^ (~e & g), t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0, S0 = R(a, 2) ^ R(a, 13) ^ R(a, 22), mj = (a & bb) ^ (a & c) ^ (bb & c), t2 = (S0 + mj) >>> 0; hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = bb; bb = a; a = (t1 + t2) >>> 0; }
-    h = [h[0] + a, h[1] + bb, h[2] + c, h[3] + d, h[4] + e, h[5] + f, h[6] + g, h[7] + hh].map(x => x >>> 0);
-  }
-  return h.map(x => x.toString(16).padStart(8, '0')).join('');
-}
+// 관리자 비밀번호는 코드/저장소 어디에도 없다.
+// 빌드할 때 ADMIN_PW(시크릿)로부터 "공개키"만 계산해서 넣는다:
+//   seed = PBKDF2-SHA256(비번, 'sbc3d-admin-ed25519-v2', 150000회) → Ed25519 개인키(관리자 브라우저 메모리에만 존재)
+//   ADMIN_PUB = 그 개인키의 공개키 (빌드에 포함, 누구나 볼 수 있음)
+// 방장은 관리자에게 무작위 nonce를 보내고, 관리자는 개인키로 서명만 돌려준다.
+// → 비밀번호·개인키는 관리자 브라우저 밖으로 절대 나가지 않고, 방장은 서명을 검증만 할 수 있을 뿐 흉내낼 수 없다.
+const ADMIN_PUB = '';
+const hexOf = b => Array.from(new Uint8Array(b), x => x.toString(16).padStart(2, '0')).join('');
+const unhex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
+const b64uDec = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+function randHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return hexOf(a); }
+const ACRYPTO = {
+  native: null, noble: null,
+  async nativeOk() {
+    if (this.native !== null) return this.native;
+    try { await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']); this.native = true; } catch (e) { this.native = false; }
+    return this.native;
+  },
+  async lib() { if (!this.noble) this.noble = await import('https://cdn.jsdelivr.net/npm/@noble/ed25519@2.3.0/+esm'); return this.noble; },
+  pk8(seed) { const o = new Uint8Array(48); o.set(unhex('302e020100300506032b657004220420')); o.set(seed, 16); return o; },
+  async seedFromPw(pw) {
+    const enc = new TextEncoder(); const k = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode('sbc3d-admin-ed25519-v2'), iterations: 150000 }, k, 256));
+  },
+  async pubFromSeed(seed) {
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('pkcs8', this.pk8(seed), { name: 'Ed25519' }, true, ['sign']); const j = await crypto.subtle.exportKey('jwk', k); if (j.x) return hexOf(b64uDec(j.x)); } catch (e) { } }
+    const ed = await this.lib(); return hexOf(await ed.getPublicKeyAsync(seed));
+  },
+  async sign(seed, msg) {
+    const m = new TextEncoder().encode(msg);
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('pkcs8', this.pk8(seed), { name: 'Ed25519' }, false, ['sign']); return hexOf(await crypto.subtle.sign({ name: 'Ed25519' }, k, m)); } catch (e) { } }
+    const ed = await this.lib(); return hexOf(await ed.signAsync(m, seed));
+  },
+  async verify(pubHex, sigHex, msg) {
+    if (!/^[0-9a-f]{128}$/.test(sigHex || '')) return false; const m = new TextEncoder().encode(msg);
+    if (await this.nativeOk()) { try { const k = await crypto.subtle.importKey('raw', unhex(pubHex), { name: 'Ed25519' }, false, ['verify']); return await crypto.subtle.verify({ name: 'Ed25519' }, k, unhex(sigHex), m); } catch (e) { } }
+    try { const ed = await this.lib(); return await ed.verifyAsync(unhex(sigHex), m, unhex(pubHex)); } catch (e) { return false; }
+  },
+};
 try { G.sens = parseFloat(localStorage.getItem('sbc3d_sens')) || 1; } catch (e) { G.sens = 1; }
 
 const ADMIN = {
-  on: false, pw: null, fails: 0, lockT: 0,
-  enabled() { return ADMIN_HASH.length === 64; },
-  check(pw) { return this.enabled() && sha256hex('sbc3d-admin:' + pw) === ADMIN_HASH; },
+  on: false, sk: null, fails: 0, lockT: 0, busy: false,
+  enabled() { return /^[0-9a-f]{64}$/.test(ADMIN_PUB); },
+  // 비번이 맞으면 개인키 seed(메모리 전용)를 돌려준다. 비번 자체는 저장하지 않는다.
+  async check(pw) { if (!this.enabled() || !pw) return null; try { const seed = await ACRYPTO.seedFromPw(pw); return (await ACRYPTO.pubFromSeed(seed)) === ADMIN_PUB ? seed : null; } catch (e) { console.warn(e); return null; } },
   open() {
     if (!this.enabled()) { toast('🔒 관리자 모드가 설정되지 않은 빌드'); return; }
     if (this.on) this.panel(); else this.login();
@@ -4019,16 +4579,18 @@ const ADMIN = {
   login() {
     UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px">' });
     const inp = $('#admPw'); setTimeout(() => inp && inp.focus(), 50);
-    const go = () => {
+    const go = async () => {
       if (performance.now() < this.lockT) { toast('⏳ 잠시 후 다시 시도'); return; }
-      if (this.check(inp.value)) { this.pw = inp.value; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
-      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); inp.value = ''; }
+      if (this.busy) return; this.busy = true; toast('🔐 확인 중…', 1200);
+      const sk = await this.check(inp.value); this.busy = false; inp.value = '';
+      if (sk) { this.sk = sk; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
+      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); }
     };
     inp.onkeydown = e => { if (e.key === 'Enter') go(); };
   },
   logout() { this.exit(); },
-  // 호스트 권한이 필요한 동작은 호스트에게 비밀번호와 함께 요청
-  remote(a, v) { if (G.isHost || !G.online) this.apply(a, v); else NET.send({ t: 'adm', a, v, pw: this.pw }); },
+  // 방장 권한이 필요한 동작: 관리자는 곧바로 방장이 되므로 보통 로컬에서 실행. (이전 중이면 서명 인증된 연결로만 요청)
+  remote(a, v) { if (G.isHost || !G.online) this.apply(a, v); else NET.send({ t: 'adm', a, v }); },
   apply(a, v) {
     if (a === 'time') { G.time = clamp(+v, 0, 23.99); toast('⏰ 시간 변경'); }
     else if (a === 'weather') { G.weather = v; G.weatherT = 600; toast('🌦️ 날씨 변경'); }
@@ -4037,7 +4599,7 @@ const ADMIN = {
     else if (a === 'ban') this.kickOthers(true);
     else if (a === 'unban') { BANS.clear(); saveBans(); toast('✅ 밴 목록 초기화'); }
   },
-  onNet(m) { if (!G.isHost) return; if (this.check(m.pw)) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
+  onNet(m, conn) { if (!G.isHost) return; if (conn && conn.admin) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
   tp(x, z) {
     if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
     const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z; toast('📍 이동');
@@ -4068,9 +4630,10 @@ const ADMIN = {
       { ic: '⛔', t: '상대 밴 (재입장 차단)', p: '', dis: !G.online, disMsg: '혼자 플레이 중', fn: () => { this.remote('ban'); } },
       { ic: '♻️', t: '밴 목록 초기화', p: '', fn: () => { this.remote('unban'); } },
       { ic: '🔓', t: '상대 수감자 무료 석방', p: '', dis: !G.online, disMsg: '혼자 플레이 중', fn: () => this.freeOther() },
+      { ic: '👑', t: '방장 권한 가져오기', p: G.isHost ? '방장임' : '', d: '관리자는 자동으로 방장이 된다 (안 됐을 때만)', dis: !G.online || G.isHost, disMsg: G.online ? '이미 방장이다' : '혼자 플레이 중', fn: () => { NET.send({ t: 'admClaim' }); toast('👑 방장 권한 요청 (서명 인증)'); } },
       { ic: '🔒', t: '관리자 로그아웃', p: '', fn: () => this.logout() },
     ];
-    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">F2 또는 /admin 으로 열기${G.online && !G.isHost ? ' · 시간/날씨/습격은 방장에게 요청됨' : ''}</small>`, items, { refresh: R });
+    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">F2 또는 /admin 으로 열기 · ${G.online ? (G.isHost ? '👑 내가 방장' : '⏳ 방장 권한 이전 중…') : '혼자 플레이'}</small>`, items, { refresh: R });
   },
   timeMenu() { UI.openMenu('⏰ 시간', '', [[6, '🌅 아침 06시'], [12, '☀️ 정오 12시'], [18, '🌇 저녁 18시'], [22, '🌃 밤 22시'], [0, '🌌 자정 00시'], [3, '🌠 새벽 03시']].map(([h, t]) => ({ t, p: '', fn: () => { this.remote('time', h); } }))); },
   weatherMenu() { UI.openMenu('🌦️ 날씨', '', [['clear', '☀️ 맑음'], ['cloudy', '☁️ 흐림'], ['rain', '🌧️ 비']].map(([k, t]) => ({ t, p: '', fn: () => { this.remote('weather', k); } }))); },
@@ -4083,7 +4646,7 @@ const ADMIN = {
     } })));
   },
   tpMenu() {
-    const items = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'].map(r => ({ ic: '📍', t: REGIONS[r].name, p: '', fn: () => fastTravel(r) }));
+    const items = DISTRICTS.map(d => ({ ic: '📍', t: `${d.id}구역 ${d.name}`, p: '', fn: () => { const n = ROUTE.nearestOnRoad(d.cx, d.cz); const E = EDGES[n.e]; this.tp(n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2.5), n.z + (E.axis === 'x' ? E.w / 2 + 2.5 : 0)); } }));
     items.push({ ic: '🚩', t: '웨이포인트로', p: '', dis: !UI.waypoint, disMsg: '지도(M)에서 웨이포인트를 먼저 찍어줘', fn: () => this.tp(UI.waypoint.x, UI.waypoint.z) });
     const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => this.tp(o.x + 1.5, o.z + 1.5) });
     UI.openMenu('📍 텔레포트', '', items);
@@ -4097,6 +4660,8 @@ UI.openHelp = function () {
   const pc = sec('이동') + row('W|A|S|D', '이동 (방향키도 가능)') + row('Shift', '달리기') + row('Space', '점프') + row('V', '1인칭 / 3인칭')
     + sec('전투') + row('좌클릭', '공격') + row('우클릭', '조준') + row('1~8|휠|Q', '무기 선택 · 이전 무기') + row('R', '재장전')
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
+    + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
+    + sec('멀티') + row('P', '휴대폰 ▶ 친구 초대 링크 (복사/공유)')
     + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
@@ -4117,8 +4682,8 @@ const DOC_ADMIN = ['관리자 님입니까? 즉시 치료해드리겠습니다!'
 
 Object.assign(ADMIN, {
   prev: null, bonus: 0,
-  preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (pw && this.check(pw)) { this.pw = pw; this.pre = true; } } catch (e) { } },
-  autoLogin() { if (this.pre && this.pw && !this.on) this.enter(); },
+  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const sk = await this.check(pw); if (sk) { this.sk = sk; this.pre = true; } else toastLater('❌ 관리자 비밀번호가 틀렸다'); } catch (e) { } },
+  autoLogin() { if (this.pre && this.sk && !this.on) this.enter(); },
   enter() {
     this.on = true; this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
     if (ME.char) { ME.outfit = Object.assign({}, ME.outfit, ADMIN_SUIT); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); }
@@ -4128,17 +4693,34 @@ Object.assign(ADMIN, {
   announce() {
     if (!G.online) return;
     if (G.isHost) { G.adminId = ME.id; NET.send({ t: 'admin', aid: ME.id }); }
-    else NET.send({ t: 'admAuth', pw: this.pw });
+    else if (NET.helloSent) NET.send({ t: 'admClaim' }); // 방장이 nonce를 보내면 서명으로 증명 → 자동으로 방장 권한 이전
   },
   exit() {
-    this.on = false; this.pw = null; this.pre = false; ME.god = false; ME.fly = false; ME.speedMul = 1;
+    this.on = false; this.sk = null; this.pre = false; ME.god = false; ME.fly = false; ME.speedMul = 1;
     if (this.prev) { ME.outfit = this.prev.outfit; if (ME.char) { ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); } ME.money = Math.min(ME.money, Math.max(this.prev.money, 50000)); }
     if (G.adminId === ME.id) { G.adminId = null; NET.send({ t: 'admin', aid: null }); }
     toast('🔒 관리자 모드 OFF');
   },
-  onAuth(m, conn) { // host side: 게스트가 관리자 비번 제시
-    if (!G.isHost) return;
-    if (this.check(m.pw)) { conn.admin = true; G.adminId = m.f; NET.send({ t: 'admin', aid: m.f }); const rp = G.players.get(m.f); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a'); announce('👑 관리자 입장', (rp ? rp.name : '') + '님이 방장 권한을 가져갑니다'); }
+  // ----- 방장 쪽: 관리자 증명 요청/검증 -----
+  challenge(conn, banned) {
+    if (!G.isHost || !this.enabled() || !conn || conn.chal) return;
+    conn.chal = randHex(32); conn.chalBan = !!banned; clearTimeout(conn.chalT);
+    conn.chalT = setTimeout(() => { if (conn.chal) { conn.chal = null; if (conn.chalBan) NET.kick(conn, true); } }, 15000);
+    try { conn.send({ t: 'admChal', n: conn.chal, h: ME.id, r: G.room, f: ME.id }); } catch (e) { }
+  },
+  async onProof(m, conn) {
+    if (!G.isHost || !conn || !conn.chal || !conn.pid) return; const n = conn.chal; conn.chal = null; clearTimeout(conn.chalT);
+    const ok = await ACRYPTO.verify(ADMIN_PUB, m.s, `sbc3d-admin-v2|${G.room}|${ME.id}|${conn.pid}|${n}`);
+    if (!ok) { try { conn.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1 }); } catch (e) { } if (conn.chalBan) NET.kick(conn, true); return; }
+    conn.admin = true;
+    if (this.on && G.adminId === ME.id) { try { conn.send({ t: 'chat', m: '👑 이 방은 이미 관리자가 방장입니다', sys: 1 }); } catch (e) { } return; }
+    NET.transferHostTo(conn); // 승인 절차 없이 무조건 방장 이전
+  },
+  // ----- 관리자 쪽: nonce에 서명만 돌려준다 (비번/개인키는 전송하지 않음) -----
+  async prove(m, conn) {
+    if (!this.on || !this.sk || conn !== NET.hostConn) return;
+    const sig = await ACRYPTO.sign(this.sk, `sbc3d-admin-v2|${m.r}|${m.h}|${ME.id}|${m.n}`);
+    try { conn.send({ t: 'admProof', s: sig, f: ME.id }); } catch (e) { }
   },
   onAdminMsg(m) { if (G.isHost) return; G.adminId = m.aid || null; if (m.aid) { const rp = G.players.get(m.aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a'); if (m.aid !== ME.id) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다'); } },
   hostPower() { return G.adminId ? G.adminId === ME.id : G.isHost; },
@@ -4146,7 +4728,7 @@ Object.assign(ADMIN, {
     let n = 0;
     for (const c of NET.conns.slice()) {
       if (c.admin || (c.pid && c.pid === G.adminId)) continue; if (G.adminId && G.adminId !== ME.id && !c.pid) continue;
-      if (ban && c.pid) { BANS.add(c.pid); saveBans(); } try { c.send({ t: 'kicked', ban: !!ban }); } catch (e) { } setTimeout(() => { try { c.close && c.close(); } catch (e) { } }, 500); n++;
+      NET.kick(c, ban); n++;
     }
     toast(n ? (ban ? '⛔ 밴했다' : '👢 추방했다') : '대상이 없다');
   },
@@ -4336,22 +4918,49 @@ function initLobby() {
   $('#randBtn').onclick = () => { lobbyOutfit = randomOutfit(); ch.setOutfit(lobbyOutfit); buildCustomizer($('#cust'), lobbyOutfit, (o) => ch.setOutfit(o)); };
   const loopP = () => { if (G.started) { pr.dispose(); return; } requestAnimationFrame(loopP); const w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== Math.floor(w * pr.getPixelRatio())) { pr.setSize(w, h, false); pc.aspect = w / h; pc.updateProjectionMatrix(); } preview.t += 0.016; ch.root.rotation.y = Math.sin(preview.t * 0.5) * 0.8; ch.update(0.016, { speed: 0, grounded: true, state: 'normal', dance: Math.floor(preview.t / 6) % 3 === 2 ? Math.floor(preview.t / 18) % 8 : -1, idleLook: 0.6 }); pr.render(ps, pc); };
   loopP();
-  $('#soloBtn').onclick = () => startGame('solo'); $('#hostBtn').onclick = () => startGame('host'); $('#joinBtn').onclick = () => { const c = $('#codeIn').value.trim().toUpperCase(); if (c.length < 4) { $('#lobbyMsg').textContent = '방 코드를 입력하세요'; return; } startGame('join', c); };
+  $('#soloBtn').onclick = () => startGame('solo'); $('#hostBtn').onclick = () => startGame('host'); $('#quickBtn').onclick = () => startGame('quick');
+  $('#joinBtn').onclick = () => { const c = $('#codeIn').value.trim().toUpperCase(); if (c.length < 4) { $('#lobbyMsg').textContent = '방 코드를 입력하세요'; return; } startGame('join', c); };
+  $('#codeIn').onkeydown = e => { if (e.key === 'Enter') $('#joinBtn').click(); };
+  // 초대 링크(?room=CODE)로 들어오면: 큰 "바로 참가" 버튼 + 5초 뒤 자동 참가
+  if (rc) {
+    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = code;
+    let left = 5; const cnt = $('#invCount');
+    const stop = () => { clearInterval(LOBBY.cd); LOBBY.cd = 0; cnt.textContent = '닉네임/외형을 바꾼 뒤 버튼을 눌러 참가하세요'; };
+    const tickCd = () => { if (left <= 0) { stop(); startGame('join', code); return; } cnt.innerHTML = `${left}초 뒤 자동으로 참가해요 · <a id="invCancel">잠깐, 외형부터 꾸밀래요</a>`; $('#invCancel').onclick = stop; left--; };
+    $('#invJoin').onclick = () => { stop(); startGame('join', code); };
+    tickCd(); LOBBY.cd = setInterval(tickCd, 1000);
+    for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
+  } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
 }
+const LOBBY = { cd: 0, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin'], lock(on) { for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } } };
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
-  ME.id = uid(); G.name = ME.name; ADMIN.preAuth();
-  $('#lobbyMsg').textContent = mode === 'join' ? '방에 접속 중…' : mode === 'host' ? '방 만드는 중…' : '';
-  ['soloBtn', 'hostBtn', 'joinBtn'].forEach(id => $('#' + id).disabled = true);
+  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd);
+  const msg = t => { $('#lobbyMsg').textContent = t; };
+  if ($('#admIn') && $('#admIn').value) { msg('🔐 관리자 확인 중…'); await ADMIN.preAuth(); }
+  msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : '');
   G.isHost = mode !== 'join';
   try {
-    if (mode === 'host') { const c = NET.code(); await NET.host(c); }
-    if (mode === 'join') { await NET.join(code); }
+    if (mode === 'host') {
+      for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
+      G.online = true; G.isHost = true;
+    }
+    if (mode === 'join') {
+      let err = null;
+      for (let k = 0; k < 2; k++) { try { await NET.join(code); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
+      if (err) throw err; G.online = true; G.isHost = false; G.room = code;
+    }
+    if (mode === 'quick') { const r = await NET.quickMatch(msg); G.online = true; G.isHost = r.mode === 'host'; G.room = r.room; }
   } catch (e) {
-    if (mode === 'join') { $('#lobbyMsg').textContent = '❌ ' + (e.message || e); ['soloBtn', 'hostBtn', 'joinBtn'].forEach(id => $('#' + id).disabled = false); G.online = false; return; }
-    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ')');
+    if (mode === 'join' || mode === 'quick') {
+      msg('❌ ' + (e.message || e)); LOBBY.lock(false); G.online = false; G.isHost = true;
+      if (mode === 'join') { $('#invJoin').innerHTML = '🔁 다시 시도'; $('#invCount').textContent = '친구 화면이 게임 안에 있는지 확인해 주세요 · 안 되면 "친구랑 같이하기"로 내가 방을 만들어 링크를 보내도 돼요'; }
+      return;
+    }
+    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ') · P ▶ 친구 초대 링크로 다시 시도 가능');
   }
+  G.hostId = G.isHost ? ME.id : null;
   $('#lobby').classList.add('hidden'); $('#loading').classList.remove('hidden');
   try { await loadWorld(); } catch (e) { console.error(e); $('#loadTxt').textContent = '오류: ' + e.message; return; }
 }
@@ -4374,12 +4983,16 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
-  $('#roomInfo').innerHTML = G.online ? (G.isHost ? `🌐 방 코드 <b>${G.room}</b> (친구에게 알려줘)` : `🌐 ${G.room} 방 접속`) : '혼자 플레이';
+  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서부리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
   _later.forEach(m => toast(m, 5000)); _later = [];
-  if (G.online && G.isHost) { UI.chatLine(null, `방 코드: ${G.room} — 친구가 로비에서 이 코드로 참가하면 됩니다`); }
+  if (G.online && G.isHost) {
+    UI.chatLine(null, `방 ${G.room} — 초대 링크를 친구에게 보내면 누르자마자 들어옵니다 (P ▶ 친구 초대 링크)`);
+    if (!G.players.size && !PUBLIC_ROOMS.includes(G.room)) setTimeout(() => { if (!G.players.size) SHARE.show(); }, 600);
+    if (PUBLIC_ROOMS.includes(G.room)) toast(`⚡ 공개방 ${G.room}을 열었다 — 다른 사람이 빠른 참가를 누르면 들어온다`, 5000);
+  }
   if (IS_TOUCH) toast('🕹️ 왼쪽 조이스틱 이동 · 오른쪽 드래그로 시점', 4000); else toast('🖱️ 화면 클릭 → 마우스 시점 · WASD 이동 · F1 조작법', 5000);
   requestAnimationFrame(loop);
   setInterval(() => { saveGame(); savePlots(); }, 30000);
@@ -4406,7 +5019,7 @@ function loop() {
 function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t += dt; frame(dt, true); } }
 function frame(dt, noRender) {
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  LAW.tick(dt); COMFORT.tick(dt);
+  LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -4435,7 +5048,7 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };
+if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };
 
 </script>
 </body>
