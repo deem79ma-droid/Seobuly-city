@@ -93,6 +93,7 @@ function buildWeaponMesh(type) {
   return g;
 }
 // ---- name/chat sprites ----
+function disposeSprite(s) { if (!s) return; if (s.parent) s.parent.remove(s); if (s.material) { if (s.material.map) s.material.map.dispose(); s.material.dispose(); } }
 function textSprite(text, color = '#fff', bg = 'rgba(0,0,0,.55)', size = 48) {
   const c = document.createElement('canvas'); const x = c.getContext('2d'); x.font = `900 ${size}px "Noto Sans KR",sans-serif`;
   const w = Math.min(1024, Math.ceil(x.measureText(text).width + size * 0.9)); c.width = w; c.height = size * 1.5;
@@ -224,18 +225,18 @@ class Character {
     out.copy(m.userData.muzzle); m.localToWorld(out); return out;
   }
   setName(text, color = '#fff') {
-    if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
+    if (this.nameTag) disposeSprite(this.nameTag);
     this.nameText = text || ''; if (!text) { this.nameTag = null; return; }
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
-    if (this.bubble) { this.root.remove(this.bubble); this.bubble.material.map.dispose(); }
-    this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
+    if (this.bubble) disposeSprite(this.bubble);
+    text = String(text ?? ''); this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
   }
   // s: {speed, grounded, state, aiming, aimPitch, action, actionT, dance, carry}
   update(dt, s) {
     this.t += dt; const P = this.P; const p = {}; const t = this.t; s.spin = 0;
-    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { this.root.remove(this.bubble); this.bubble = null; } }
+    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { disposeSprite(this.bubble); this.bubble = null; } }
     const spd = s.speed || 0; const runT = clamp((spd - 1.8) / 4.2, 0, 1);
     const st = s.state || 'normal';
     // defaults
