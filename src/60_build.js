@@ -106,7 +106,7 @@ function syncPlotVisual(p) {
     for (let i = 0; i < 3; i++) { const c = new Character(randomOutfit(Math.random, 'worker'), { shadow: false }); c.setWeapon(null); scene.add(c.root); V.workers.push({ c, a: i / 3 * TAU + 0.5 }); }
     V.label = null;
   }
-  if (p.state !== 'building' && V.site) { scene.remove(V.site); for (const w of V.workers) scene.remove(w.c.root); V.site = null; V.workers = []; if (V.label) { scene.remove(V.label); V.label = null; } }
+  if (p.state !== 'building' && V.site) { scene.remove(V.site); for (const w of V.workers) scene.remove(w.c.root); V.site = null; V.workers = []; if (V.label) { disposeSprite(V.label); V.label = null; } }
   if (p.state === 'done' && V.group && !V.collider) {
     const fp = plotFootprint(p, p.design); V.collider = addCollider(p.x - fp.hw, p.z - fp.hd, p.x + fp.hw, p.z + fp.hd, p.y + (V.group.userData.H || 8), 'bld');
     if (V.clip) V.clip.constant = 9999; if (V.doneFx !== true) { V.doneFx = true; }
@@ -135,7 +135,7 @@ function updateConstruction(dt, cam) {
     if (near && Math.random() < dt * 3) { FX.impact({ x: p.x + rnd(-p.w / 3, p.w / 3), y: p.y + rnd(0.2, H * p.progress + 1), z: p.z + rnd(-p.d / 3, p.d / 3) }, 'dust'); }
     if (near && Math.random() < dt * 1.5) sfx('build', p.x, p.z, 0.6);
     // label
-    const pct = Math.floor(p.progress * 100); if (V.lastPct !== pct) { V.lastPct = pct; if (V.label) { scene.remove(V.label); V.label.material.map.dispose(); } V.label = textSprite(`🏗️ ${BUILD_DESIGNS[p.design].name} ${pct}%`, '#ffd34a'); V.label.scale.multiplyScalar(4); V.label.position.set(p.x, top + 4, p.z); scene.add(V.label); }
+    const pct = Math.floor(p.progress * 100); if (V.lastPct !== pct) { V.lastPct = pct; if (V.label) disposeSprite(V.label); V.label = textSprite(`🏗️ ${BUILD_DESIGNS[p.design].name} ${pct}%`, '#ffd34a'); V.label.scale.multiplyScalar(4); V.label.position.set(p.x, top + 4, p.z); scene.add(V.label); }
     V.label.position.y = top + 4;
   }
 }

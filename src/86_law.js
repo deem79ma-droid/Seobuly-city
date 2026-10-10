@@ -21,9 +21,9 @@ Object.assign(ADMIN, {
     let el = $('#admStatus'); if (!el) { el = document.createElement('div'); el.id = 'admStatus'; document.body.appendChild(el); }
     clearTimeout(this._stT); el.className = kind; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<div><b></b>' + (sub ? '<small></small>' : '') + '</div>';
     el.querySelector('b').textContent = text; if (sub) el.querySelector('small').textContent = sub; el.style.display = 'flex';
-    if (kind !== 'busy') this._stT = setTimeout(() => { el.style.display = 'none'; }, kind === 'ok' ? 4200 : 3500);
+    if (kind !== 'busy') this._stT = setTimeout(() => { el.style.display = 'none'; if (window.closeShare) {} }, kind === 'ok' ? 4200 : 3500);
   },
-  hideStatus() { const el = $('#admStatus'); if (el) el.style.display = 'none'; clearTimeout(this._stT); },
+  hideStatus() { const el = $('#admStatus'); if (el) el.style.display = 'none'; if (window.closeShare) {} clearTimeout(this._stT); },
   lobbyMsg(kind, text) { const el = $('#admMsg'); if (!el) return; el.className = kind || ''; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<span></span>'; el.querySelector('span:last-child').textContent = text || ''; },
   beginProgress() {
     this.pending = true; this.ready = false; clearTimeout(this._pT);
@@ -37,7 +37,7 @@ Object.assign(ADMIN, {
     this.status('ok', '👑 관리자 모드 완료', hostOk ? (G.online ? '이 방의 방장 · 무한 돈·탄약 · 체포 면제' : '무한 돈·탄약 · 체포 면제') : '방장 권한은 아직 못 받았어요 (관리자 기능은 사용 가능)');
     sfx('levelup'); UI.updateHud && G.started && UI.updateHud();
   },
-  onHostGranted() { G.adminId = ME.id; if (this.pending) this.finish(true); },
+  onHostGranted() { if (!this.on || !this.sk) return; G.adminId = ME.id; if (this.pending) this.finish(true); }, // 비번으로 로그인한 본인만
   announce() {
     if (!G.online) return;
     if (G.isHost) { G.adminId = ME.id; NET.send({ t: 'admin', aid: ME.id }); }
@@ -73,7 +73,9 @@ Object.assign(ADMIN, {
     if (this.peerFails()[conn.pid]) { delete this._pf[conn.pid]; this.savePeerFails(); }
     conn.admin = true;
     if (this.on && G.adminId === ME.id) { try { conn.send({ t: 'chat', m: '👑 이 방은 이미 관리자가 방장입니다', sys: 1 }); } catch (e) { } return; }
-    NET.transferHostTo(conn); // 승인 절차 없이 무조건 방장 이전
+    // 여기까지 왔다 = 상대(conn.pid)가 관리자 개인키로 이 방·이 순간의 nonce에 서명했다(검증 완료) → 그 사람에게만 방장 이전.
+    // (예전 임시 수정은 '방장 쪽'이 관리자인지 검사해서, 진짜 관리자가 들어와도 이전이 안 됐음)
+    NET.transferHostTo(conn);
   },
   // ----- 관리자 쪽: nonce에 서명만 돌려준다 (비번/개인키는 전송하지 않음) -----
   async prove(m, conn) {
@@ -81,8 +83,15 @@ Object.assign(ADMIN, {
     const sig = await ACRYPTO.sign(this.sk, `sbc3d-admin-v2|${m.r}|${m.h}|${ME.id}|${m.n}`);
     try { conn.send({ t: 'admProof', s: sig, f: ME.id }); } catch (e) { }
   },
-  onAdminMsg(m) { if (G.isHost) return; G.adminId = m.aid || null; if (m.aid) { if (m.aid === ME.id) this.onHostGranted(); if (m.aid !== ME.id) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다'); } },
-  hostPower() { return G.adminId ? G.adminId === ME.id : G.isHost; },
+  // 관리자 표시는 '지금 방장'이 보낸 것만 믿는다. 나를 관리자로 지정하는 메시지는 내가 실제로 로그인한 경우에만 받아들인다.
+  onAdminMsg(m, conn) {
+    if (G.isHost || (conn && conn !== NET.hostConn)) return;
+    const aid = m.aid || null;
+    if (aid === ME.id) { if (this.on && this.sk) this.onHostGranted(); else G.adminId = null; return; }
+    const was = G.adminId; G.adminId = aid; if (aid && aid !== was) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다');
+    for (const rp of G.players.values()) refreshRemoteName(rp);
+  },
+  hostPower() { return G.adminId ? (G.adminId === ME.id && this.on) : G.isHost; },
   kickOthers(ban) {
     let n = 0;
     for (const c of NET.conns.slice()) {
@@ -187,14 +196,31 @@ const LAW = {
   },
 };
 // ---- 이름표 / 배지: 방장이 서명으로 검증한 관리자(G.adminId)에게만 '👑관리자' 배지 ----
-function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id); }
+function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id && id !== ME.id); }
 function displayName(id, name) { return (isAdminId(id) ? '👑관리자 ' : '') + (name || ''); }
 function refreshRemoteName(rp) {
   const adm = G.adminId === rp.id; const key = rp.name + '|' + !!rp.jail + '|' + adm; if (rp._nk === key) return; rp._nk = key;
   rp.char.setName((adm ? '👑관리자 ' : '') + (rp.name || '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ffd34a' : rp.jail ? '#ff9a6a' : (rp.baseCol || '#9fe0ff'));
 }
 if (ADMIN.enabled()) {
-  const f = $('#admField'); if (f) f.style.display = '';
+  // Admin field is hidden by default; revealed only after 7 consecutive clicks on the ? button
+  let clickCount = 0, lastClick = 0;
+  const helpBtn = document.getElementById('secretHelp');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const now = Date.now();
+      if (now - lastClick > 1200) clickCount = 0; // reset if not consecutive (1.2s window)
+      clickCount++;
+      lastClick = now;
+      if (clickCount >= 7) {
+        const f = $('#admField'); if (f) f.style.display = '';
+        helpBtn.style.color = '#ffcc33';
+        clickCount = 0;
+      }
+    });
+  }
+  const f = $('#admField'); // keep hidden until secret
   // 로비: 확인 버튼(또는 Enter)으로 게임에 들어가기 전에 비밀번호를 미리 확인 (비번은 이 브라우저 밖으로 안 나감)
   const inp = $('#admIn'), btn = $('#admBtn');
   const check = async () => {

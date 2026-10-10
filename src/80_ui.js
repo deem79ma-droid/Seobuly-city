@@ -9,6 +9,7 @@ const UI = {
     $('#mapClose').onclick = () => this.closeMap();
     $('#bigmapC').addEventListener('click', e => { const r = e.target.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 1400, y = (e.clientY - r.top) / r.height * 900; const w = this.mapToWorld(x, y); this.waypoint = w; toast('📍 목적지 설정'); this.drawBigMap(); });
     $('#menu').addEventListener('click', e => { if (e.target.id === 'menu') this.closeMenu(); });
+    { const mb = $('#menuBox'); let busy = false; const addX = () => { if (busy || mb.querySelector(':scope > .xbtn')) return; busy = true; const x = document.createElement('button'); x.className = 'xbtn'; x.type = 'button'; x.setAttribute('aria-label', '닫기'); x.textContent = '✕'; x.onclick = e => { e.stopPropagation(); sfx('ui'); this.closeMenu(); }; mb.insertBefore(x, mb.firstChild); busy = false; }; new MutationObserver(addX).observe(mb, { childList: true }); }
     this.buildHotbar();
     if (IS_TOUCH) this.buildTouch();
     setInterval(() => { if (G.started) this.updateHud(); }, 250);
@@ -28,6 +29,7 @@ const UI = {
     this.updateStars(); this.updateInv();
     const v = ME.vehicle; $('#speedo').classList.toggle('hidden', !v); if (v) $('#speedo').innerHTML = `${Math.round(Math.abs(v.speed) * 3.6)}<small>km/h · ${v.M.name}${v.hp < v.M.hp * 0.3 ? ' · ⚠ 파손' : ''}</small>`;
     $('#cross').classList.toggle('hidden', !(ME.aiming || (!WEAPONS[ME.weapon].melee && !ME.vehicle)) || ME.dead);
+    if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
   updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`🪵${i.wood}`); if (i.meat) parts.push(`🥩${i.meat}`); if (i.food) parts.push(`🍱${i.food}`); if (i.medkit) parts.push(`🩹${i.medkit}`); if (i.drink) parts.push(`🍺${i.drink}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
@@ -40,7 +42,7 @@ const UI = {
   openChat() { const i = $('#chatIn'); i.classList.remove('hidden'); i.focus(); if (document.pointerLockElement) document.exitPointerLock(); },
   closeChat() { const i = $('#chatIn'); i.value = ''; i.classList.add('hidden'); i.blur(); },
   sendChat() {
-    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); if (!m) return;
+    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); this._chatSentT = performance.now(); if (!m) return;
     if (m.startsWith('/')) { this.command(m); return; }
     this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
@@ -54,7 +56,7 @@ const UI = {
     else if (c === '습격' || c === 'raid') { G.raidT = 0; }
     else toast('명령어: /시간 20, /날씨 비|맑음|흐림, /습격, /admin');
   },
-  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > 7) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
+  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
   // ---------- menu ----------
   openMenu(title, desc, items, opts = {}) {
     this.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
@@ -145,7 +147,27 @@ const UI = {
   },
   openCasino() {
     const bet = (b) => ({ ic: '🎰', t: `슬롯머신 ₩${b.toLocaleString()}`, p: b, stay: true, d: '777 = 50배', fn: (btn) => { const S = ['🍒', '🍋', '🔔', '💎', '7️⃣']; const r = [0, 1, 2].map(() => Math.random() < 0.3 ? 4 : Math.floor(Math.random() * 4)); const res = r.map(i => S[i]).join(' '); let win = 0; if (r[0] === r[1] && r[1] === r[2]) win = r[0] === 4 ? b * 50 : b * 10; else if (r[0] === r[1] || r[1] === r[2]) win = b * 1.5; ME.money += win; btn.querySelector('.d').textContent = `${res} → ${win ? '+' + fmtMoney(win) : '꽝'}`; if (win) { sfx('cash'); if (win >= b * 10) announce('🎰 잭팟!', fmtMoney(win)); } else sfx('error'); return true; } });
-    const rou = (c, b) => ({ ic: c === 'red' ? '🔴' : '⚫', t: `룰렛 ${c === 'red' ? '레드' : '블랙'} ₩${b.toLocaleString()}`, p: b, stay: true, d: '2배', fn: (btn) => { const n = Math.floor(Math.random() * 37); const col = n === 0 ? 'green' : n % 2 ? 'red' : 'black'; const win = col === c ? b * 2 : 0; ME.money += win; btn.querySelector('.d').textContent = `${n} ${col === 'red' ? '🔴' : col === 'black' ? '⚫' : '🟢'} → ${win ? '+' + fmtMoney(win) : '꽝'}`; sfx(win ? 'cash' : 'error'); return true; } });
+    const rou = (c, b) => ({ ic: c === 'red' ? '🔴' : '⚫', t: `룰렛 ${c === 'red' ? '레드' : '블랙'} ₩${b.toLocaleString()}`, p: b, stay: true, d: '화려한 룰렛 2배', fn: (btn) => {
+  const d = btn.querySelector('.d');
+  d.textContent = '🎡 돌아가는 중...';
+  let spins = 0;
+  const iv = setInterval(() => {
+    const fake = Math.floor(Math.random() * 37);
+    const fc = fake === 0 ? '🟢' : fake % 2 ? '🔴' : '⚫';
+    d.textContent = `🎡 ${fake} ${fc}`;
+    spins++;
+    if (spins > 18) {
+      clearInterval(iv);
+      const n = Math.floor(Math.random() * 37);
+      const col = n === 0 ? 'green' : n % 2 ? 'red' : 'black';
+      const win = col === c ? b * 2 : 0;
+      ME.money += win;
+      d.innerHTML = `<b style="font-size:1.15em">${n} ${col==='red'?'🔴':col==='black'?'⚫':'🟢'}</b> → ${win ? '<span style="color:#7dff9a">+' + fmtMoney(win) + ' 🎉</span>' : '꽝'}`;
+      if (win) { sfx('cash'); if (win >= b * 2) announce('🎡 룰렛 당첨!', fmtMoney(win)); } else sfx('error');
+    }
+  }, 80);
+  return true;
+} });
     this.openMenu('🎰 카지노', '도박은 적당히…', [bet(100), bet(1000), bet(10000), rou('red', 1000), rou('black', 1000), rou('red', 10000)]);
   },
   factoryGame() {
@@ -167,10 +189,10 @@ const UI = {
     if (p.state === 'empty') { this.openMenu('🪧 매물 — ' + R, `${Math.round(p.w)}m × ${Math.round(p.d)}m 부지. 구매 후 시공사에 건축을 맡길 수 있다.`, [{ ic: '📝', t: '땅 구매', p: p.price, fn: () => { plotRequest({ t: 'buyLand', p: p.id }); toast('📝 계약 진행 중…'); } }]); return; }
     if (p.state === 'owned') {
       if (!mine) { this.openMenu(`🏗️ ${p.ownerName}의 땅`, '아직 건물이 없다', []); return; }
-      const order = (k, fl) => { const D = BUILD_DESIGNS[k]; fl = clampFloors(k, fl); plotRequest({ t: 'build', p: p.id, d: k, fl }); announce('🏗️ 착공!', `${D.name} ${fl}층 — 서부리 건설`); };
+      const order = (k, fl) => { const D = BUILD_DESIGNS[k]; fl = clampFloors(k, fl); plotRequest({ t: 'build', p: p.id, d: k, fl }); announce('🏗️ 착공!', `${D.name} ${fl}층 — 서불리 건설`); };
       const pickFloors = (k) => { const D = BUILD_DESIGNS[k], r = DESIGN_FLOORS[k]; const opts = [r[0], 3, 4, 5, 6, 8, 10, 12, MAX_FLOORS].filter((v, i, a) => v >= r[0] && v <= Math.min(r[1], MAX_FLOORS) && a.indexOf(v) === i);
         this.openMenu(`${D.icon} ${D.name} — 층수 선택`, `건물은 <b>최대 ${MAX_FLOORS}층</b>까지 지을 수 있다 (1층 ≈ ${FLOOR_H}m)`, opts.map(fl => ({ ic: '🏢', t: `${fl}층${fl === MAX_FLOORS ? ' (최대)' : ''}`, p: designPrice(k, fl), d: `높이 약 ${Math.round(fl * FLOOR_H)}m${D.income ? ` · 분당 ₩${Math.round(D.income * fl / r[2]).toLocaleString()}` : ''}`, fn: () => order(k, fl) }))); };
-      this.openMenu('🏗️ 건축 의뢰 — ' + R, `시공사(서부리 건설)에 맡기면 인부들이 직접 지어준다 · <b>최대 ${MAX_FLOORS}층</b>`, Object.entries(BUILD_DESIGNS).map(([k, D]) => { const r = DESIGN_FLOORS[k]; const multi = r[0] !== r[1]; return { ic: D.icon, t: D.name + (multi ? ` (${r[0]}~${Math.min(r[1], MAX_FLOORS)}층)` : ` (${r[0]}층)`), p: multi ? `${fmtMoney(designPrice(k, r[0]))}~` : D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { if (multi) { setTimeout(() => pickFloors(k), 30); return; } order(k, r[0]); } }; }));
+      this.openMenu('🏗️ 건축 의뢰 — ' + R, `시공사(서불리 건설)에 맡기면 인부들이 직접 지어준다 · <b>최대 ${MAX_FLOORS}층</b>`, Object.entries(BUILD_DESIGNS).map(([k, D]) => { const r = DESIGN_FLOORS[k]; const multi = r[0] !== r[1]; return { ic: D.icon, t: D.name + (multi ? ` (${r[0]}~${Math.min(r[1], MAX_FLOORS)}층)` : ` (${r[0]}층)`), p: multi ? `${fmtMoney(designPrice(k, r[0]))}~` : D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { if (multi) { setTimeout(() => pickFloors(k), 30); return; } order(k, r[0]); } }; }));
       return;
     }
     if (p.state === 'building') { this.openMenu('🏗️ 공사 현장', `${BUILD_DESIGNS[p.design].name} · 진행률 ${Math.floor(p.progress * 100)}% · 건축주 ${p.ownerName}`, []); return; }
@@ -215,7 +237,7 @@ const UI = {
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
-      { ic: '🔗', t: '친구 초대 링크', p: 0, d: G.online ? `방 ${G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 방을 만들고 링크 생성', fn: () => { setTimeout(() => SHARE.open(), 30); } },
+      { ic: '🔗', t: '친구 초대 (방 코드 · 링크)', p: 0, d: G.online ? `방 ${PUBLIC_ROOMS.includes(G.room) ? '공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1) : G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 비공개방을 만들고 코드·링크가 나와요', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
       { ic: '🐶', t: '반려동물 부르기', p: 0, dis: ME.petId === null, disMsg: '반려동물이 없다 (길강아지/고양이 입양)', fn: () => { const a = ANIMALS[ME.petId]; if (a && G.isHost) { a.x = ME.x + 1.5; a.z = ME.z + 1.5; } toast('🐶 이리 와!'); } },
@@ -223,11 +245,17 @@ const UI = {
       { ic: '🎥', t: CAM.fp ? '3인칭 시점' : '1인칭 시점', p: 0, fn: () => { CAM.fp = !CAM.fp; } },
       { ic: '⚙️', t: '그래픽 품질', p: 0, d: ['낮음', '보통', '높음', '최고'][G.quality], fn: () => { setTimeout(() => this.openMenu('⚙️ 그래픽', '변경 후 새로고침하면 완전 적용', [0, 1, 2, 3].map(q => ({ t: ['낮음', '보통', '높음', '최고'][q], p: 0, fn: () => { try { localStorage.setItem('sbc3d_q', q); } catch (e) { } G.quality = q; applyQualityLive(); toast('품질 변경'); } }))), 30); } },
       { ic: '💾', t: '저장', p: 0, fn: () => { saveGame(); savePlots(); toast('💾 저장 완료'); } },
+      { ic: '🚪', t: G.online ? '서버 나가기' : '메인 화면으로', p: 0, d: G.online ? (G.isHost ? '방장이 나가면 방이 닫히거나 방장이 넘어가요' : '저장하고 로비로 돌아가요') : '저장하고 로비로 돌아가요', fn: () => setTimeout(() => this.confirmLeave(), 30) },
       { ic: '🎯', t: '쉬운 조작 · 끼임 탈출', p: 0, d: '사격 보정 · 자동 달리기 · 끼임 탈출', fn: () => setTimeout(() => this.openEasy(), 30) },
       { ic: '🖱️', t: '마우스 감도', p: 0, d: 'x' + (G.sens || 1), dis: IS_TOUCH, disMsg: '터치에선 필요 없어요', fn: () => setTimeout(() => this.openSens(), 30) },
       { ic: '❓', t: '조작법 (F1)', p: 0, fn: () => setTimeout(() => this.openHelp(), 30) },
       { ic: '🛠️', t: '관리자', p: 0, d: ADMIN.enabled() ? (ADMIN.on ? '로그인됨' : '비밀번호 필요') : '이 빌드에선 비활성', fn: () => setTimeout(() => ADMIN.open(), 30) },
     ]);
+  },
+  confirmLeave() {
+    this.openMenu('🚪 ' + (G.online ? '서버 나가기' : '메인 화면으로'), G.online ? `방 <b style="color:#ffd34a">${G.room || ''}</b>에서 나가 로비로 돌아갑니다.<br><small style="opacity:.75">진행 상황은 자동 저장돼요</small>` : '저장하고 로비로 돌아갑니다.', [
+      { ic: '✅', t: '나가기', p: 0, fn: () => { leaveServer(); } },
+      { ic: '↩️', t: '취소', p: 0, fn: () => {} }]);
   },
   // ---------- maps ----------
   buildWorldImage() {
@@ -311,10 +339,10 @@ const UI = {
     document.body.classList.add('touch'); const T = $('#touch'); T.classList.remove('hidden');
     const mk = (id, txt, css, cls = '', label = '') => { const b = document.createElement('div'); b.className = 'tb ' + cls; b.id = id; b.innerHTML = txt + (label ? `<small>${label}</small>` : ''); b.style.cssText = css; T.appendChild(b); return b; };
     const B = {
-      fire: mk('tFire', '🔥', 'right:18px;bottom:92px', 'big'), jump: mk('tJump', '⬆', 'right:112px;bottom:18px', '', '점프'), aim: mk('tAim', '🎯', 'right:114px;bottom:112px', '', '조준'),
-      use: mk('tUse', '✋', 'right:198px;bottom:32px', '', '상호작용'), car: mk('tCar', '🚗', 'right:200px;bottom:124px', '', '탑승'), run: mk('tRun', '🏃', 'left:22px;bottom:196px', 'sm', '달리기'),
-      wpn: mk('tWpn', '🔁', 'right:28px;bottom:192px', 'sm', '무기'), rel: mk('tRel', '♻', 'right:84px;bottom:196px', 'sm', '재장전'),
-      phone: mk('tPhone', '📱', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', '🗺', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', '💬', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', '💃', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', '🎥', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
+      fire: mk('tFire', '●', 'right:18px;bottom:92px', 'big'), jump: mk('tJump', '↑', 'right:112px;bottom:18px', '', '점프'), aim: mk('tAim', '◎', 'right:114px;bottom:112px', '', '조준'),
+      use: mk('tUse', 'E', 'right:198px;bottom:32px', '', '상호작용'), car: mk('tCar', '차', 'right:200px;bottom:124px', '', '탑승'), run: mk('tRun', 'RUN', 'left:22px;bottom:196px', 'sm', '달리기'),
+      wpn: mk('tWpn', 'W', 'right:28px;bottom:192px', 'sm', '무기'), rel: mk('tRel', 'R', 'right:84px;bottom:196px', 'sm', '재장전'),
+      phone: mk('tPhone', '☎', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', 'M', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', 'T', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', 'G', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', 'C', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
     };
     const hold = (el, on, off) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); AU.init(); on(); el.classList.add('on'); }, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off && off(); el.classList.remove('on'); }, { passive: false }); el.addEventListener('touchcancel', e => { off && off(); el.classList.remove('on'); }); };
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
@@ -327,9 +355,25 @@ const UI = {
     hold(B.phone, () => this.openPhone()); hold(B.map, () => this.openMap()); hold(B.chat, () => this.openChat()); hold(B.dance, () => this.openDance()); hold(B.cam, () => { CAM.fp = !CAM.fp; });
     this.touchBtns = B;
     // joystick
-    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
-    joy.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY; base.style.display = knob.style.display = 'block'; base.style.left = knob.style.left = jx + 'px'; base.style.top = knob.style.top = jy + 'px'; }, { passive: false });
-    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx + dx) + 'px'; knob.style.top = (jy + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
+    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0, jox = 0, joy0 = 0; // jox/joy0: #joy 박스의 화면 위치 (조이스틱 그림은 #joy 안에서 상대 좌표로 그림)
+    joy.addEventListener('touchstart', e => {
+  const menu = document.getElementById('menu');
+  const bigmap = document.getElementById('bigmap');
+  const share = document.getElementById('share');
+  const anyOpen = UI.menuOpen || 
+    (menu && !menu.classList.contains('hidden')) || 
+    (bigmap && !bigmap.classList.contains('hidden')) ||
+    (share && !share.classList.contains('hidden'));
+  if (anyOpen) return;
+  e.preventDefault(); AU.init();
+  const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
+  const jr = joy.getBoundingClientRect(); jox = jr.left; joy0 = jr.top;
+  base.style.display = knob.style.display = 'block';
+  base.style.left = knob.style.left = (jx - jox) + 'px';
+  base.style.top = knob.style.top = (jy - joy0) + 'px';
+}, { passive: false });
+    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx - jox + dx) + 'px'; knob.style.top = (jy - joy0 + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
+    UI.joyReset = () => { if (jid !== null) { jid = null; base.style.display = knob.style.display = 'none'; } };
     const jend = e => { for (const t of e.changedTouches) if (t.identifier === jid) { jid = null; INP.mx = INP.mz = 0; INP.joyMag = 0; base.style.display = knob.style.display = 'none'; } };
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
     // look
@@ -340,7 +384,7 @@ const UI = {
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
-    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? '🚪<small>세워주세요</small>' : '🚪<small>하차</small>') : '🚗<small>탑승</small>';
+    B.jump.innerHTML = inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
@@ -367,7 +411,7 @@ function fastTravel(r) {
 // ---------- customizer (lobby + clothes shop) ----------
 function buildCustomizer(el, o, onChange) {
   el.innerHTML = '';
-  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['beard', '수염', OPT.beard]];
+  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['beard', '수염', OPT.beard]];
   for (const [k, label, opts] of fields) {
     const f = document.createElement('div'); f.className = 'f'; f.innerHTML = `<label>${label}</label>`;
     let inp; if (opts) { inp = document.createElement('select'); for (const [v, n] of opts) { const op = document.createElement('option'); op.value = v; op.textContent = n; inp.appendChild(op); } }
@@ -382,34 +426,51 @@ function applyQualityLive() {
 }
 
 // ---------- 원클릭 초대: 링크 만들기 / 복사 / 공유 ----------
+
+// 친구 초대 창: 방 코드 + 링크 복사/공유. 모바일 가로 화면에서도 작게, 터치 버튼보다 위(z-index)에 뜬다.
 const SHARE = {
   async open() {
-    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 방을 연다
-      toast('🌐 방 만드는 중…');
-      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
+    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 비공개방을 연다
+      toast('🌐 비공개방 만드는 중…');
+      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on && ADMIN.ready) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
       if (!G.online) return;
     }
     this.show();
   },
+  isOpen() { const el = $('#share'); return !!(el && !el.classList.contains('hidden')); },
   show() {
-    const el = $('#share'); if (!el) return; const link = inviteLink(G.room);
-    $('#shareLink').value = link; $('#shareCode').textContent = G.room; el.classList.remove('hidden');
-    $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : (G.isHost ? '이 링크를 카톡/문자로 보내면 친구가 누르자마자 들어와요' : '이 링크로 다른 사람도 이 방을 찾을 수 있어요');
-    if (document.pointerLockElement) document.exitPointerLock();
+    const el = $('#share'); if (!el || !G.room) return; const link = inviteLink(G.room); const pub = PUBLIC_ROOMS.includes(G.room);
+    $('#shareLink').value = link; $('#shareCode').textContent = pub ? ('공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1)) : G.room;
+    $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : pub ? '공개방이에요 — 로비의 공개방 목록에서도 들어올 수 있어요' : '친구에게 방 코드를 알려주거나 링크를 보내세요 (로비 → 코드 입력 → 참가하기)';
+    el.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock();
   },
   hide() { const el = $('#share'); if (el) el.classList.add('hidden'); },
-  async copy() {
-    const link = inviteLink(G.room); let ok = false;
-    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { const i = $('#shareLink'); i.focus(); i.select(); try { ok = document.execCommand('copy'); } catch (e2) { } }
-    toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '링크를 길게 눌러 복사해 주세요'); sfx('coin');
+  fallbackCopy(text) {
+    const i = $('#shareLink'); let ok = false;
+    try { i.value = text; i.focus({ preventScroll: true }); i.select(); i.setSelectionRange(0, text.length); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    try { i.blur(); window.getSelection && window.getSelection().removeAllRanges(); } catch (e) { }
+    return ok;
   },
-  async share() {
+  copy() {
+    const link = inviteLink(G.room); sfx('coin');
+    const done = ok => toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '복사가 막혀 있어요 — 링크 칸을 길게 눌러 복사해 주세요', 3500);
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(link).then(() => done(true), () => done(this.fallbackCopy(link)));
+    else done(this.fallbackCopy(link));
+  },
+  share() {
     const link = inviteLink(G.room);
-    if (navigator.share) { try { await navigator.share({ title: '서부리 시티 3D', text: `서부리 시티 같이 하자! 링크 누르면 바로 들어와 (방 ${G.room})`, url: link }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    if (navigator.share) { // 버튼을 누른 그 순간(사용자 제스처)에 바로 호출해야 안드로이드/아이폰 공유 창이 뜬다
+      navigator.share({ title: '서불리 시티 3D', text: `서불리 시티 같이 하자! 방 코드 ${G.room} · 링크 누르면 바로 들어와`, url: link }).then(() => toast('📤 공유 완료')).catch(e => { if (!e || e.name !== 'AbortError') this.copy(); });
+      return;
+    }
     this.copy();
   },
   init() {
-    $('#shareCopy').onclick = () => this.copy(); $('#shareShare').onclick = () => this.share(); $('#shareClose').onclick = () => this.hide();
-    $('#shareLink').onclick = e => e.target.select();
+    const el = $('#share'); if (!el) return;
+    const on = (id, fn) => { const b = $('#' + id); if (b) b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); AU.init(); fn(); }); };
+    on('shareCopy', () => this.copy()); on('shareShare', () => this.share()); on('shareClose', () => this.hide()); on('shareX', () => this.hide());
+    el.addEventListener('click', e => { if (e.target === el) this.hide(); }); // 바깥(어두운 곳) 누르면 닫기
+    $('#shareLink').addEventListener('click', e => { try { e.target.select(); } catch (er) { } });
   },
 };
+window.closeShare = () => SHARE.hide();

@@ -3,6 +3,7 @@
 const OPT = {
   body: [['m', '남성형'], ['f', '여성형']],
   skin: ['#f8dcc8', '#f0c6a6', '#e0aa84', '#c48a62', '#9a6644', '#6a4430'],
+  eyeColor: [['#3a2a1a', '갈색'], ['#4a6a8a', '파랑'], ['#5a8a5a', '녹색'], ['#6a4a3a', '헤이즐'], ['#2a2a2a', '검정']],
   hair: [['short', '숏컷'], ['buzz', '반삭'], ['long', '장발'], ['ponytail', '포니테일'], ['bob', '단발'], ['curly', '곱슬'], ['spiky', '스파이키'], ['mohawk', '모히칸'], ['bald', '삭발']],
   hairColor: ['#1a1412', '#3a2418', '#6a4024', '#a87038', '#e0c070', '#c8c8c8', '#d04060', '#4060d0', '#f0f0f0'],
   top: [['tshirt', '반팔티'], ['long', '긴팔티'], ['hoodie', '후드티'], ['jacket', '재킷'], ['tank', '나시'], ['suit', '정장'], ['police', '경찰복'], ['doctor', '의사 가운'], ['vest', '조끼(작업복)']],
@@ -20,7 +21,7 @@ function randomOutfit(r = Math.random, kind = 'civ') {
     hairColor: p(OPT.hairColor.slice(0, 6)), top: p(['tshirt', 'long', 'hoodie', 'jacket', 'tank', 'tshirt', 'suit']), topColor: p(COLORS_CLOTH),
     bottom: body === 'f' ? p(['jeans', 'skirt', 'slacks', 'shorts']) : p(['jeans', 'slacks', 'cargo', 'shorts']), bottomColor: p(['#2a3a5a', '#1c1c22', '#5a4a3a', '#8a8a90', '#3a4a6a', '#c8b89a']),
     shoes: p(['#1a1a1a', '#f0f0f0', '#6a3a1a', '#d03a3a', '#3a6ad0']), hat: r() < 0.25 ? p(['cap', 'beanie', 'fedora']) : 'none', hatColor: p(COLORS_CLOTH),
-    glasses: r() < 0.2 ? p(['glasses', 'sunglasses']) : 'none', beard: body === 'm' && r() < 0.25 ? p(['stubble', 'full']) : 'none',
+    glasses: r() < 0.2 ? p(['glasses', 'sunglasses']) : 'none', beard: body === 'm' && r() < 0.25 ? p(['stubble', 'full']) : 'none', eyeColor: p(OPT.eyeColor)[0],
   };
   if (kind === 'police') Object.assign(o, { top: 'police', topColor: '#22305a', bottom: 'slacks', bottomColor: '#1a2240', hat: 'police', hatColor: '#1a2240', shoes: '#111111' });
   if (kind === 'doctor') Object.assign(o, { top: 'doctor', topColor: '#ffffff', bottom: 'slacks', bottomColor: '#4a6a8a', hat: 'none' });
@@ -38,27 +39,32 @@ function cmat(color, rough = 0.8, metal = 0, extra = '') {
 const CG = {}; // char geometry cache
 function initCharGeo() {
   if (CG.done) return; CG.done = true;
-  CG.chest = new THREE.CapsuleGeometry(0.15, 0.28, 6, 14);
-  CG.pelvis = new THREE.SphereGeometry(0.16, 14, 10);
-  CG.neck = new THREE.CylinderGeometry(0.052, 0.06, 0.12, 10);
-  CG.head = new THREE.SphereGeometry(0.115, 22, 18);
-  CG.uarm = new THREE.CapsuleGeometry(0.052, 0.19, 4, 10);
-  CG.farm = new THREE.CapsuleGeometry(0.045, 0.17, 4, 10);
-  CG.hand = new THREE.SphereGeometry(0.048, 10, 8);
-  CG.thigh = new THREE.CapsuleGeometry(0.074, 0.29, 4, 12);
-  CG.shin = new THREE.CapsuleGeometry(0.058, 0.3, 4, 10);
+  // Higher resolution geometries for smoother, higher-quality characters
+  CG.chest = new THREE.CapsuleGeometry(0.15, 0.28, 8, 20);
+  CG.pelvis = new THREE.SphereGeometry(0.16, 20, 16);
+  CG.neck = new THREE.CylinderGeometry(0.052, 0.06, 0.12, 16);
+  CG.head = new THREE.SphereGeometry(0.115, 32, 24);
+  CG.uarm = new THREE.CapsuleGeometry(0.052, 0.19, 6, 14);
+  CG.farm = new THREE.CapsuleGeometry(0.045, 0.17, 6, 14);
+  CG.hand = new THREE.SphereGeometry(0.048, 14, 12);
+  CG.thigh = new THREE.CapsuleGeometry(0.074, 0.29, 6, 16);
+  CG.shin = new THREE.CapsuleGeometry(0.058, 0.3, 6, 14);
   CG.foot = new THREE.BoxGeometry(0.1, 0.07, 0.25); CG.foot.translate(0, 0, 0.05);
-  CG.eyeW = new THREE.SphereGeometry(0.02, 10, 8); CG.pupil = new THREE.SphereGeometry(0.0115, 8, 6);
-  CG.brow = new THREE.BoxGeometry(0.045, 0.009, 0.012); CG.mouth = new THREE.BoxGeometry(0.045, 0.009, 0.01);
-  CG.nose = new THREE.ConeGeometry(0.018, 0.045, 8); CG.nose.rotateX(Math.PI / 2 + 0.3);
-  CG.ear = new THREE.SphereGeometry(0.028, 8, 6);
-  CG.cap = (t, r = 0.125) => new THREE.SphereGeometry(r, 18, 12, 0, TAU, 0, Math.PI * t);
+  CG.eyeW = new THREE.SphereGeometry(0.018, 16, 12);
+  CG.iris = new THREE.SphereGeometry(0.01, 12, 10);
+  CG.highlight = new THREE.SphereGeometry(0.004, 8, 6);
+  CG.pupil = new THREE.SphereGeometry(0.005, 8, 6);
+  CG.brow = new THREE.BoxGeometry(0.045, 0.008, 0.01);
+  CG.mouth = new THREE.BoxGeometry(0.04, 0.007, 0.008);
+  CG.nose = new THREE.ConeGeometry(0.016, 0.04, 12); CG.nose.rotateX(Math.PI / 2 + 0.25);
+  CG.ear = new THREE.SphereGeometry(0.026, 12, 10);
+  CG.cap = (t, r = 0.125) => new THREE.SphereGeometry(r, 24, 16, 0, TAU, 0, Math.PI * t);
   CG.box = new THREE.BoxGeometry(1, 1, 1);
-  CG.cyl = new THREE.CylinderGeometry(1, 1, 1, 14);
-  CG.sph = new THREE.SphereGeometry(1, 12, 10);
-  CG.cone = new THREE.ConeGeometry(1, 1, 10);
-  CG.skirt = new THREE.CylinderGeometry(0.17, 0.3, 0.42, 16, 1, true);
-  CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 16, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
+  CG.cyl = new THREE.CylinderGeometry(1, 1, 1, 20);
+  CG.sph = new THREE.SphereGeometry(1, 16, 12);
+  CG.cone = new THREE.ConeGeometry(1, 1, 14);
+  CG.skirt = new THREE.CylinderGeometry(0.17, 0.3, 0.42, 24, 1, true);
+  CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 24, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
 }
 function M(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; }
 // ---- weapons ----
@@ -87,6 +93,7 @@ function buildWeaponMesh(type) {
   return g;
 }
 // ---- name/chat sprites ----
+function disposeSprite(s) { if (!s) return; if (s.parent) s.parent.remove(s); if (s.material) { if (s.material.map) s.material.map.dispose(); s.material.dispose(); } }
 function textSprite(text, color = '#fff', bg = 'rgba(0,0,0,.55)', size = 48) {
   const c = document.createElement('canvas'); const x = c.getContext('2d'); x.font = `900 ${size}px "Noto Sans KR",sans-serif`;
   const w = Math.min(1024, Math.ceil(x.measureText(text).width + size * 0.9)); c.width = w; c.height = size * 1.5;
@@ -157,18 +164,30 @@ class Character {
     }
     if (o.bottom === 'skirt') add(P.hips, M(CG.skirt, bot, 0, -0.17, 0));
     if (o.bottom === 'cargo') for (const s of [1, -1]) add(P['hip' + (s > 0 ? 'L' : 'R')], M(CG.box, bot, 0.075 * s, -0.25, 0, 0.03, 0.1, 0.08));
-    // head
+    // head - higher quality with detailed eyes
     const H = P.head;
-    add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.95 : 1, 1.12, 1.04));
-    add(H, M(CG.sph, skin, 0, 0.04, 0.035, 0.085, 0.07, 0.075));
+    add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.96 : 1.02, 1.1, 1.02));
+    add(H, M(CG.sph, skin, 0, 0.035, 0.04, 0.09, 0.065, 0.07)); // cheeks
+    // Eye color from outfit or default brown
+    const eyeCol = o.eyeColor || (f ? '#4a6a8a' : '#3a2a1a');
+    const irisMat = cmat(eyeCol, 0.15, 0.1);
+    const highlightMat = cmat('#ffffff', 0.05, 0.8);
     for (const s of [1, -1]) {
-      add(H, M(CG.eyeW, cmat('#ffffff', 0.3), 0.042 * s, 0.115, 0.098), false);
-      add(H, M(CG.pupil, cmat('#2a1a10', 0.2), 0.042 * s, 0.115, 0.115), false);
-      add(H, M(CG.brow, hairM, 0.043 * s, 0.148, 0.108), false).rotation.z = -0.12 * s;
-      add(H, M(CG.ear, skin, 0.112 * s, 0.1, -0.005, 0.5, 1, 0.8));
+      // Sclera
+      add(H, M(CG.eyeW, cmat('#f8f4f0', 0.2), 0.04 * s, 0.118, 0.095), false);
+      // Iris
+      add(H, M(CG.iris, irisMat, 0.04 * s, 0.118, 0.108), false);
+      // Pupil
+      add(H, M(CG.pupil, cmat('#111111', 0.1), 0.04 * s, 0.118, 0.112), false);
+      // Specular highlight
+      add(H, M(CG.highlight, highlightMat, 0.046 * s, 0.124, 0.114), false);
+      // Eyebrow
+      add(H, M(CG.brow, hairM, 0.041 * s, 0.15, 0.105), false).rotation.z = -0.1 * s;
+      // Ear
+      add(H, M(CG.ear, skin, 0.11 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
     }
-    add(H, M(CG.nose, skin, 0, 0.085, 0.122), false);
-    add(H, M(CG.mouth, cmat(f ? '#b8404a' : '#8a4040', 0.5), 0, 0.047, 0.108), false);
+    add(H, M(CG.nose, skin, 0, 0.082, 0.118), false);
+    add(H, M(CG.mouth, cmat(f ? '#c05060' : '#904848', 0.4), 0, 0.045, 0.105), false);
     // hair
     const hh = o.hair;
     if (hh === 'short' || hh === 'spiky' || hh === 'curly' || hh === 'long' || hh === 'ponytail') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
@@ -206,18 +225,18 @@ class Character {
     out.copy(m.userData.muzzle); m.localToWorld(out); return out;
   }
   setName(text, color = '#fff') {
-    if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
+    if (this.nameTag) disposeSprite(this.nameTag);
     this.nameText = text || ''; if (!text) { this.nameTag = null; return; }
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
-    if (this.bubble) { this.root.remove(this.bubble); this.bubble.material.map.dispose(); }
-    this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
+    if (this.bubble) disposeSprite(this.bubble);
+    text = String(text ?? ''); this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
   }
   // s: {speed, grounded, state, aiming, aimPitch, action, actionT, dance, carry}
   update(dt, s) {
     this.t += dt; const P = this.P; const p = {}; const t = this.t; s.spin = 0;
-    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { this.root.remove(this.bubble); this.bubble = null; } }
+    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { disposeSprite(this.bubble); this.bubble = null; } }
     const spd = s.speed || 0; const runT = clamp((spd - 1.8) / 4.2, 0, 1);
     const st = s.state || 'normal';
     // defaults
@@ -231,7 +250,7 @@ class Character {
         p.lHx = -Math.sin(ph) * A; p.rHx = Math.sin(ph) * A;
         p.lK = Math.max(0, -Math.cos(ph)) * A * 1.6 + 0.08; p.rK = Math.max(0, Math.cos(ph)) * A * 1.6 + 0.08;
         p.lA = -p.lHx * 0.3; p.rA = -p.rHx * 0.3;
-        p.lSx = -Math.sin(ph) * A * 0.85; p.rSx = Math.sin(ph) * A * 0.85;
+        p.lSx = -Math.sin(ph) * A * 1.05; p.rSx = Math.sin(ph) * A * 1.05;
         p.lE = -0.25 - runT * 1.2; p.rE = -0.25 - runT * 1.2;
         p.hipsY = 0.95 - Math.abs(Math.cos(ph)) * (0.025 + runT * 0.05) - runT * 0.04;
         p.pitch = runT * 0.22; p.spY = Math.sin(ph) * 0.12 * A;
