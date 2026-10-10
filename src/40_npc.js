@@ -29,7 +29,7 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']);
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined;
 }
 function pedEnsureChar(p) {
   if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
@@ -68,6 +68,8 @@ function spawnPedNear(p, px, pz) {
   placePedOnEdge(p, r.e, r.t, Math.random() < 0.5 ? 1 : -1, Math.random() < 0.5 ? 1 : -1);
   const R = regionAt(p.x, p.z); if (R === 'sea') return false;
   pedSetIdentity(p, pedKindFor(R), (Math.random() * 1e9) | 0);
+  if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
+  pedStartRoutine(p);
   if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
   p.spawnT = G.t; return true;
 }
@@ -92,11 +94,14 @@ function hostUpdatePeds(dt) {
   const anyP = players.length ? players : [{ x: ME.x, z: ME.z }];
   for (const p of PEDS) {
     // relocation
+    if (p.state === 'parked' && p.nextTry > G.t) continue; // 건물에 들어간/밤이라 쉬는 NPC는 잠시 뒤에 다시 등장
     if (p.state !== 'dead') { const nd = nearestPlayerDist(p.x, p.z); if ((p.state === 'parked' || nd > 240) && !(p.raid && G.raid)) { const pl = pick(anyP); if (spawnPedNear(p, pl.x, pl.z)) { } continue; } }
     p.timer -= dt; p.fireT -= dt; p.actT = Math.min(1, p.actT + dt * (p.act === 'punchR' || p.act === 'punchL' ? 3 : 2));
     if (p.state === 'dead') { if (p.timer <= 0) { p.state = 'parked'; } continue; }
     if (p.state === 'knocked') { if (p.timer <= 0) p.state = 'flee', p.timer = 6; continue; }
     // perception every ~0.4s
+    if (p.state === 'surrender') { p.spd = 0; p.aiming = false; if (p.timer <= 0) p.state = 'parked'; continue; } // 신고당한 갱단원: 손 들고 연행 대기
+    if (p.state === 'collar') { POLICE.copCollar(p, dt); continue; } // 경찰: 갱단원 연행
     if ((p.percT = (p.percT || 0) - dt) <= 0) {
       p.percT = 0.35 + Math.random() * 0.2;
       if (p.kind !== 'civ' && p.kind !== 'medic' && p.kind !== 'worker') {
@@ -104,11 +109,15 @@ function hostUpdatePeds(dt) {
         for (const pl of players) { const d = Math.hypot(pl.x - p.x, pl.z - p.z); if (d < bd && pedHostileTo(p, pl)) { bd = d; best = { kind: pl.me ? 'me' : 'player', id: pl.id }; } }
         for (const q of PEDS) { if (q === p || q.state === 'dead' || q.state === 'parked') continue; const d = Math.abs(q.x - p.x) + Math.abs(q.z - p.z); if (d < bd && pedHostileTo(p, { isPed: true, ref: q })) { bd = d; best = { kind: 'ped', id: q.id }; } }
         if (best) { p.target = best; p.state = 'fight'; if (p.weapon !== 'fist' && p.char) p.char.setWeapon(p.weapon); }
-        else if (p.state === 'fight') { p.target = null; if (p.raid) p.state = 'raid'; else { p.state = 'walk'; snapToNearestEdge(p); } }
+        else if (p.state === 'fight' && p.dispT > G.t && targetPos(p.target)) { /* 체포 영장 집행 중: 목표 유지 */ }
+        else if (p.state === 'fight') { p.target = null; if (p.raid) p.state = 'raid'; else if (p.job === 'hang') { p.state = 'loiter'; p.lx = undefined; } else { p.state = 'walk'; snapToNearestEdge(p); } }
       }
     }
-    if (p.state === 'walk') pedWalk(p, dt);
-    else if (p.state === 'idle') { p.spd = 0; if (p.timer <= 0) p.state = 'walk'; }
+    if (p.state === 'walk') { if (p.job === 'hang') p.state = 'loiter'; else if (!pedRoutineTick(p, dt)) pedWalk(p, dt); }
+    else if (p.state === 'idle') { p.spd = 0; if (p.phone) { p.act = 'drink'; p.actT = 0.5; } if (p.timer <= 0) { p.state = 'walk'; p.phone = false; if (p.job === 'clerk') p.job = 'walk'; } }
+    else if (p.state === 'goto') pedGoto(p, dt);
+    else if (p.state === 'sit') { p.spd = 0; if (p.timer <= 0) { p.state = 'walk'; snapToNearestEdge(p); } }
+    else if (p.state === 'loiter') { pedLoiter(p, dt); }
     else if (p.state === 'flee') { pedFlee(p, dt); }
     else if (p.state === 'fight') { pedFight(p, dt); }
     else if (p.state === 'raid') { pedRaidMove(p, dt); }
@@ -126,7 +135,7 @@ function snapToNearestEdge(p) {
   p.e = best.id; p.t = t; p.side = side; p.dir = Math.random() < 0.5 ? 1 : -1; p.rejoin = true;
 }
 function pedWalk(p, dt) {
-  const E = EDGES[p.e]; const a = NODES[E.a], b = NODES[E.b]; const sp = p.kind === 'police' ? 1.5 : 1.35 + (p.seed % 5) * 0.08;
+  const E = EDGES[p.e]; const a = NODES[E.a], b = NODES[E.b]; const sp = pedJobSpeed(p);
   p.t += p.dir * sp * dt;
   if (p.t < 0 || p.t > E.len) {
     const node = p.t < 0 ? a : b; const opts = node.edges.filter(x => x !== p.e && !EDGES[x].bridge); const ne = opts.length ? pick(opts) : p.e; const NE = EDGES[ne];
@@ -139,7 +148,7 @@ function pedWalk(p, dt) {
   if (md > 0.01) { const k = p.rejoin ? Math.min(1, sp * 2.5 * dt / md) : 1; p.x += mx * k; p.z += mz * k; if (p.rejoin && md < 0.5) p.rejoin = false; if (md > 0.02) p.yaw = dampAng(p.yaw, Math.atan2(mx, mz), 8, dt); }
   p.spd = sp; p.y = groundHeight(p.x, p.z, p.y + 1);
   if (p.rejoin) { const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); p.x = r.x; p.z = r.z; }
-  if (Math.random() < dt * 0.01 && p.char) p.char.say(pick(PED_LINES[p.kind] || PED_LINES.civ), 4);
+  if (Math.random() < dt * 0.01 && p.char) p.char.say(pick((p.job && JOB_LINES[p.job]) || PED_LINES[p.kind] || PED_LINES.civ), 4);
 }
 function pedRaidMove(p, dt) {
   if (!G.raid) { p.raid = false; p.state = 'walk'; snapToNearestEdge(p); return; }
@@ -165,7 +174,7 @@ function targetPos(tg) {
 }
 function pedFight(p, dt) {
   const tp = targetPos(p.target); if (!tp) { p.state = p.raid ? 'raid' : 'walk'; p.target = null; if (!p.raid) snapToNearestEdge(p); return; }
-  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee' }); sfx('punch', p.x, p.z); } }
+  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
   const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz);
   const W = WEAPONS[p.weapon]; const ranged = !W.melee; const want = ranged ? (p.kind === 'police' ? 14 : 11) : 1.3;
   p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt);
@@ -190,7 +199,7 @@ function pedFight(p, dt) {
       const mz = { x: p.x + Math.sin(p.yaw) * 0.5, y: p.y + 1.45, z: p.z + Math.cos(p.yaw) * 0.5 };
       showShot(mz, end, W.sfx, hit ? (p.target.kind === 'ped' ? 'blood' : 'blood') : 'dust');
       NET.send({ t: 'shot', a: [mz.x, mz.y, mz.z], b: [end.x, end.y, end.z], w: p.weapon, i: hit ? 'blood' : 'dust' });
-      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun' });
+      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun', w: p.weapon });
     } else if (d < 1.8) {
       p.fireT = 0.7; p.act = Math.random() < 0.5 ? 'punchR' : 'punchL'; p.actT = 0;
       if (p.weapon === 'bat') p.act = 'bat';
@@ -233,7 +242,7 @@ function pedDamage(p, amt, from, opts = {}) {
   if (opts.kind === 'gun' || p.hp <= 0) panicAround(p.x, p.z, 30);
 }
 function panicAround(x, z, r) {
-  for (const q of PEDS) if ((q.kind === 'civ' || q.kind === 'worker' || q.kind === 'medic') && (q.state === 'walk' || q.state === 'idle' || q.state === 'talk' || q.state === 'club') && Math.abs(q.x - x) < r && Math.abs(q.z - z) < r) { q.state = 'flee'; q.timer = rnd(6, 12); q.fx = x; q.fz = z; q.dance = -1; }
+  for (const q of PEDS) if ((q.kind === 'civ' || q.kind === 'worker' || q.kind === 'medic') && (q.state === 'walk' || q.state === 'idle' || q.state === 'talk' || q.state === 'club' || q.state === 'sit' || q.state === 'goto') && Math.abs(q.x - x) < r && Math.abs(q.z - z) < r) { q.state = 'flee'; q.timer = rnd(6, 12); q.fx = x; q.fz = z; q.dance = -1; }
   for (const an of ANIMALS) if (!an.S.predator && an.state !== 'dead' && an.state !== 'follow' && Math.abs(an.x - x) < r && Math.abs(an.z - z) < r) { an.state = 'flee'; an.timer = 6; an.fx = x; an.fz = z; }
 }
 function spawnPickup(x, z, amount, id) {
@@ -269,7 +278,7 @@ function raidUpdate(dt) {
   announce(t1, t2); NET.send({ t: 'ann', a: t1, b: t2 });
 }
 // ----- render peds (all clients) -----
-const PED_ANIM_STATES = ['walk', 'idle', 'flee', 'fight', 'dead', 'knocked', 'club', 'dance', 'talk', 'parked'];
+const PED_ANIM_STATES = ['walk', 'idle', 'flee', 'fight', 'dead', 'knocked', 'club', 'dance', 'talk', 'parked', 'goto', 'sit', 'loiter', 'surrender', 'collar'];
 function renderPeds(dt, cam) {
   const view = Q().npcView;
   for (const p of PEDS) {
@@ -280,7 +289,8 @@ function renderPeds(dt, cam) {
     if (!G.isHost && p.tx !== undefined) { p.x = damp(p.x, p.tx, 10, dt); p.z = damp(p.z, p.tz, 10, dt); p.y = damp(p.y, p.ty, 10, dt); p.yaw = dampAng(p.yaw, p.tyaw, 10, dt); }
     c.root.position.set(p.x, p.y, p.z); c.root.rotation.y = p.yaw;
     const wantShadow = d < 45; if (wantShadow !== p.shadowOn) { c.setShadow(wantShadow); p.shadowOn = wantShadow; }
-    const st = p.state === 'dead' ? 'dead' : p.state === 'knocked' ? 'knocked' : 'normal';
+    const st = p.state === 'dead' ? 'dead' : p.state === 'knocked' ? 'knocked' : p.state === 'sit' ? 'sit' : 'normal';
+    if (p.state === 'sit') c.root.position.y = p.y + 0.5 - 0.95;
     c.setWeapon(((p.state === 'fight' || p.state === 'raid') && p.weapon !== 'fist') ? p.weapon : 'fist');
     c.update(dt, { speed: p.spd, grounded: true, state: st, aiming: p.aiming && p.state === 'fight', aimPitch: 0, action: p.act, actionT: p.actT, dance: (p.state === 'club' || p.state === 'dance') ? p.dance : -1, guard: p.state === 'fight' && p.weapon === 'fist', idleLook: 1, work: p.kind === 'worker' && p.state === 'idle' });
   }
@@ -371,6 +381,8 @@ function runOverCheck(v, by) {
   if (v.kind === 'horse') return;
   for (const q of PEDS) { if (q.state === 'dead' || q.state === 'parked' || q.state === 'knocked') continue; if (Math.abs(q.x - v.x) > 5 || Math.abs(q.z - v.z) > 5) continue; if (hit(q.x, q.z)) { const tg = { kind: 'ped', id: q.id }; dealDamage(tg, sp * 4.5, by === 'me' ? ME.id : 'n', { kind: 'car' }); q.x += fx * 2; q.z += fz * 2; if (G.isHost) { q.state = q.hp > 0 ? 'knocked' : 'dead'; q.timer = q.hp > 0 ? 2.5 : 25; } sfx('punch', q.x, q.z); FX.impact({ x: q.x, y: q.y + 1, z: q.z }, 'blood'); v.speed *= 0.85; } }
   if (by !== 'me' && !ME.dead && !ME.vehicle && hit(ME.x, ME.z) && Math.abs(ME.y - v.y) < 2) { ME.takeDamage(sp * 3.5, 'car'); ME.knock(fx * sp * 0.6, fz * sp * 0.6); }
+  // 내가 운전한 차에 다른 플레이어가 치임 (같은 공간·1초에 한 번) → 피해는 맞은 쪽이 적용, 사고 기록은 신고 수사에 쓰인다
+  if (by === 'me') for (const [id, rp] of G.players) { if (rp.dead || rp.veh || !sameSpace(rp) || Math.abs(rp.y - v.y) > 2 || !hit(rp.x, rp.z)) continue; if (G.t < (rp._carHitT || 0)) continue; rp._carHitT = G.t + 1; dealDamage({ kind: 'player', id }, sp * 3.5, ME.id, { kind: 'car', w: 'car' }); FX.impact({ x: rp.x, y: rp.y + 1, z: rp.z }, 'blood'); sfx('punch', rp.x, rp.z); v.speed *= 0.85; }
   for (const an of ANIMALS) { if (an.state === 'dead') continue; if (Math.abs(an.x - v.x) > 6 || Math.abs(an.z - v.z) > 6) continue; if (hit(an.x, an.z)) dealDamage({ kind: 'animal', id: an.id }, sp * 4, by === 'me' ? ME.id : 'n', { kind: 'car' }); }
 }
 // ================= ANIMALS =================
