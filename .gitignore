@@ -3,3 +3,4 @@ game.mjs
 test/
 __pycache__/
 *.png
+!og.png

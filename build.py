@@ -51,4 +51,9 @@ open(os.path.join(out_dir, 'game.mjs'), 'w', encoding='utf-8').write(js)
 tpl = open(os.path.join(src, 'template.html'), encoding='utf-8').read()
 out = tpl.replace('/*__JS__*/', js)
 open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8').write(out)
+# ---- 검색엔진/공유용 정적 파일 (og.png, robots.txt, sitemap.xml) → 배포 폴더로 복사 ----
+import shutil
+for f in ('og.png', 'robots.txt', 'sitemap.xml'):
+    s_, d_ = os.path.join(root, f), os.path.join(out_dir, f)
+    if os.path.exists(s_) and os.path.abspath(s_) != os.path.abspath(d_): shutil.copyfile(s_, d_)
 print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF')

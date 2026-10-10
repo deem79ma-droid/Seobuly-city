@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://deem79ma-droid.github.io/Seobuly-city/sitemap.xml
