@@ -33,16 +33,18 @@ const ME = {
 const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
 const KEYS = {}; const INP = { mx: 0, mz: 0, run: false, fire: false, aim: false, touchRun: false, joyMag: 0 };
 let pointerLocked = false;
+// 한글 입력 상태(ㅈㄴㅁㅇ… 또는 IME 'Process')에서도 WASD·단축키가 동작하도록, 글자키는 물리 키(e.code)로 맞춘다
+function keyOf(e) { const k = (e.key || '').toLowerCase(); if (/^Key[A-Z]$/.test(e.code) && !/^[a-z]$/.test(k)) return e.code.slice(3).toLowerCase(); return k; }
 function initInput() {
   const cv = renderer.domElement;
   addEventListener('keydown', e => {
-    if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
-    if (!G.started) return; const k = e.key.toLowerCase(); KEYS[k] = true; KEYS[e.code] = true;
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { if (e.isComposing || e.keyCode === 229) { const ci = document.activeElement; if (!ci._imeWait) { ci._imeWait = true; ci.addEventListener('compositionend', () => setTimeout(() => { ci._imeWait = false; if (!ci.classList.contains('hidden')) UI.sendChat(); }, 0), { once: true }); } } else UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
+    if (!G.started) return; const k = keyOf(e); KEYS[k] = true; KEYS[e.code] = true;
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
     if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
     if (UI.menuOpen) { if (k === 'escape' || k === 'e' || k === 'tab') UI.closeMenu(); return; }
-    if (k === 't' || k === 'enter') { e.preventDefault(); UI.openChat(); return; }
+    if (k === 't' || k === 'enter') { e.preventDefault(); if (k === 'enter' && performance.now() - (UI._chatSentT || 0) < 250) return; UI.openChat(); return; } // 한글 조합 중 Enter로 보낸 직후 따라오는 Enter에 채팅창이 다시 열리지 않게
     if (e.repeat) return;
     if (k === 'e') doInteract(); if (k === 'f') toggleVehicle(); if (k === 'r') startReload();
     if (k === 'g') UI.openDance(); if (k === 'm') UI.openMap(); if (k === 'v') CAM.fp = !CAM.fp; if (k === 'p' || k === 'escape' || k === 'tab') UI.openPhone();
@@ -53,7 +55,7 @@ function initInput() {
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
   });
-  addEventListener('keyup', e => { KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
+  addEventListener('keyup', e => { KEYS[keyOf(e)] = false; KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
   addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; INP.fire = false; INP.aim = false; });
   cv.addEventListener('mousedown', e => {
     if (!G.started || IS_TOUCH) return; AU.init();
@@ -457,7 +459,7 @@ function getRemote(id) {
   if (!rp) { rp = { id, name: '???', x: 0, y: LAND, z: 0, yaw: 0, tx: 0, ty: LAND, tz: 0, tyaw: 0, char: new Character(randomOutfit()), anim: {}, veh: null, dead: false, wanted: 0, grudge: {}, hp: 100, first: true }; scene.add(rp.char.root); G.players.set(id, rp); }
   return rp;
 }
-function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene.remove(rp.char.root); for (const v of vehicles.values()) { if (v.driver === id) { v.driver = null; if (G.isHost) v.ctrl = 'local'; } if (v.passenger === id) v.passenger = null; } G.players.delete(id); }
+function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene.remove(rp.char.root); disposeSprite(rp.char.nameTag); rp.char.nameTag = null; disposeSprite(rp.char.bubble); rp.char.bubble = null; for (const v of vehicles.values()) { if (v.driver === id) { v.driver = null; if (G.isHost) v.ctrl = 'local'; } if (v.passenger === id) v.passenger = null; } G.players.delete(id); }
 function renderRemotes(dt) {
   for (const rp of G.players.values()) {
     const c = rp.char; const v = rp.veh ? vehicles.get(rp.veh) : null;

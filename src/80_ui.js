@@ -41,7 +41,7 @@ const UI = {
   openChat() { const i = $('#chatIn'); i.classList.remove('hidden'); i.focus(); if (document.pointerLockElement) document.exitPointerLock(); },
   closeChat() { const i = $('#chatIn'); i.value = ''; i.classList.add('hidden'); i.blur(); },
   sendChat() {
-    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); if (!m) return;
+    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); this._chatSentT = performance.now(); if (!m) return;
     if (m.startsWith('/')) { this.command(m); return; }
     this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
@@ -354,7 +354,7 @@ const UI = {
     hold(B.phone, () => this.openPhone()); hold(B.map, () => this.openMap()); hold(B.chat, () => this.openChat()); hold(B.dance, () => this.openDance()); hold(B.cam, () => { CAM.fp = !CAM.fp; });
     this.touchBtns = B;
     // joystick
-    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
+    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0, jox = 0, joy0 = 0; // jox/joy0: #joy 박스의 화면 위치 (조이스틱 그림은 #joy 안에서 상대 좌표로 그림)
     joy.addEventListener('touchstart', e => {
   const menu = document.getElementById('menu');
   const bigmap = document.getElementById('bigmap');
@@ -366,11 +366,12 @@ const UI = {
   if (anyOpen) return;
   e.preventDefault(); AU.init();
   const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
+  const jr = joy.getBoundingClientRect(); jox = jr.left; joy0 = jr.top;
   base.style.display = knob.style.display = 'block';
-  base.style.left = knob.style.left = jx + 'px';
-  base.style.top = knob.style.top = jy + 'px';
+  base.style.left = knob.style.left = (jx - jox) + 'px';
+  base.style.top = knob.style.top = (jy - joy0) + 'px';
 }, { passive: false });
-    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx + dx) + 'px'; knob.style.top = (jy + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
+    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx - jox + dx) + 'px'; knob.style.top = (jy - joy0 + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
     UI.joyReset = () => { if (jid !== null) { jid = null; base.style.display = knob.style.display = 'none'; } };
     const jend = e => { for (const t of e.changedTouches) if (t.identifier === jid) { jid = null; INP.mx = INP.mz = 0; INP.joyMag = 0; base.style.display = knob.style.display = 'none'; } };
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
