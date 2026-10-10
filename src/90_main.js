@@ -93,12 +93,7 @@ async function startGame(mode, code) {
     if (mode === 'host') {
       for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
       G.online = true; G.isHost = true;
-      setTimeout(() => {
-        const msg = `//: 방코드 ${G.room}`;
-        if (UI && UI.chatLine) UI.chatLine(null, msg);
-        else if (typeof toast === 'function') toast(msg);
-        console.log(msg);
-      }, 500);
+      console.log(`//: 방코드 ${G.room}`); // 채팅창 안내는 월드 로딩이 끝난 뒤 한 번만 (loadWorld) — 예전엔 로딩 중에도 찍혀서 두 줄로 보였음
     }
     if (mode === 'join') {
       let err = null;

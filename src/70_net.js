@@ -220,6 +220,7 @@ const NET = {
   onData(m, conn) {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
+    if (m.n != null && (m.t === 'hello' || m.t === 'p' || m.t === 'welcome')) m.n = String(m.n).slice(0, 12); if (m.t === 'chat') m.m = String(m.m ?? '').slice(0, 80); // 조작된 클라이언트의 초장문 이름/채팅 방지 (로비·채팅 입력 길이와 같게)
     if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
