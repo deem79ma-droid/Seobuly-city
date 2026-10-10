@@ -64,6 +64,8 @@ function initCharGeo() {
   CG.sph = new THREE.SphereGeometry(1, 16, 12);
   CG.cone = new THREE.ConeGeometry(1, 1, 14);
   CG.skirt = new THREE.CylinderGeometry(0.17, 0.3, 0.42, 24, 1, true);
+  CG.collar = new THREE.TorusGeometry(0.066, 0.016, 8, 22); CG.collar.rotateX(Math.PI / 2);
+  CG.toe = new THREE.SphereGeometry(0.06, 14, 10, 0, TAU, 0, Math.PI / 2); // 신발 앞코 (둥근)
   CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 24, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
 }
 function M(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; }
@@ -132,7 +134,8 @@ class Character {
     this.outfit = Object.assign({}, o); const P = this.P;
     // clear old meshes
     if (this.meshes) for (const m of this.meshes) m.parent && m.parent.remove(m);
-    this.meshes = []; const add = (parent, m, shadow = true) => { parent.add(m); this.meshes.push(m); m.castShadow = shadow; return m; };
+    this.meshes = []; const add = (parent, m, shadow = true, det = false) => { parent.add(m); this.meshes.push(m); m.castShadow = shadow; if (det) m.userData.det = true; return m; };
+    const addD = (parent, m) => add(parent, m, false, true); // 가까이서만 보이는 디테일 (멀면 숨겨 성능 확보)
     const skin = cmat(o.skin, 0.62), top = cmat(o.topColor, 0.85), bot = cmat(o.bottomColor, 0.88), shoe = cmat(o.shoes, 0.5), hairM = cmat(o.hairColor, 0.55), hatM = cmat(o.hatColor || '#333', 0.7);
     const f = o.body === 'f';
     const longSleeve = ['long', 'hoodie', 'jacket', 'suit', 'police', 'doctor'].includes(o.top); const noSleeve = o.top === 'tank' || o.top === 'vest';
@@ -164,6 +167,19 @@ class Character {
     }
     if (o.bottom === 'skirt') add(P.hips, M(CG.skirt, bot, 0, -0.17, 0));
     if (o.bottom === 'cargo') for (const s of [1, -1]) add(P['hip' + (s > 0 ? 'L' : 'R')], M(CG.box, bot, 0.075 * s, -0.25, 0, 0.03, 0.1, 0.08));
+    // ---- 옷 디테일 (가까이서만) : 신발 밑창·앞코, 벨트, 칼라/라펠, 소매·바짓단, 엄지 ----
+    { const dark = new THREE.Color(o.shoes).getHSL({}).l < 0.35; const sole = cmat(dark ? '#e8e6e0' : '#2a2a2a', 0.9);
+      for (const s of ['L', 'R']) { addD(P['an' + s], M(CG.box, sole, 0, -0.04, 0.05, 0.108, 0.022, 0.262)); addD(P['an' + s], M(CG.toe, shoe, 0, -0.03, 0.15, 0.85, 0.72, 0.75)); addD(P['hand' + s], M(CG.sph, skin, (s === 'L' ? -1 : 1) * 0.035, 0.012, 0.022, 0.017, 0.03, 0.017)); }
+      const tuck = !['tank', 'doctor', 'vest'].includes(o.top) && o.bottom !== 'skirt';
+      if (tuck && o.top !== 'hoodie') { addD(P.hips, M(CG.cyl, cmat('#1a1612', 0.5), 0, 0.075, 0, 0.172, 0.034, 0.13)); addD(P.hips, M(CG.box, cmat('#d8c070', 0.25, 0.9), 0, 0.075, 0.13, 0.038, 0.026, 0.01)); }
+      const topD = cmat(new THREE.Color(o.topColor).multiplyScalar(0.78).getStyle(), 0.85);
+      if (['tshirt', 'long', 'hoodie', 'tank'].includes(o.top)) addD(P.spine, M(CG.collar, topD, 0, 0.545, 0.008, 1.05, 1, 0.92));
+      if (['suit', 'jacket', 'police', 'doctor'].includes(o.top)) for (const sx of [1, -1]) { const l = addD(P.spine, M(CG.box, topD, 0.055 * sx, 0.42, 0.112, 0.05, 0.17, 0.018)); l.rotation.z = 0.32 * sx; }
+      if (o.top === 'hoodie') for (const sx of [1, -1]) addD(P.spine, M(CG.cyl, cmat('#f2f2f2', 0.8), 0.03 * sx, 0.42, 0.122, 0.005, 0.12, 0.005));
+      if (o.top === 'suit' || o.top === 'jacket') for (const sx of [1, -1]) addD(P.spine, M(CG.sph, cmat('#222', 0.4, 0.4), 0, 0.2 + sx * 0.06, 0.122, 0.011, 0.011, 0.006));
+      if (longSleeve) for (const s of ['L', 'R']) addD(P['el' + s], M(CG.cyl, topD, 0, -0.215, 0, 0.05, 0.03, 0.05));
+      if (longPants) for (const s of ['L', 'R']) addD(P['kn' + s], M(CG.cyl, cmat(new THREE.Color(o.bottomColor).multiplyScalar(o.bottom === 'jeans' ? 1.25 : 0.82).getStyle(), 0.9), 0, -0.395, 0, 0.064, 0.035, 0.064));
+    }
     // head - higher quality with detailed eyes
     const H = P.head;
     add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.96 : 1.02, 1.1, 1.02));
@@ -174,20 +190,20 @@ class Character {
     const highlightMat = cmat('#ffffff', 0.05, 0.8);
     for (const s of [1, -1]) {
       // Sclera
-      add(H, M(CG.eyeW, cmat('#f8f4f0', 0.2), 0.04 * s, 0.118, 0.095), false);
+      addD(H, M(CG.eyeW, cmat('#f8f4f0', 0.2), 0.04 * s, 0.118, 0.095));
       // Iris
-      add(H, M(CG.iris, irisMat, 0.04 * s, 0.118, 0.108), false);
+      addD(H, M(CG.iris, irisMat, 0.04 * s, 0.118, 0.108));
       // Pupil
-      add(H, M(CG.pupil, cmat('#111111', 0.1), 0.04 * s, 0.118, 0.112), false);
+      addD(H, M(CG.pupil, cmat('#111111', 0.1), 0.04 * s, 0.118, 0.112));
       // Specular highlight
-      add(H, M(CG.highlight, highlightMat, 0.046 * s, 0.124, 0.114), false);
+      addD(H, M(CG.highlight, highlightMat, 0.046 * s, 0.124, 0.114));
       // Eyebrow
-      add(H, M(CG.brow, hairM, 0.041 * s, 0.15, 0.105), false).rotation.z = -0.1 * s;
+      addD(H, M(CG.brow, hairM, 0.041 * s, 0.15, 0.105)).rotation.z = -0.1 * s;
       // Ear
       add(H, M(CG.ear, skin, 0.11 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
     }
-    add(H, M(CG.nose, skin, 0, 0.082, 0.118), false);
-    add(H, M(CG.mouth, cmat(f ? '#c05060' : '#904848', 0.4), 0, 0.045, 0.105), false);
+    addD(H, M(CG.nose, skin, 0, 0.082, 0.118));
+    addD(H, M(CG.mouth, cmat(f ? '#c05060' : '#904848', 0.4), 0, 0.045, 0.105));
     // hair
     const hh = o.hair;
     if (hh === 'short' || hh === 'spiky' || hh === 'curly' || hh === 'long' || hh === 'ponytail') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
@@ -212,8 +228,9 @@ class Character {
       for (const s of [1, -1]) add(H, M(CG.box, gm, 0.043 * s, 0.115, 0.123, 0.05, 0.035, o.glasses === 'sunglasses' ? 0.01 : 0.004), false);
       add(H, M(CG.box, gm, 0, 0.12, 0.124, 0.03, 0.006, 0.006), false);
     }
-    this.setShadow(this.shadow !== false);
+    this.setShadow(this.shadow !== false); this.setDetail(this.detail !== false, true);
   }
+  setDetail(v, force) { if (!force && this.detail === v) return; this.detail = v; if (this.meshes) for (const m of this.meshes) if (m.userData.det) m.visible = v; }
   setShadow(v) { this.shadow = v; if (this.meshes) for (const m of this.meshes) if (m.castShadow !== undefined && m.geometry !== CG.eyeW && m.geometry !== CG.pupil) m.castShadow = v; }
   setWeapon(w) {
     if (this.weapon === w) return; this.weapon = w;

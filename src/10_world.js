@@ -493,6 +493,14 @@ function regBuilding(kind, x, z, w, d, top, side, extra = {}) {
     const m = mbAt('plain', wx, wz); const y = b.y0 - 0.05;
     m.box(wx + sx * 0.06, y, wz + sz * 0.06, sx ? 0.14 : 1.9, 2.6, sz ? 0.14 : 1.9, C(0x2e2620));
     m.box(wx + sx * 0.1, y + 2.6, wz + sz * 0.1, sx ? 0.2 : 2.3, 0.25, sz ? 0.2 : 2.3, C(0xd8c890));
+    if (G.quality >= 1 && !extra.small) { // 유리 양문 + 손잡이 + 캐노피 + 벽등
+      const px = sz, pz = sx; // 문 면을 따라가는 방향
+      m.box(wx + sx * 0.14, y + 0.08, wz + sz * 0.14, sx ? 0.04 : 1.7, 2.35, sz ? 0.04 : 1.7, C(0x6a8aa0));
+      m.box(wx + sx * 0.17, y + 0.08, wz + sz * 0.17, sx ? 0.04 : 0.06, 2.35, sz ? 0.04 : 0.06, C(0x2e2620));
+      for (const k2 of [-1, 1]) m.box(wx + sx * 0.2 + px * k2 * 0.18, y + 1.0, wz + sz * 0.2 + pz * k2 * 0.18, sx ? 0.05 : 0.04, 0.5, sz ? 0.05 : 0.04, C(0xd8dce0));
+      m.box(wx + sx * 0.8, y + 2.95, wz + sz * 0.8, sx ? 1.5 : 3.2, 0.14, sz ? 1.5 : 3.2, C(0x34383e));
+      for (const k2 of [-1, 1]) m.box(wx + sx * 0.12 + px * k2 * 1.35, y + 2.0, wz + sz * 0.12 + pz * k2 * 1.35, 0.18, 0.28, 0.18, C(0xfff0c8));
+    }
   }
   return b;
 }
@@ -543,6 +551,7 @@ function genBlocks() {
     if (g.region === 'kaengjibe') for (let k = 0; k < 2; k++) { const b = list[bi++]; if (b) b.use = k ? 'court' : 'park'; }
     if (g.region === 'jiolle') for (let k = 0; k < 3; k++) { const b = list[bi++]; if (b) b.use = k === 0 ? 'park' : 'factoryblock'; }
     if (g.region === 'simone') { const b = list[bi++]; if (b) b.use = 'park'; }
+    if (g.region !== 'seoburi') { const b = list[bi++]; if (b) b.use = 'parking'; } // 모든 지역에 주차장 (차 소환)
   }
   for (const b of BLOCKS) {
     // slab + curb
@@ -599,6 +608,13 @@ function addBuildingBox(x, z, w, d, h, style, col, opts = {}) {
   const yb = cityShop ? y0 + 4.4 : y0;
   mbAt(style, x, z).box(x, yb, z, w, h - (yb - y0), d, col, BAY[style], { topCol: col.clone().multiplyScalar(0.55) });
   if (!opts.noCornice) mbAt('plain', x, z).box(x, y0 + h, z, w + 0.6, 0.7, d + 0.6, col.clone().multiplyScalar(0.7));
+  if (G.quality >= 1) { // 고품질 외관: 모서리 기둥, 옥상 난간(파라펫)+금속 마감, 지상층 석재 기단
+    const m = mbAt('plain', x, z); const pc = style === 'glass' ? C(0x4e555e) : col.clone().multiplyScalar(0.82); const ph = h - (yb - y0);
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) m.box(x + sx * (w / 2 - 0.25), yb, z + sz * (d / 2 - 0.25), 0.62, ph, 0.62, pc);
+    if (!opts.noCornice) { const t = y0 + h + 0.7, pw = col.clone().multiplyScalar(0.62), cap = C(0xb8bcc2), W2 = w + 0.6, D2 = d + 0.6;
+      for (const [cx2, cz2, ww, dd] of [[x, z - D2 / 2 + 0.14, W2, 0.28], [x, z + D2 / 2 - 0.14, W2, 0.28], [x - W2 / 2 + 0.14, z, 0.28, D2], [x + W2 / 2 - 0.14, z, 0.28, D2]]) { m.box(cx2, t, cz2, ww, 0.85, dd, pw); m.box(cx2, t + 0.85, cz2, ww + 0.06, 0.08, dd + 0.06, cap); } }
+    if (!cityShop) m.box(x, y0, z, w + 0.08, 0.6, d + 0.08, C(0x55565c));
+  }
   addCollider(x - w / 2 - (cityShop ? 0.2 : 0), z - d / 2 - (cityShop ? 0.2 : 0), x + w / 2 + (cityShop ? 0.2 : 0), z + d / 2 + (cityShop ? 0.2 : 0), y0 + h + 0.7, 'bld');
   return y0 + h + 0.7;
 }
@@ -606,10 +622,11 @@ function roofProps(x, z, w, d, top, n = 3) {
   const m = mbAt('plain', x, z);
   for (let i = 0; i < n; i++) {
     const px = x + wr(-w / 3, w / 3), pz = z + wr(-d / 3, d / 3); const k = wrng();
-    if (k < 0.45) m.box(px, top, pz, wr(2, 3.5), wr(1.2, 2), wr(2, 3), C(0xa8aab0));
-    else if (k < 0.7) { m.cyl(px, top, pz, wr(1.2, 2), wr(2.5, 4), C(0x8a8f96), 10); }
-    else if (k < 0.85) m.box(px, top, pz, 0.25, wr(4, 10), 0.25, C(0x555555));
-    else m.box(px, top, pz, wr(3, 5), 2.6, wr(3, 5), C(0xd0ccc4));
+    const hq = G.quality >= 1; // 고품질: 실외기 팬·물탱크 지붕·안테나 경고등·계단실 문 (랜덤 시퀀스는 그대로 유지)
+    if (k < 0.45) { const aw = wr(2, 3.5), ah = wr(1.2, 2), ad = wr(2, 3); m.box(px, top, pz, aw, ah, ad, C(0xa8aab0)); if (hq) { m.cyl(px - aw * 0.22, top + ah, pz, Math.min(aw, ad) * 0.2, 0.08, C(0x2a2c30), 12); m.cyl(px + aw * 0.22, top + ah, pz, Math.min(aw, ad) * 0.2, 0.08, C(0x2a2c30), 12); m.box(px, top + ah * 0.15, pz + ad / 2 + 0.01, aw * 0.85, ah * 0.6, 0.04, C(0x6a6e74)); m.box(px, top, pz, aw + 0.2, 0.15, ad + 0.2, C(0x5a5e64)); } }
+    else if (k < 0.7) { const r = wr(1.2, 2), th = wr(2.5, 4); m.cyl(px, top + (hq ? 0.9 : 0), pz, r, th, C(0x8a8f96), hq ? 14 : 10); if (hq) { for (let a = 0; a < 4; a++) m.box(px + Math.cos(a * 1.571 + 0.785) * r * 0.7, top, pz + Math.sin(a * 1.571 + 0.785) * r * 0.7, 0.18, 0.9, 0.18, C(0x4a4e54)); m.cyl(px, top + 0.9 + th, pz, r * 1.04, 0.5, C(0x6a6e74), 14, 0.08); m.cyl(px, top + 0.9 + th * 0.5, pz, r * 1.02, 0.12, C(0x5a5e64), 14); } }
+    else if (k < 0.85) { const ah = wr(4, 10); m.box(px, top, pz, 0.25, ah, 0.25, C(0x555555)); if (hq) { m.box(px, top + ah * 0.6, pz, 1.4, 0.06, 0.06, C(0x555555)); m.box(px, top + ah * 0.8, pz, 0.06, 0.06, 1.0, C(0x555555)); m.box(px, top + ah, pz, 0.3, 0.3, 0.3, C(0xff2a2a)); } }
+    else { const sw = wr(3, 5), sd = wr(3, 5); m.box(px, top, pz, sw, 2.6, sd, C(0xd0ccc4)); if (hq) { m.box(px, top + 2.6, pz, sw + 0.3, 0.18, sd + 0.3, C(0x8a8a8e)); m.box(px, top, pz + sd / 2 + 0.02, 0.95, 2.05, 0.06, C(0x3a4048)); m.box(px + sw / 2 + 0.02, top + 1.2, pz, 0.06, 0.6, 1.2, C(0x8ab0c8)); } }
   }
 }
 function seoKind(x, z) { const k = hash2(x * 7 | 0, z * 13 | 0); return k < 0.12 ? 'bank' : k < 0.27 ? 'cafe' : k < 0.4 ? 'mart' : k < 0.5 ? 'restaurant' : k < 0.55 ? 'church' : 'office'; }
@@ -709,10 +726,38 @@ function buildFactoryHall(x, z, w, d, R, small, side = 's', noReg = false) {
   }
   if (!small) for (let i = 0; i < 6; i++) { const tx = x + wr(-w / 2, w / 2), tz = z + d / 2 + 4; cm.box(tx, y0, tz, 6, 2.6, 2.5, C(wpick([0xc04030, 0x3060a0, 0x40a060, 0xe0a030])), null); }
 }
+const PARKING_LOTS = []; // 주차장: 무인 정산기(키오스크) + 주차면 목록 → 차 소환
 function buildParking(b) {
-  const m = mbAt('plain', b.x0, b.z0); const cx = (b.ix0 + b.ix1) / 2, cz = (b.iz0 + b.iz1) / 2;
-  m.box(cx, LAND - 0.2, cz, b.ix1 - b.ix0, 0.42, b.iz1 - b.iz0, C(0x4a4b4e));
-  for (let x = b.ix0 + 4; x < b.ix1 - 4; x += 3.2) for (const zz of [b.iz0 + 8, b.iz1 - 8]) { m.box(x, LAND + 0.23, zz, 0.15, 0.02, 5.5, C(0xdddddd)); if (wrng() < 0.45) PARKED.push({ x: x + 1.6, z: zz, yaw: zz < cz ? 0 : Math.PI, region: b.region }); }
+  const m = mbAt('plain', b.x0, b.z0); const cx = (b.ix0 + b.ix1) / 2, cz = (b.iz0 + b.iz1) / 2, W = b.ix1 - b.ix0, D = b.iz1 - b.iz0;
+  m.box(cx, LAND - 0.2, cz, W, 0.42, D, C(0x3c3d41));
+  const lot = { id: PARKING_LOTS.length, region: b.region, cx, cz, bays: [], fac: null };
+  const rows = D > 46 ? [b.iz0 + 8, cz - 3, cz + 3, b.iz1 - 8] : [b.iz0 + 8, b.iz1 - 8];
+  rows.forEach((zz, ri) => {
+    const yaw = (ri % 2 === 0) ? 0 : Math.PI; const back = ri % 2 === 0 ? -1 : 1; // 차 앞이 통로를 보게
+    for (let x = b.ix0 + 4; x < b.ix1 - 4; x += 3.2) {
+      m.box(x, LAND + 0.23, zz, 0.15, 0.02, 5.5, C(0xe8e8e8));
+      if (x + 3.2 < b.ix1 - 4) {
+        const bx = x + 1.6; m.box(bx, LAND + 0.22, zz + back * 2.3, 1.4, 0.14, 0.22, C(0xe0c030)); // 휠스톱
+        if (wrng() < 0.08) m.box(bx, LAND + 0.231, zz, 1.1, 0.012, 1.1, C(0x2a6ad0)); // 장애인 주차 표시
+        const bay = { x: bx, z: zz, yaw }; lot.bays.push(bay);
+        if (wrng() < 0.12) PARKED.push({ x: bx, z: zz, yaw, region: b.region }); // 빈 자리를 넉넉히 (소환용 + 성능)
+      }
+    }
+  });
+  // 통로 화살표 + 테두리 연석
+  if (rows.length === 2) for (let x = b.ix0 + 8; x < b.ix1 - 8; x += 12) { m.box(x, LAND + 0.231, cz, 2.2, 0.012, 0.35, C(0xf2f2f2)); m.box(x + 1.1, LAND + 0.231, cz, 0.5, 0.012, 0.9, C(0xf2f2f2)); }
+  for (const [x0, z0, x1, z1] of [[b.ix0, b.iz0, b.ix1, b.iz0 + 0.4], [b.ix0, b.iz1 - 0.4, b.ix1, b.iz1], [b.ix0, b.iz0, b.ix0 + 0.4, b.iz1], [b.ix1 - 0.4, b.iz0, b.ix1, b.iz1]]) m.box((x0 + x1) / 2, LAND, (z0 + z1) / 2, x1 - x0, 0.28, z1 - z0, C(0xb8b4ac));
+  // 가로등
+  for (let x = b.ix0 + 10; x < b.ix1 - 6; x += 22) for (const z of [cz]) { m.cyl(x, LAND, z + 0.01, 0.12, 6.5, C(0x5a5e66), 8); m.box(x, LAND + 6.5, z, 1.6, 0.18, 0.4, C(0x5a5e66)); m.box(x, LAND + 6.4, z, 1.2, 0.06, 0.3, C(0xfff2c0)); addCircleCollider(x, z, 0.2, 'bld', null, LAND + 6.5); LAMPS.push({ x, y: LAND - 0.02, z, yaw: Math.PI, park: 1 }); }
+  // 정산소 부스 + 키오스크 (남쪽 입구)
+  const kx = cx + Math.min(10, W / 4), kz = b.iz1 - 2.2;
+  m.box(kx - 3.2, LAND, kz, 2.4, 2.6, 2.2, C(0xe8eef4)); m.box(kx - 3.2, LAND + 2.6, kz, 2.9, 0.22, 2.7, C(0x2a5ad0)); m.box(kx - 3.2, LAND + 1.1, kz + 1.11, 1.8, 1.0, 0.04, C(0x9cc8e8));
+  m.box(kx, LAND, kz, 0.9, 1.45, 0.6, C(0x2a5ad0)); m.box(kx, LAND + 0.85, kz + 0.31, 0.62, 0.45, 0.03, C(0x101820)); m.box(kx, LAND + 1.45, kz, 1.0, 0.12, 0.7, C(0xf2f2f2));
+  m.box(kx + 2.4, LAND, kz, 0.14, 1.1, 0.14, C(0xd8d8d8)); m.box(kx + 4.4, LAND + 1.0, kz, 4.0, 0.1, 0.1, C(0xd03030)); // 차단기
+  addCollider(kx - 4.45, kz - 1.15, kx - 1.95, kz + 1.15, LAND + 2.9, 'bld'); addCollider(kx - 0.45, kz - 0.3, kx + 0.45, kz + 0.3, LAND + 1.5, 'bld');
+  addSign('P', '주차장 · 차 소환', '#2a5ad0', kx - 3.2, LAND + 3.6, kz + 1.36, 2.6, 1.3, 0, '#ffffff');
+  const f = { id: FACILITIES.length, type: 'parking', name: '주차장 (차 소환)', icon: '🅿️', region: b.region, x: kx, z: kz + 1.3, cx, cz, side: 's', lot: lot.id };
+  f.ring = addDoorRing(f.x, f.z, 0x4a8aff); FACILITIES.push(f); lot.fac = f; PARKING_LOTS.push(lot);
 }
 function buildParkBlock(b) {
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, w = b.ix1 - b.ix0, d = b.iz1 - b.iz0;
@@ -1153,6 +1198,12 @@ function buildTreeGeos() {
   TREE_GEO.acacia = { trunk: new THREE.CylinderGeometry(0.2, 0.3, 5, 6).translate(0, 2.5, 0), leaf: jitter(merge([[ico(1), 0, 5.6, 0, [3.6, 0.9, 3.6]]]), 0.3, 4), leafCol: [0x6a8a2a, 0x7a9a3a], trunkCol: 0x5a4434 };
   TREE_GEO.bush = { trunk: null, leaf: jitter(merge([[ico(1), 0, 0.6, 0, [1.3, 0.9, 1.3]], [ico(1), 0.7, 0.5, 0.3, [0.8, 0.7, 0.8]]]), 0.2, 5), leafCol: [0x3a6a28, 0x4a7a2a, 0x2a5a22] };
   TREE_GEO.rock = { trunk: null, leaf: jitter(new THREE.DodecahedronGeometry(1, 1), 0.35, 8), leafCol: [0x7a7872, 0x8a8680, 0x6a6862] };
+  // 잎에 자연스러운 음영(아래·안쪽은 어둡고 위·바깥은 밝게) + 잎 덩어리마다 색 변화 → 버텍스 컬러 (인스턴스 색과 곱해진다)
+  for (const k in TREE_GEO) { const T = TREE_GEO[k]; if (!T.leaf || T.leaf.attributes.color) continue; const g = T.leaf; g.computeBoundingBox(); const bb = g.boundingBox; const p = g.attributes.position, n = g.attributes.normal; const col = new Float32Array(p.count * 3); const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2, hy = Math.max(0.01, bb.max.y - bb.min.y), rr = Math.max(0.01, Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2);
+    for (let i = 0; i < p.count; i++) { const ty = (p.getY(i) - bb.min.y) / hy; const rad = Math.min(1, Math.hypot(p.getX(i) - cx, p.getZ(i) - cz) / rr); const up = n ? n.getY(i) : 0; const h = Math.sin(i * 12.9898 + k.length * 78.233) * 43758.5453; const nz = (h - Math.floor(h)) * 0.12; let v = k === 'rock' ? 0.8 + up * 0.15 + nz : 0.55 + ty * 0.35 + rad * 0.12 + up * 0.08 + nz; v = Math.min(1.12, v); col[i * 3] = v * (k === 'rock' ? 1 : 0.97); col[i * 3 + 1] = v; col[i * 3 + 2] = v * (k === 'rock' ? 1 : 0.9); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); }
+  // 굵은 가지 (참나무·벚나무) — 줄기에 합친다
+  { const br = []; for (let i = 0; i < 3; i++) { const b = new THREE.CylinderGeometry(0.07, 0.13, 1.8, 5); b.translate(0, 0.9, 0); b.rotateZ(0.75); b.rotateY(i * 2.1 + 0.4); b.translate(0, 3.0 + i * 0.35, 0); br.push(b.toNonIndexed()); } const tr = TREE_GEO.oak.trunk.toNonIndexed(); const m2 = mergeAttrGeos([tr, ...br]); TREE_GEO.oak.trunk = m2; TREE_GEO.cherry.trunk = m2; }
 }
 function mergeGeos(gs) {
   let n = 0; for (const g of gs) n += g.attributes.position.count;
@@ -1197,11 +1248,11 @@ function buildTreeInstances() {
     if (t.type !== 'bush' && !t.noCollide) t.col = addCircleCollider(t.x, t.z, t.type === 'rock' ? 0.9 * t.s : 0.35 * t.s, t.type === 'rock' ? 'rock' : 'tree', t, t.y + 6);
   }
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), s4 = new THREE.Vector3(), p4 = new THREE.Vector3(), c = new THREE.Color();
-  const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, flatShading: false });
+  const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, flatShading: false, vertexColors: true });
   const trunkMat = new THREE.MeshStandardMaterial({ roughness: 0.95 });
   for (const [k, list] of groups) {
     const type = k.split('|')[1]; const G = TREE_GEO[type];
-    const leaf = new THREE.InstancedMesh(G.leaf, type === 'rock' ? new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }) : leafMat, list.length);
+    const leaf = new THREE.InstancedMesh(G.leaf, type === 'rock' ? new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true, vertexColors: true }) : leafMat, list.length);
     const trunk = G.trunk ? new THREE.InstancedMesh(G.trunk, trunkMat, list.length) : null;
     list.forEach((t, i) => {
       const r = hash2(Math.floor(t.x * 10), Math.floor(t.z * 10));

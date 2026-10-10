@@ -127,7 +127,7 @@ const ADMIN = {
     const R = () => this.panel(); const on = b => b ? 'ON' : 'OFF';
     const others = [...G.players.values()];
     const items = [
-      { ic: '🛡️', t: '무적', p: on(ME.god), d: '데미지 무시 · 차량 무적', stay: true, fn: () => { ME.god = !ME.god; return true; } },
+      { ic: '🛡️', t: '체력 무한 (항상 켜짐)', p: '∞', d: '플레이어·NPC·낙하·차량·폭발 피해 무시 · 타고 있는 차도 무적', stay: true, fn: () => { toast('🛡️ 관리자는 항상 체력 무한'); return true; } },
       { ic: '🕊️', t: '비행', p: on(ME.fly), d: 'Space 상승 · C 하강 · Shift 빠르게', stay: true, fn: () => { ME.fly = !ME.fly; if (!ME.fly) ME.vy = 0; return true; } },
       { ic: '⚡', t: '이동 속도', p: 'x' + (ME.speedMul || 1), d: '눌러서 x1 → x3 → x6', stay: true, fn: () => { const c = ME.speedMul || 1; ME.speedMul = c === 1 ? 3 : c === 3 ? 6 : 1; return true; } },
                   { ic: '❤️', t: '완전 회복', p: '', stay: true, fn: () => { ME.hp = 100; ME.armor = 100; ME.stamina = 100; ME.drunk = 0; UI.updateInv && UI.updateInv(); return true; } },
@@ -174,7 +174,7 @@ UI.openHelp = function () {
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
     
     + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
-    + sec('경찰 · 건물') + row('J', '🚨 경찰 신고 (나를 공격한 사람·갱단원)') + row('E', '엘리베이터 호출 · 층 선택 / 계단은 걸어서 오르내리기') + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
+    + sec('경찰 · 건물') + row('J', '🚨 경찰 신고 (나를 공격한 사람·갱단원)') + row('E', '엘리베이터 호출 · 층 선택 / 계단은 걸어서 오르내리기') + sec('차 · 옷 · 사망') + row('E', '🅿️ 주차장 정산기에서 차 소환 (1인 1대)') + row('E', '👕 옷가게 계산대에서 옷 사기 · 내 옷장') + row('💀', '사망하면 현금·무기·탄약·아이템·산 옷을 모두 잃는다') + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
   UI.openMenu('🎮 조작법', IS_TOUCH ? tc : pc, []);

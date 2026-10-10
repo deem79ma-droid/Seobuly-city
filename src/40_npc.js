@@ -289,6 +289,7 @@ function renderPeds(dt, cam) {
     if (!G.isHost && p.tx !== undefined) { p.x = damp(p.x, p.tx, 10, dt); p.z = damp(p.z, p.tz, 10, dt); p.y = damp(p.y, p.ty, 10, dt); p.yaw = dampAng(p.yaw, p.tyaw, 10, dt); }
     c.root.position.set(p.x, p.y, p.z); c.root.rotation.y = p.yaw;
     const wantShadow = d < 45; if (wantShadow !== p.shadowOn) { c.setShadow(wantShadow); p.shadowOn = wantShadow; }
+    const wantDet = d < (G.quality >= 2 ? 22 : 12); if (wantDet !== c.detail) c.setDetail(wantDet); // 먼 NPC는 얼굴·옷 디테일 생략
     const st = p.state === 'dead' ? 'dead' : p.state === 'knocked' ? 'knocked' : p.state === 'sit' ? 'sit' : 'normal';
     if (p.state === 'sit') c.root.position.y = p.y + 0.5 - 0.95;
     c.setWeapon(((p.state === 'fight' || p.state === 'raid') && p.weapon !== 'fist') ? p.weapon : 'fist');

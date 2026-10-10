@@ -356,7 +356,8 @@ const NET = {
       case 'jack': { const v = vehicles.get(m.v); if (v && G.isHost && v.ai) ejectNpcDriver(v); break; }
       case 'vdmg': { const v = vehicles.get(m.id); if (v && v.ctrl === 'local') v.damage(m.amt, m.f); break; }
       case 'vboom': { const v = vehicles.get(m.id); if (v && !v.dead) v.explode(); break; }
-      case 'vspawn': { let v = vehicles.get(m.id); if (!v) { v = new Vehicle(m.id, m.model, m.color, m.x, m.z, m.yaw, { owner: m.owner }); v.dyn = true; } else { v.x = m.x; v.z = m.z; v.yaw = m.yaw; v.y = groundHeight(m.x, m.z); v.reset && (v.hp = v.M.hp, v.dead = false, v.burnT = 0); } v.ctrl = 'remote'; break; }
+      case 'vdel': { const v = vehicles.get(m.id); if (v && v.dyn && v.owner === f && (!v.driver || v.driver === f || v.driver === ME.id)) { if (ME.vehicle === v) exitVehicle(true); v.remove(); } break; } // 소환 차 회수 (주인만)
+      case 'vspawn': { if (!VMODELS[m.model] || typeof m.id !== 'string') break; let v = vehicles.get(m.id); if (v && v.model !== m.model) { if (ME.vehicle === v) exitVehicle(true); v.remove(); v = null; } if (!v) { v = new Vehicle(m.id, m.model, m.color, m.x, m.z, m.yaw, { owner: m.owner }); v.dyn = true; } else { v.x = m.x; v.z = m.z; v.yaw = m.yaw; v.y = groundHeight(m.x, m.z); v.reset && (v.hp = v.M.hp, v.dead = false, v.burnT = 0); } v.ctrl = 'remote'; break; }
       case 'tree': { const t = TREES[m.i]; if (t && t.alive) fellTree(t, m.y); if (G.isHost && t) t.cutAt = G.t; break; }
       case 'treeGrow': { const t = TREES[m.i]; if (t && !t.alive) setTreeVisible(t, true); break; }
       case 'pick': { if (!G.isHost) break; const p = PICKUPS.get(m.id); if (!p) break; removePickup(m.id); this.send({ t: 'pickRm', id: m.id, by: f, a: p.amount }); break; }

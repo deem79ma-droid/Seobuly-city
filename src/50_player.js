@@ -8,6 +8,7 @@ const ME = {
   combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
   takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
+    if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
     if (this.armor > 0) { const a = Math.min(this.armor, amt * 0.65); this.armor -= a; amt -= a; }
     this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
@@ -19,8 +20,11 @@ const ME = {
   },
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
-    if (this.dead) return; this.dead = true; this.deadT = 0; this.hp = 0; if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
+    if (this.dead || adminGod()) { if (adminGod()) this.hp = 100; return; } this.dead = true; this.deadT = 0; this.hp = 0; if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
     $('#death').classList.remove('hidden'); $('#deathSub').textContent = '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
+    const lost = loseAllOnDeath(); const dl = $('#deathLoss'); // 사망하면 현금·무기·탄약·아이템·산 옷을 전부 잃는다
+    if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } }
+    if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 모두 잃었다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품을 모두 잃었다', sys: 1 }); }
   },
   respawn() {
     if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
@@ -29,7 +33,7 @@ const ME = {
     if (this.homePlot != null && PLOTS[this.homePlot] && PLOTS[this.homePlot].state === 'done' && PLOTS[this.homePlot].owner === this.id) { const p = PLOTS[this.homePlot]; sp = { x: p.x + SIDE_VEC[p.side][0] * (p.w / 2 + 2), z: p.z + SIDE_VEC[p.side][1] * (p.d / 2 + 2) }; }
     if (!sp) { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } } sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 }; }
     this.x = sp.x; this.z = sp.z; this.y = groundHeight(this.x, this.z) + 0.1; this.vx = this.vz = this.vy = 0;
-    $('#death').classList.add('hidden'); toast(`🏥 병원비 ${fmtMoney(fee)} 지불`); G.godT = G.t + 3;
+    $('#death').classList.add('hidden'); toast(fee > 0 ? `🏥 병원비 ${fmtMoney(fee)} 지불` : '🏥 병원에서 깨어났다 — 빈털터리다…'); G.godT = G.t + 3;
     if (this.warrant) { this.wanted = 2; toast('🚨 체포 영장은 아직 유효하다 — 경찰이 찾고 있다', 3000); }
   },
 };
@@ -342,7 +346,7 @@ function updatePlayer(dt) {
   if (ME.reloadT > 0) { ME.reloadT -= dt; if (ME.reloadT <= 0) finishReload(); }
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
   ME.drunk = Math.max(0, ME.drunk - dt * 0.01);
-  if (ME.dead) { ME.deadT += dt; if (ME.deadT > 4.5) ME.respawn(); c.update(dt, { state: 'dead' }); placeChar(); return; }
+  if (ME.dead) { ME.deadT += dt; if (ME.deadT > 6) ME.respawn(); c.update(dt, { state: 'dead' }); placeChar(); return; }
   // wanted decay
   if (ME.wanted > 0) {
     const copNear = PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - ME.x, v.z - ME.z) < 90);
@@ -350,7 +354,8 @@ function updatePlayer(dt) {
     if (ME.wantedCool > 18) { ME.wanted--; ME.wantedCool = 0; UI.updateStars(); if (!ME.wanted) toast('✅ 수배 해제'); }
   }
   if (INP.fire) { const W = WEAPONS[ME.weapon]; if (W.auto || !INP._fired) { tryAttack(); INP._fired = true; } } else INP._fired = false;
-  if (ME.vehicle) { if (ME.god) ME.vehicle.hp = ME.vehicle.M.hp; updateDriving(dt); placeChar(); return; }
+  if (adminGod()) { ME.hp = 100; ME.dead = false; }
+  if (ME.vehicle) { if (ME.god || adminGod()) { ME.vehicle.hp = ME.vehicle.M.hp; ME.vehicle.dead = false; ME.vehicle.burnT = 0; } updateDriving(dt); placeChar(); return; }
   const mi = readMoveInput(); const mag = Math.min(1, Math.hypot(mi.x, mi.z));
   const fwdX = Math.sin(CAM.yaw), fwdZ = Math.cos(CAM.yaw), rX = -Math.cos(CAM.yaw), rZ = Math.sin(CAM.yaw);
   let dx = fwdX * mi.z + rX * mi.x, dz = fwdZ * mi.z + rZ * mi.x; const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
