@@ -100,7 +100,7 @@ Object.assign(ADMIN, {
     }
     toast(n ? (ban ? '⛔ 밴했다' : '👢 추방했다') : '대상이 없다');
   },
-  freeOther() { const o = [...G.players.values()][0]; if (!o) { toast('다른 플레이어가 없다'); return; } NET.send({ t: 'free', to: o.id }); toast('🔓 ' + o.name + ' 무료 석방'); },
+  freeOther() { const ps = [...G.players.values()].filter(o => o.jail); if (!ps.length) { toast(G.players.size ? '수감 중인 플레이어가 없다' : '다른 플레이어가 없다'); return; } for (const o of ps) NET.send({ t: 'free', to: o.id }); toast('🔓 ' + ps.map(o => o.name).join(', ') + ' 무료 석방'); },
   adminTick(dt) {
     ME.money = 999999999999;
     this._u = (this._u || 0) - dt; const refresh = this._u <= 0; if (refresh) this._u = 0.6;

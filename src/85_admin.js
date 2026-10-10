@@ -159,7 +159,8 @@ const ADMIN = {
   tpMenu() {
     const items = DISTRICTS.map(d => ({ ic: '📍', t: `${d.id}구역 ${d.name}`, p: '', fn: () => { const n = ROUTE.nearestOnRoad(d.cx, d.cz); const E = EDGES[n.e]; this.tp(n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2.5), n.z + (E.axis === 'x' ? E.w / 2 + 2.5 : 0)); } }));
     items.push({ ic: '🚩', t: '웨이포인트로', p: '', dis: !UI.waypoint, disMsg: '지도(M)에서 웨이포인트를 먼저 찍어줘', fn: () => this.tp(UI.waypoint.x, UI.waypoint.z) });
-    const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => { const a = anchorOf(o); this.tp(a.x + 1.5, a.z + 1.5); } });
+    const ps = [...G.players.values()]; if (!ps.length) items.push({ ic: '🤝', t: '다른 플레이어에게', p: '', dis: true, disMsg: '다른 플레이어가 없다', fn: () => { } });
+    for (const o of ps) items.push({ ic: '🤝', t: o.name + '에게', p: '', fn: () => { const a = anchorOf(o); this.tp(a.x + 1.5, a.z + 1.5); } });
     UI.openMenu('📍 텔레포트', '', items);
   },
 };
