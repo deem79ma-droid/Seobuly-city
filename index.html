@@ -226,7 +226,7 @@ body.touch #prompt{bottom:auto;top:58%}
  <div id="bars"><canvas id="mini" width="340" height="340"></canvas><div class="hbar" id="hpBar"><i></i></div><div class="hbar" id="arBar"><i></i></div><div class="hbar" id="stBar"><i></i></div></div>
  <div id="weapon" class="panel"><div id="wName">주먹</div><div id="wAmmo"></div><div id="hotbar"></div></div>
  <div id="taxiHud" class="panel hidden"></div>
- <div id="share" class="panel hidden" style="pointer-events:auto;z-index:40"><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button class="btn" id="shareCopy">📋 링크 복사</button><button class="btn b2" id="shareShare">📤 카톡으로 보내기</button></div><button class="btn b3" id="shareClose" style="width:100%;margin-top:10px">닫기 (P ▶ 친구 초대 링크로 다시 열기)</button></div>
+ <div id="share" class="panel hidden" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;pointer-events:auto;background:rgba(14,16,26,.96);padding:18px;border-radius:18px;width:min(440px,92vw);text-align:center"><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button class="btn" id="shareCopy">📋 링크 복사</button><button class="btn b2" id="shareShare">📤 카톡으로 보내기</button></div><button class="btn b3" id="shareClose" onclick="window.closeShare()" style="width:100%;margin-top:10px;padding:16px;font-size:16px">✕ 닫기</button></div>
  <div id="dmgFlash"></div><div id="drunk"></div>
 </div>
 
@@ -5181,6 +5181,15 @@ function applyQualityLive() {
 }
 
 // ---------- 원클릭 초대: 링크 만들기 / 복사 / 공유 ----------
+
+window.closeShare = function() {
+  const el = document.getElementById('share');
+  if (el) {
+    el.classList.add('hidden');
+    el.style.display = 'none'; if (window.closeShare) {}
+  }
+};
+
 const SHARE = {
   async open() {
     if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 방을 연다
@@ -5196,7 +5205,13 @@ const SHARE = {
     $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : (G.isHost ? '이 링크를 카톡/문자로 보내면 친구가 누르자마자 들어와요' : '이 링크로 다른 사람도 이 방을 찾을 수 있어요');
     if (document.pointerLockElement) document.exitPointerLock();
   },
-  hide() { const el = $('#share'); if (el) el.classList.add('hidden'); },
+  hide() {
+    const el = $('#share');
+    if (!el) return;
+    el.classList.add('hidden');
+    el.style.display = 'none'; if (window.closeShare) {}
+    setTimeout(() => { el.style.display = ''; }, 50);
+  },
   async copy() {
     const link = inviteLink(G.room); let ok = false;
     try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { const i = $('#shareLink'); i.focus(); i.select(); try { ok = document.execCommand('copy'); } catch (e2) { } }
@@ -5226,11 +5241,15 @@ const SHARE = {
   init() {
     const closeBtn = $('#shareClose');
     if (closeBtn) {
-      const close = (e) => { e.preventDefault(); e.stopPropagation(); this.hide(); };
-      closeBtn.onclick = close;
-      closeBtn.ontouchend = close;
+      const close = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        this.hide();
+      };
+      closeBtn.addEventListener('click', close, true);
+      closeBtn.addEventListener('touchend', close, true);
+      closeBtn.addEventListener('pointerup', close, true);
       closeBtn.style.pointerEvents = 'auto';
-      closeBtn.style.zIndex = '30';
+      closeBtn.style.zIndex = '999';
     }
     $('#shareCopy').onclick = () => this.copy();
     $('#shareShare').onclick = () => this.share();
@@ -5449,9 +5468,9 @@ Object.assign(ADMIN, {
     let el = $('#admStatus'); if (!el) { el = document.createElement('div'); el.id = 'admStatus'; document.body.appendChild(el); }
     clearTimeout(this._stT); el.className = kind; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<div><b></b>' + (sub ? '<small></small>' : '') + '</div>';
     el.querySelector('b').textContent = text; if (sub) el.querySelector('small').textContent = sub; el.style.display = 'flex';
-    if (kind !== 'busy') this._stT = setTimeout(() => { el.style.display = 'none'; }, kind === 'ok' ? 4200 : 3500);
+    if (kind !== 'busy') this._stT = setTimeout(() => { el.style.display = 'none'; if (window.closeShare) {} }, kind === 'ok' ? 4200 : 3500);
   },
-  hideStatus() { const el = $('#admStatus'); if (el) el.style.display = 'none'; clearTimeout(this._stT); },
+  hideStatus() { const el = $('#admStatus'); if (el) el.style.display = 'none'; if (window.closeShare) {} clearTimeout(this._stT); },
   lobbyMsg(kind, text) { const el = $('#admMsg'); if (!el) return; el.className = kind || ''; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<span></span>'; el.querySelector('span:last-child').textContent = text || ''; },
   beginProgress() {
     this.pending = true; this.ready = false; clearTimeout(this._pT);
