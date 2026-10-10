@@ -161,7 +161,7 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #bigmap .x{position:absolute;right:16px;top:12px}
 /* mobile */
 #touch{position:fixed;inset:0;z-index:12;pointer-events:none}
-#joy{position:absolute;left:0;bottom:0;width:45%;height:60%;pointer-events:auto}
+#joy{position:absolute;left:0;bottom:0;width:38%;height:42%;pointer-events:auto}
 #joyBase{position:absolute;width:130px;height:130px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);transform:translate(-50%,-50%);display:none}
 #joyKnob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.35);transform:translate(-50%,-50%);display:none}
 #look{position:absolute;right:0;top:0;width:55%;height:100%;pointer-events:auto}
@@ -200,8 +200,8 @@ body.touch #prompt{bottom:auto;top:58%}
    <div class="field"><label>닉네임</label><input id="nameIn" class="inp" maxlength="12" placeholder="이름"></div>
    <div class="field"><label>그래픽 품질</label>
     <select id="qualIn" class="inp"><option value="3">최고 (울트라 · 그림자 4K · 블룸 · 잔디)</option><option value="2">높음</option><option value="1">보통</option><option value="0">낮음 (저사양 폰)</option></select></div>
-   <div style="margin-bottom:12px"><button class="btn big" id="hostBtn">친구와 같이하기<small>누르면 방이 생기고 초대 링크가 나와요 (카톡으로 보내기)</small></button></div>
-   <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">빠른 참가 (공개방)</button><button class="btn" id="soloBtn">혼자 플레이</button></div>
+   <div style="margin-bottom:12px"><button class="btn big" id="hostBtn">비공개 방 만들기<small>방 코드로만 입장 가능</small></button></div>
+   <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">공개서버 참가</button><button class="btn" id="soloBtn">혼자 플레이</button></div>
    <div class="row"><input id="codeIn" class="inp" maxlength="6" placeholder="방 코드 (5자리)" style="text-transform:uppercase"><button class="btn b3" id="joinBtn">코드로 참가</button></div>
    <div id="lobbyMsg" class="tip" style="color:#ffcf5a"></div>
    <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴(🚕 택시 · 🔗 초대) · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
@@ -4434,7 +4434,7 @@ function plotRequest(m) { if (G.isHost) hostPlotRequest(m, ME.id, ME.name); else
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 2;
 const ROOM_PREFIX = 'sbc3d-v1-';
-const PUBLIC_ROOMS = ['PUB01', 'PUB02', 'PUB03', 'PUB04', 'PUB05', 'PUB06', 'PUB07', 'PUB08'];
+const PUBLIC_ROOMS = ['PUB01','PUB02','PUB03','PUB04','PUB05','PUB06','PUB07','PUB08','PUB09','PUB10','PUB11','PUB12','PUB13','PUB14','PUB15','PUB16','PUB17','PUB18','PUB19','PUB20'];
 const NET_ERR = {
   'peer-unavailable': '방을 찾을 수 없어요 — 친구가 게임 화면을 켜 두었는지 확인해 주세요',
   'unavailable-id': '이미 사용 중인 방 코드예요', full: '방이 가득 찼어요 (최대 2명)', allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
@@ -4620,8 +4620,8 @@ const NET = {
   updateRoomInfo() {
     const el = $('#roomInfo'); if (!el || !G.started) return;
     if (!G.online) { el.textContent = '혼자 플레이'; return; }
-    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room);
-    el.innerHTML = `${pub ? '⚡ 공개방' : '🌐 방'} <b>${G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}${G.isHost && n < MAX_PLAYERS ? ' · <u>P ▶ 초대 링크</u>' : ''}`;
+    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room); const pubName = pub ? ('공개서버 ' + (PUBLIC_ROOMS.indexOf(G.room)+1)) : G.room;
+    el.innerHTML = `${pub ? '⚡ ' + pubName : '🔒 비공개 방'} <b>${pub ? '' : G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}`;
   },
   // ---- outgoing ticks ----
   tick(dt) {
@@ -5014,7 +5014,7 @@ const UI = {
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
-      { ic: '🔗', t: '친구 초대 링크', p: 0, d: G.online ? `방 ${G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 방을 만들고 링크 생성', fn: () => { setTimeout(() => SHARE.open(), 30); } },
+      { ic: '🔢', t: '방 코드 보기', p: G.room || '-', d: G.online ? `채팅에 방 코드가 표시됨` : '방을 먼저 만드세요', fn: () => { if (G.room) { UI.chatLine(null, `//: 방코드 ${G.room}`); toast('방 코드: ' + G.room); } } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
       { ic: '🐶', t: '반려동물 부르기', p: 0, dis: ME.petId === null, disMsg: '반려동물이 없다 (길강아지/고양이 입양)', fn: () => { const a = ANIMALS[ME.petId]; if (a && G.isHost) { a.x = ME.x + 1.5; a.z = ME.z + 1.5; } toast('🐶 이리 와!'); } },
@@ -5127,7 +5127,7 @@ const UI = {
     this.touchBtns = B;
     // joystick
     const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
-    joy.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY; base.style.display = knob.style.display = 'block'; base.style.left = knob.style.left = jx + 'px'; base.style.top = knob.style.top = jy + 'px'; }, { passive: false });
+    joy.addEventListener('touchstart', e => { if (UI.menuOpen || document.getElementById('menu') && !document.getElementById('menu').classList.contains('hidden')) return; e.preventDefault(); AU.init(); const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY; base.style.display = knob.style.display = 'block'; base.style.left = knob.style.left = jx + 'px'; base.style.top = knob.style.top = jy + 'px'; }, { passive: false });
     joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx + dx) + 'px'; knob.style.top = (jy + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
     const jend = e => { for (const t of e.changedTouches) if (t.identifier === jid) { jid = null; INP.mx = INP.mz = 0; INP.joyMag = 0; base.style.display = knob.style.display = 'none'; } };
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
@@ -5809,7 +5809,7 @@ function initLobby() {
   $('#codeIn').onkeydown = e => { if (e.key === 'Enter') $('#joinBtn').click(); };
   // 초대 링크(?room=CODE)로 들어오면: 큰 "바로 참가" 버튼 + 5초 뒤 자동 참가
   if (rc) {
-    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = code;
+    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); // $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = code;
     let left = 5; const cnt = $('#invCount');
     const stop = () => { clearInterval(LOBBY.cd); LOBBY.cd = 0; cnt.textContent = '닉네임/외형을 바꾼 뒤 버튼을 눌러 참가하세요'; };
     const tickCd = () => { if (left <= 0) { stop(); startGame('join', code); return; } cnt.innerHTML = `${left}초 뒤 자동으로 참가해요 · <a id="invCancel">잠깐, 외형부터 꾸밀래요</a>`; $('#invCancel').onclick = stop; left--; };
@@ -5831,6 +5831,10 @@ async function startGame(mode, code) {
     if (mode === 'host') {
       for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
       G.online = true; G.isHost = true;
+      setTimeout(() => {
+        if (UI && UI.chatLine) UI.chatLine(null, `//: 방코드 ${G.room}`);
+        toast(`방 코드: ${G.room} (채팅에 표시됨)`);
+      }, 800);
     }
     if (mode === 'join') {
       let err = null;
@@ -5876,7 +5880,7 @@ async function loadWorld() {
   _later.forEach(m => toast(m, 5000)); _later = [];
   if (G.online && G.isHost) {
     UI.chatLine(null, `방 ${G.room} — 초대 링크를 친구에게 보내면 누르자마자 들어옵니다 (P ▶ 친구 초대 링크)`);
-    if (!G.players.size && !PUBLIC_ROOMS.includes(G.room)) setTimeout(() => { if (!G.players.size) SHARE.show(); }, 600);
+    // invite panel disabled on start
     if (PUBLIC_ROOMS.includes(G.room)) toast(`⚡ 공개방 ${G.room}을 열었다 — 다른 사람이 빠른 참가를 누르면 들어온다`, 5000);
   }
   if (IS_TOUCH) toast('🕹️ 왼쪽 조이스틱 이동 · 오른쪽 드래그로 시점', 4000); else toast('🖱️ 화면 클릭 → 마우스 시점 · WASD 이동 · F1 조작법', 5000);
@@ -5938,7 +5942,7 @@ if (URLP.get("debug")) window.__SBC = { FX, TAXI, ROUTE, DISTRICTS, districtAt, 
 
 </script>
 
-<div id="share" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;z-index:999999;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+<div id="share" style="display:none !important;position:fixed;left:0;top:0;right:0;bottom:0;z-index:999999;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
   <div style="background:#0e101a;border-radius:18px;padding:20px;width:min(420px,90vw);text-align:center;box-shadow:0 10px 40px #000">
     <h3 style="margin:0 0 6px;font-family:'Black Han Sans'">👫 친구 초대</h3>
     <div class="code" id="shareCode" style="font-size:28px;font-weight:900;letter-spacing:4px;color:#ffcc33;margin:8px 0"></div>
