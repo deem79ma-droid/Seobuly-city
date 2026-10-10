@@ -1,0 +1,5 @@
+dist/
+game.mjs
+test/
+__pycache__/
+*.png
