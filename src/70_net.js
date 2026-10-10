@@ -66,6 +66,8 @@ const NET = {
     });
   },
   accept(conn) {
+    // 로비의 공개방 목록이 인원만 물어보는 연결(probe): 플레이어로 받지 않고 인원만 알려준 뒤 닫는다
+    if (conn.metadata && conn.metadata.probe) { conn.on('open', () => { try { conn.send({ t: 'cnt', n: this.conns.length + 1, max: MAX_PLAYERS }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 1500); }); return; }
     conn.on('open', () => {
       if (this.conns.length >= MAX_PLAYERS - 1) { try { conn.send({ t: 'full' }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 600); return; }
       this.recovering = false; if (!G.isHost) this.becomeAuthority();
@@ -104,9 +106,43 @@ const NET = {
     });
   },
   host(room) { return this.listen(room); },
+  // ---- 공개방 하나에 들어가기: 방장이 있으면 참가, 없으면 내가 그 방의 방장이 된다 (동시에 만들면 늦은 쪽이 참가) ----
+  async joinOrHost(r) {
+    try { await this.join(r, 9000); return { mode: 'join', room: r }; }
+    catch (e) { if (e.code !== 'peer-unavailable' && e.code !== 'timeout') throw e; } // 시간 초과도 '방장 없음'일 수 있다 → 방을 열어 본다 (이미 있으면 unavailable-id)
+    try { await this.listen(r); return { mode: 'host', room: r }; }
+    catch (e) { if (e.code !== 'unavailable-id') throw e; await sleep(900); await this.join(r, 12000); return { mode: 'join', room: r }; }
+  },
+  // ---- 로비: 공개방 인원 조회 (서버가 없으므로 각 방의 방장 Peer에 잠깐 연결해서 인원을 묻는다) ----
+  ppeer: null,
+  probeRooms(codes, onCount, ms = 8000) {
+    if (!window.Peer || URLP.get('local')) { for (const c of codes) onCount(c, 0); return Promise.resolve(); }
+    const ready = (this.ppeer && !this.ppeer.destroyed && this.ppeer.open) ? Promise.resolve(this.ppeer) : new Promise((res, rej) => {
+      try { this.ppeer && this.ppeer.destroy(); } catch (e) { }
+      const pp = this.ppeer = new Peer(peerOpts()); const to = setTimeout(() => rej(netErr('timeout')), 15000);
+      pp.on('open', () => { clearTimeout(to); res(pp); }); pp.on('error', e => { if (!pp.open) { clearTimeout(to); rej(netErr(e.type)); } });
+    });
+    return ready.then(pp => new Promise(res => {
+      const done = new Set(); let left = codes.length;
+      const fin = (code, n) => { if (done.has(code)) return; done.add(code); onCount(code, n); if (--left <= 0) { pp.off('error', onErr); res(); } };
+      const onErr = e => { if (e.type !== 'peer-unavailable') return; const id = (/(\S+)\s*$/.exec(e.message || '') || [])[1] || ''; if (id.startsWith(ROOM_PREFIX)) { const code = id.slice(ROOM_PREFIX.length); if (codes.includes(code)) fin(code, 0); } };
+      pp.on('error', onErr);
+      for (const code of codes) {
+        let c; try { c = pp.connect(ROOM_PREFIX + code, { metadata: { probe: 1 }, serialization: 'json', reliable: true }); } catch (e) { fin(code, null); continue; }
+        if (!c) { fin(code, null); continue; }
+        c.on('data', m => { if (!m) return; if (m.t === 'cnt') fin(code, +m.n || 0); else if (m.t === 'full') fin(code, MAX_PLAYERS); else if (m.t === 'acc') fin(code, 1); try { c.close(); } catch (e) { } });
+        c.on('error', () => { });
+      }
+      setTimeout(() => { for (const code of codes) fin(code, null); }, ms);
+    })).catch(() => { for (const c of codes) onCount(c, null); });
+  },
+  stopProbe() { try { this.ppeer && this.ppeer.destroy(); } catch (e) { } this.ppeer = null; },
   // ---- 빠른 참가: 공개방을 차례로 확인 → 사람이 기다리는 방이 있으면 참가, 없으면 내가 공개방을 연다 ----
   async quickMatch(say) {
-    for (const r of PUBLIC_ROOMS) {
+    // 로비 목록에서 알아낸 인원으로 순서 정하기: 한 명이 기다리는 방 → 빈 방 → 확인 실패 → 가득 찬 방
+    const C = (typeof PUBLIST !== 'undefined' && PUBLIST.counts) || {}; const sc = r => { const n = C[r]; return n === undefined ? 1 : n === null ? 0.5 : n >= MAX_PLAYERS ? -1 : n > 0 ? 2 : 1; };
+    const order = PUBLIC_ROOMS.slice().sort((a, b) => sc(b) - sc(a));
+    for (const r of order) {
       say && say(`⚡ 공개방 ${r} 확인 중…`);
       try { await this.join(r, 6000); return { mode: 'join', room: r }; }
       catch (e) { if (e.code === 'full' || e.code === 'timeout' || e.code === 'webrtc') continue; if (e.code !== 'peer-unavailable') throw e; }
@@ -127,7 +163,7 @@ const NET = {
     const wasHostConn = conn === this.hostConn; if (wasHostConn) this.hostConn = null;
     const names = [...G.players.values()].map(rp => rp.name); const nm = names[0] || '상대';
     for (const id of [...G.players.keys()]) { removeRemote(id); TAXI.removeOwnedBy(id); }
-    if (G.adminId && G.adminId !== ME.id) G.adminId = null;
+    if (G.adminId && (G.adminId !== ME.id || !ADMIN.on)) G.adminId = null; // 나간 사람의 관리자 표시/권한은 남기지 않는다
     if (this.kicked) return;
     UI.chatLine(null, `${nm}님과 연결이 끊겼습니다`);
     if (!G.isHost) { this.becomeAuthority(); toast('⚠ 방장과 연결이 끊겼다 — 재접속 시도 중…', 4000); }
@@ -165,7 +201,7 @@ const NET = {
   },
   // 다른 사람이 방장이 된다 (나는 게스트)
   becomeGuest() {
-    G.isHost = false;
+    G.isHost = false; if (G.adminId === ME.id) G.adminId = null; // 게스트가 되면 내 관리자 방장 표시는 내려놓고, 방장에게 다시 서명 인증 (hello adm)
     for (const v of vehicles.values()) { if (v.driver === ME.id || (v.taxiCab && v.taxiOwner === ME.id)) continue; v.ctrl = 'remote'; v.netT = 0; v.tx = v.x; v.ty = v.y; v.tz = v.z; v.tyaw = v.yaw; }
     for (const p of PEDS) { p.tx = p.x; p.ty = p.y; p.tz = p.z; p.tyaw = p.yaw; }
     for (const a of ANIMALS) { a.tx2 = a.x; a.ty2 = a.y; a.tz2 = a.z; a.tyaw = a.yaw; }
@@ -173,6 +209,7 @@ const NET = {
   },
   // 방장(나) → 서명 검증된 관리자에게 방장 권한을 넘긴다 (승인 절차 없음)
   transferHostTo(conn) {
+    if (!conn || !conn.admin || !conn.pid || conn.pid === ME.id) return; // 서명 검증을 통과한 연결에만
     const aid = conn.pid; G.adminId = aid;
     try { conn.send({ t: 'hostTo', f: ME.id, plots: PLOTS.map(plotState), time: G.time, wt: G.weather }); } catch (e) { }
     savePlots(); this.becomeGuest(); this.hostConn = conn; G.hostId = aid;
@@ -188,7 +225,7 @@ const NET = {
   updateRoomInfo() {
     const el = $('#roomInfo'); if (!el || !G.started) return;
     if (!G.online) { el.textContent = '혼자 플레이'; return; }
-    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room); const pubName = pub ? ('공개서버 ' + (PUBLIC_ROOMS.indexOf(G.room)+1)) : G.room;
+    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room); const pubName = pub ? ('공개방 ' + (PUBLIC_ROOMS.indexOf(G.room)+1)) : G.room;
     el.innerHTML = `${pub ? '⚡ ' + pubName : '🔒 비공개 방'} <b>${pub ? '' : G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}`;
   },
   // ---- outgoing ticks ----
@@ -237,14 +274,14 @@ const NET = {
         const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp._nk = null; refreshRemoteName(rp);
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
-        else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
-        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); this.updateRoomInfo(); break;
+        else if (ADMIN.on && ADMIN.sk && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
+        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); SHARE.hide(); this.updateRoomInfo(); break;
       }
       case 'admClaim': if (G.isHost && conn && conn.pid) ADMIN.challenge(conn, false); break;
       case 'admChal': ADMIN.prove(m, conn); break;
       case 'admProof': ADMIN.onProof(m, conn); break;
       case 'hostTo': {
-        if (G.isHost || !conn || conn !== this.hostConn || !ADMIN.on) break;
+        if (G.isHost || !conn || conn !== this.hostConn || !ADMIN.on || !ADMIN.sk) break;
         conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id; ADMIN.onHostGranted();
         for (const s of m.plots || []) applyPlotState(s); if (m.time !== undefined) G.time = m.time; if (m.wt) G.weather = m.wt;
         this.send({ t: 'admin', aid: ME.id }); announce('👑 방장 권한 획득', '관리자 인증 완료 — 이제 이 방의 방장입니다'); UI.chatLine(null, '👑 관리자 인증 완료: 방장 권한을 넘겨받았습니다');
@@ -327,8 +364,8 @@ const NET = {
       case 'plots': for (const s of m.ps) applyPlotState(s); break;
       case 'ann': announce(m.a, m.b); break;
       case 'horn': { const rp = G.players.get(f); if (rp) sfx('horn', rp.x, rp.z); break; }
-      case 'admin': ADMIN.onAdminMsg(m); break;
-      case 'free': if (m.to === ME.id) LAW.release('🔓 관리자님이 무료로 석방해 주셨다'); break;
+      case 'admin': ADMIN.onAdminMsg(m, conn); break;
+      case 'free': if (m.to === ME.id && f && isAdminId(f)) LAW.release('🔓 관리자님이 무료로 석방해 주셨다'); break; // 인증된 관리자가 보낸 것만
       case 'adm': ADMIN.onNet(Object.assign({}, m, { f }), conn); break;
       case 'kicked': if (!G.isHost && !ADMIN.on && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce(m.ban ? '⛔ 밴당했다' : '👢 추방당했다', '로비로 돌아갑니다'); setTimeout(() => location.replace(cleanUrl()), 1800); } break;
       case 'panic': if (G.isHost) panicAround(m.x, m.z, 35); break;
