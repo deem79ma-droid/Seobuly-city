@@ -66,8 +66,10 @@ function initInput() {
   addEventListener('mousemove', e => { if (!pointerLocked || UI.menuOpen) return; const s = (INP.aim ? 0.0011 : 0.0022) * (G.sens || 1); CAM.yaw -= e.movementX * s; CAM.pitch = clamp(CAM.pitch + e.movementY * s, -1.25, 1.3); CAM.lookT = G.t; });
   addEventListener('wheel', e => { if (!G.started) return; if (ME.vehicle) return; cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 }
+function winOpen() { const sh = document.getElementById('share'); return !!(UI.menuOpen || UI.mapOpen || (sh && !sh.classList.contains('hidden') && sh.style.display !== 'none' && sh.offsetParent)); }
 function readMoveInput() {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return { x: 0, z: 0 };
+  if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; if (UI.joyReset) UI.joyReset(); return { x: 0, z: 0 }; }
   let x = 0, z = 0;
   if (KEYS['w'] || KEYS['arrowup']) z += 1; if (KEYS['s'] || KEYS['arrowdown']) z -= 1; if (KEYS['a'] || KEYS['arrowleft']) x -= 1; if (KEYS['d'] || KEYS['arrowright']) x += 1;
   if (INP.joyMag > 0.05) { x = INP.mx; z = INP.mz; }
@@ -343,7 +345,7 @@ function updatePlayer(dt) {
   const water = terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1);
   ME.swim = water;
   let sprint = (KEYS['shift'] || KEYS['ShiftLeft'] || INP.touchRun || (G.opt.autoRun && mag > 0.1) || (IS_TOUCH && INP.joyMag > 0.92)) && ME.stamina > 1 && !ME.aiming;
-  let speed = ME.swim ? (sprint ? 3.2 : 2.2) : ME.aiming ? 2.6 : sprint ? 7.4 + ME.skills.fit * 0.3 : (IS_TOUCH && mag < 0.5 ? 2.0 : 4.4);
+  let speed = ME.swim ? (sprint ? 3.6 : 2.4) : ME.aiming ? 2.8 : sprint ? 9.2 + ME.skills.fit * 0.35 : (IS_TOUCH && mag < 0.5 ? 2.2 : 4.8);
   speed *= ME.speedMul || 1;
   if (ME.drunk > 0.4) { dx += Math.sin(G.t * 1.3) * 0.4 * ME.drunk; dz += Math.cos(G.t * 1.1) * 0.4 * ME.drunk; }
   ME.stamina = clamp(ME.stamina + (sprint && mag > 0.1 ? -dt * (14 - ME.skills.fit * 1.5) : dt * 9), 0, 100);

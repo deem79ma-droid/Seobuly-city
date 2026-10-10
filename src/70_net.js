@@ -2,17 +2,21 @@
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 2;
 const ROOM_PREFIX = 'sbc3d-v1-';
-const PUBLIC_ROOMS = ['PUB01', 'PUB02', 'PUB03', 'PUB04', 'PUB05', 'PUB06', 'PUB07', 'PUB08'];
+const PUBLIC_ROOMS = ['PUB01','PUB02','PUB03','PUB04','PUB05','PUB06','PUB07','PUB08','PUB09','PUB10','PUB11','PUB12','PUB13','PUB14','PUB15','PUB16','PUB17','PUB18','PUB19','PUB20'];
 const NET_ERR = {
   'peer-unavailable': '방을 찾을 수 없어요 — 친구가 게임 화면을 켜 두었는지 확인해 주세요',
   'unavailable-id': '이미 사용 중인 방 코드예요', full: '방이 가득 찼어요 (최대 2명)', allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
   network: '매칭 서버에 연결할 수 없어요 (인터넷 연결 확인)', 'server-error': '매칭 서버 오류 — 잠시 후 다시 시도해 주세요', 'socket-error': '매칭 서버 연결 오류 — 다시 시도해 주세요', 'socket-closed': '매칭 서버 연결이 끊겼어요',
-  'browser-incompatible': '이 브라우저는 P2P(WebRTC)를 지원하지 않아요 — 크롬/사파리 최신 버전을 써 주세요', webrtc: 'P2P 연결 실패 (방화벽/공유기 문제) — 와이파이↔LTE를 바꿔서 다시 시도해 보세요',
+  'browser-incompatible': '이 브라우저는 P2P(WebRTC)를 지원하지 않아요 — 크롬/사파리 최신 버전을 써 주세요', webrtc: 'P2P 연결 실패 (방화벽/공유기 문제) — 같은 와이파이에 연결하거나 LTE로 바꿔서 다시 시도해 보세요',
   timeout: '연결 시간 초과 — 네트워크를 확인하고 다시 시도해 주세요', nopeer: 'PeerJS를 불러오지 못했어요 (네트워크 확인 후 새로고침)',
 };
 function netErr(code) { const e = new Error(NET_ERR[code] || ('네트워크 오류: ' + code)); e.code = code; return e; }
 function peerOpts() {
-  const o = { debug: 0, config: { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }] } };
+  const o = { debug: 0, config: { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.services.mozilla.com:3478' }
+] } };
   const h = URLP.get('peerhost'); // 테스트/자체 서버용 (기본은 PeerJS 공개 클라우드 서버, https)
   if (h) { o.host = h; o.port = +(URLP.get('peerport') || 443); o.path = URLP.get('peerpath') || '/'; o.secure = URLP.has('peersecure') ? URLP.get('peersecure') === '1' : o.port === 443; }
   return o;
@@ -54,7 +58,7 @@ const NET = {
     return new Promise((res, rej) => {
       const peer = this.peer = new Peer(ROOM_PREFIX + room, peerOpts()); this.peerRoom = room; let done = false;
       const fail = code => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch (e) { } if (this.peer === peer) this.peer = null; rej(netErr(code)); };
-      const to = setTimeout(() => fail('timeout'), 15000);
+      const to = setTimeout(() => fail('timeout'), 22000);
       peer.on('open', () => { if (done) return; done = true; clearTimeout(to); res(true); });
       peer.on('error', e => { if (!done) fail(e.type); else console.warn('peer error', e.type); });
       peer.on('connection', conn => this.accept(conn));
@@ -73,14 +77,14 @@ const NET = {
     });
   },
   // ---- 다른 사람 방에 참가 ----
-  join(room) {
+  join(room, ms) {
     if (URLP.get('local')) return this.localTransport(room, false).then(() => true);
     if (!window.Peer) return Promise.reject(netErr('nopeer'));
     try { this.gpeer && this.gpeer.destroy(); } catch (e) { }
     return new Promise((res, rej) => {
       const peer = this.gpeer = new Peer(peerOpts()); let done = false;
       const fail = code => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch (e) { } if (this.gpeer === peer) this.gpeer = null; rej(netErr(code)); };
-      const to = setTimeout(() => fail('timeout'), 15000);
+      const to = setTimeout(() => fail('timeout'), ms || 15000);
       peer.on('open', () => {
         const conn = peer.connect(ROOM_PREFIX + room, { reliable: true, serialization: 'json' });
         conn.on('data', m => {
@@ -104,7 +108,7 @@ const NET = {
   async quickMatch(say) {
     for (const r of PUBLIC_ROOMS) {
       say && say(`⚡ 공개방 ${r} 확인 중…`);
-      try { await this.join(r); return { mode: 'join', room: r }; }
+      try { await this.join(r, 6000); return { mode: 'join', room: r }; }
       catch (e) { if (e.code === 'full' || e.code === 'timeout' || e.code === 'webrtc') continue; if (e.code !== 'peer-unavailable') throw e; }
       try { await this.listen(r); return { mode: 'host', room: r }; }
       catch (e) { if (e.code === 'unavailable-id') { try { await this.join(r); return { mode: 'join', room: r }; } catch (e2) { continue; } } throw e; }
@@ -184,8 +188,8 @@ const NET = {
   updateRoomInfo() {
     const el = $('#roomInfo'); if (!el || !G.started) return;
     if (!G.online) { el.textContent = '혼자 플레이'; return; }
-    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room);
-    el.innerHTML = `${pub ? '⚡ 공개방' : '🌐 방'} <b>${G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}${G.isHost && n < MAX_PLAYERS ? ' · <u>P ▶ 초대 링크</u>' : ''}`;
+    const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room); const pubName = pub ? ('공개서버 ' + (PUBLIC_ROOMS.indexOf(G.room)+1)) : G.room;
+    el.innerHTML = `${pub ? '⚡ ' + pubName : '🔒 비공개 방'} <b>${pub ? '' : G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}`;
   },
   // ---- outgoing ticks ----
   tick(dt) {
@@ -233,7 +237,7 @@ const NET = {
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
         else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
-        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); SHARE.hide(); this.updateRoomInfo(); break;
+        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); this.updateRoomInfo(); break;
       }
       case 'admClaim': if (G.isHost && conn && conn.pid) ADMIN.challenge(conn, false); break;
       case 'admChal': ADMIN.prove(m, conn); break;
@@ -256,7 +260,7 @@ const NET = {
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
         for (const p of m.picks) if (!PICKUPS.has(p[0])) spawnPickup(p[1], p[2], p[3], p[0]);
         for (const s of m.seats) { const v = vehicles.get(s[0]); if (v) { v.driver = s[1]; v.passenger = s[2]; } }
-        toast(`✅ ${m.n}의 서부리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
+        toast(`✅ ${m.n}의 서불리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
       }
       case 'reid': { if (G.isHost) break; const nid = newTabId(); toast('🔁 같은 기기의 다른 탭과 겹쳐서 새 플레이어 ID로 접속'); ME.id = nid; G.myId = nid; this.hello(); break; }
       case 'bye': removeRemote(m.f); break;

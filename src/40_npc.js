@@ -1,8 +1,9 @@
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 46; const PICKUPS = new Map(); let pickupSeq = 1;
-const PED_LINES = {
-  civ: ['안녕하세요!', '오늘 날씨 좋네요', '서벌리 집값 미쳤어…', '캥지베 쪽은 가지 마세요', '이벤트광장 클럽 가봤어요?', '시모느 아일랜드 놀러가고 싶다', '배고프다…', '디산베이 공기 좋아요', '말 타봤어요? 디산베이 목장에 있어요'],
+const PED_LINES = { // 자아 있는 대사
+
+  civ: ['안녕하세요!', '오늘 날씨 좋네요', '서불리 집값 미쳤어…', '캥지베 쪽은 가지 마세요', '이벤트광장 클럽 가봤어요?', '시모느 아일랜드 놀러가고 싶다', '배고프다…', '디산베이 공기 좋아요', '말 타봤어요? 디산베이 목장에 있어요'],
   police: ['안전 운전하세요', '수상한 사람 보면 신고하세요', '캥지베 갱단 때문에 바빠요'],
   gangA: ['여기 레드 크루 구역이다', '뭘 봐?', '블루 놈들 보이면 말해'], gangB: ['블루 독스 구역이야', '꺼져라', '레드 놈들 어디 있냐'],
   medic: ['다치면 병원으로 오세요', '건강이 최고예요'], worker: ['공사중입니다!', '안전모 필수!'],
@@ -28,7 +29,7 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0;
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']);
 }
 function pedEnsureChar(p) {
   if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
@@ -253,7 +254,7 @@ function raidUpdate(dt) {
     return;
   }
   G.raidT -= dt; if (G.raidT > 0) return;
-  const spots = [{ x: 0, z: 40, name: '이벤트광장' }, { x: 580, z: -60, name: '서벌리 중심가' }, { x: 900, z: 200, name: '서벌리 남부' }];
+  const spots = [{ x: 0, z: 40, name: '이벤트광장' }, { x: 580, z: -60, name: '서불리 중심가' }, { x: 900, z: 200, name: '서불리 남부' }];
   const pl = playersList(); const sp = pl.length ? spots.slice().sort((a, b) => Math.hypot(a.x - pl[0].x, a.z - pl[0].z) - Math.hypot(b.x - pl[0].x, b.z - pl[0].z))[0] : spots[0];
   G.raid = { t: 150, x: sp.x, z: sp.z, name: sp.name };
   const fac = Math.random() < 0.5 ? 'gangA' : 'gangB';

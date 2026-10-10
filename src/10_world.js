@@ -6,7 +6,7 @@ HM.W = (HM.x1 - HM.x0) / HM.res + 1; HM.H = (HM.z1 - HM.z0) / HM.res + 1;
 let hmData, roadDistF, grassMask;
 const REGIONS = {
   plaza: { name: '이벤트광장', desc: '클럽과 카지노가 있는 중앙 공원', color: '#ff5fd8', cx: 0, cz: 0 },
-  seoburi: { name: '서벌리', desc: '메인 도시 · 마천루 중심가', color: '#4fc3ff', cx: 760, cz: 0 },
+  seoburi: { name: '서불리', desc: '메인 도시 · 마천루 중심가', color: '#4fc3ff', cx: 760, cz: 0 },
   jiolle: { name: '지올르', desc: '평화로운 공장 도시', color: '#7dff8a', cx: -240, cz: -620 },
   kaengjibe: { name: '캥지베', desc: '갱단이 지배하는 동네 · 위험', color: '#ff5a4f', cx: -240, cz: 610 },
   disanbay: { name: '디산베이', desc: '자연친화적인 시골 마을', color: '#ffd54f', cx: -1100, cz: 0 },
@@ -24,11 +24,11 @@ function regionAt(x, z) {
 // ---- 16개 구역 (지역을 잘게 나눈 행정구역) ----
 const DISTRICTS = [
   { id: 1, name: '이벤트광장', region: 'plaza', cx: 0, cz: 0 },
-  { id: 2, name: '서벌리 북부 주거지', region: 'seoburi', cx: 480, cz: -440 },
-  { id: 3, name: '서벌리 금융가', region: 'seoburi', cx: 1000, cz: -440 },
-  { id: 4, name: '서벌리 다운타운', region: 'seoburi', cx: 760, cz: 0 },
-  { id: 5, name: '서벌리 남부 상가', region: 'seoburi', cx: 480, cz: 440 },
-  { id: 6, name: '서벌리 항구', region: 'seoburi', cx: 1120, cz: 440 },
+  { id: 2, name: '서불리 북부 주거지', region: 'seoburi', cx: 480, cz: -440 },
+  { id: 3, name: '서불리 금융가', region: 'seoburi', cx: 1000, cz: -440 },
+  { id: 4, name: '서불리 다운타운', region: 'seoburi', cx: 760, cz: 0 },
+  { id: 5, name: '서불리 남부 상가', region: 'seoburi', cx: 480, cz: 440 },
+  { id: 6, name: '서불리 항구', region: 'seoburi', cx: 1120, cz: 440 },
   { id: 7, name: '지올르 서부 공단', region: 'jiolle', cx: -520, cz: -800 },
   { id: 8, name: '지올르 물류단지', region: 'jiolle', cx: -40, cz: -800 },
   { id: 9, name: '지올르 주택가', region: 'jiolle', cx: -360, cz: -360 },
@@ -115,7 +115,7 @@ function landF(x, z) {
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
   let h = wW * (fbm(x * 0.0032, z * 0.0032, 5) * 0.5 + 0.55) * 48;
-  h += wW * 210 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 230 * 230)); // 디산베이 북쪽 큰 산 (서부리산)
+  h += wW * 210 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 230 * 230)); // 디산베이 북쪽 큰 산 (서불리산)
   h += wW * 70 * Math.exp(-((x + 1350) ** 2 + (z - 820) ** 2) / (2 * 170 * 170));
   // 시모느 아일랜드: 동쪽 언덕 + 북쪽 작은 봉우리
   h += 46 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 110 * 110));
@@ -477,7 +477,7 @@ const SIDE_YAW = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
 const SIDE_VEC = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
 // ---- 들어갈 수 있는 건물 목록 (모든 건물에 문 + 실내) ----
 const BLD_KIND = {
-  office: '오피스 빌딩', bank: '서부리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
+  office: '오피스 빌딩', bank: '서불리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
   factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
   food: '음식점', pcbang: 'PC방', gym: '헬스장', pool: '실내 수영장', gun: '총포사', clothes: '옷가게', casino: '카지노', guard: '교도관실', home: '내 집',
 };
@@ -657,7 +657,7 @@ function addGraffiti(cx, cz, w, d, side) {
   const t = canvasTex(256, 128, (x) => {
     x.clearRect(0, 0, 256, 128); const cols = ['#ff3d6a', '#3dff9a', '#3db8ff', '#ffd23d', '#c43dff'];
     x.font = `900 ${50 + wrng() * 20}px "Black Han Sans",sans-serif`; x.lineWidth = 8; x.strokeStyle = '#111'; x.fillStyle = wpick(cols);
-    const w2 = wpick(['캥지베', 'KJB', 'RED', 'BLUE', '서벌리X', 'GANG', '🔥']); x.save(); x.translate(128, 70); x.rotate(wr(-0.15, 0.15)); x.textAlign = 'center'; x.strokeText(w2, 0, 0); x.fillText(w2, 0, 0); x.restore();
+    const w2 = wpick(['캥지베', 'KJB', 'RED', 'BLUE', '서불리X', 'GANG', '🔥']); x.save(); x.translate(128, 70); x.rotate(wr(-0.15, 0.15)); x.textAlign = 'center'; x.strokeText(w2, 0, 0); x.fillText(w2, 0, 0); x.restore();
   }, { repeat: false });
   const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), new THREE.MeshStandardMaterial({ map: t, transparent: true, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }));
   const [sx, sz] = SIDE_VEC[side]; m.position.set(cx + sx * (w / 2 + 0.03), LAND + 2.4, cz + sz * (d / 2 + 0.03)); m.rotation.y = SIDE_YAW[side]; scene.add(m);
@@ -1098,7 +1098,7 @@ function buildTerrainMesh() {
     if (slope > 0.55 || h > 70) { const t = Math.max(smooth(0.55, 1.0, slope), smooth(70, 100, h)); r = lerp(r, 0.46 + n * 0.05, t); g = lerp(g, 0.44 + n * 0.05, t); b = lerp(b, 0.42, t); }
     if (h > 118) { const t = smooth(118, 135, h + n * 10); r = lerp(r, 0.95, t); g = lerp(g, 0.96, t); b = lerp(b, 0.98, t); }
     const land = landF(x, z);
-    // 모래사장: 섬 전체 해안, 서벌리 동쪽 항구 해변, 남북 해안
+    // 모래사장: 섬 전체 해안, 서불리 동쪽 항구 해변, 남북 해안
     if (rd > 6 && h < LAND + 3 && !(R === 'disanbay')) { const cd = coastDist(x, z) + n * 12; const wide = R === 'simone' ? 70 : R === 'seoburi' ? 45 : 30; if (cd < wide) { const t = smooth(wide, wide * 0.5, cd) * smooth(LAND + 3, LAND + 1, h); r = lerp(r, 0.86, t); g = lerp(g, 0.79, t); b = lerp(b, 0.6, t); } }
     if (h < LAND - 0.15 || land < 0.985) { const t = smooth(LAND - 0.1, LAND - 0.9, h); r = lerp(r, 0.86, Math.max(t, land < 0.985 ? 0.9 : 0)); g = lerp(g, 0.78, Math.max(t, land < 0.985 ? 0.9 : 0)); b = lerp(b, 0.58, Math.max(t, land < 0.985 ? 0.9 : 0)); }
     if (h < -0.5) { const t = smooth(-0.5, -8, h); r = lerp(r, 0.45, t); g = lerp(g, 0.5, t); b = lerp(b, 0.42, t); }
