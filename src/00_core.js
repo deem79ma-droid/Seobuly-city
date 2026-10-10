@@ -91,7 +91,7 @@ const AU = {
 };
 function sfx(type, x, z, vol = 1) {
   const c = AU.ctx; if (!c) return; const t = c.currentTime;
-  const ranges = { pistol: 220, smg: 220, shotgun: 260, rifle: 320, sniper: 400, explode: 600, punch: 30, hit: 40, axe: 40, chop: 60, coin: 1, ui: 1, horn: 120, step: 12, splash: 40, bark: 60, moo: 80, roar: 140, tree: 90, build: 70, siren: 200, cash: 1, levelup: 1, error: 1, door: 20, neigh: 80 };
+  const ranges = { pistol: 220, smg: 220, shotgun: 260, rifle: 320, sniper: 400, explode: 600, punch: 30, punchH: 36, whoosh: 18, hit: 40, axe: 40, chop: 60, coin: 1, ui: 1, horn: 120, step: 12, splash: 40, bark: 60, moo: 80, roar: 140, tree: 90, build: 70, siren: 200, cash: 1, levelup: 1, error: 1, door: 20, neigh: 80 };
   const s = AU.spatial(x, z, ranges[type] || 80); const v = s.v * vol; if (v < 0.01) return; const p = s.p;
   switch (type) {
     case 'pistol': AU.noiseHit(t, 0.18, 2600, 0.7, 0.9 * v, p); AU.tone(t, 0.12, 160, 50, 0.6 * v, p); break;
@@ -101,6 +101,8 @@ function sfx(type, x, z, vol = 1) {
     case 'sniper': AU.noiseHit(t, 0.5, 1800, 0.6, 1.3 * v, p); AU.tone(t, 0.3, 120, 30, 1 * v, p); AU.noiseHit(t + 0.08, 1.2, 400, 0.3, 0.35 * v, p); break;
     case 'explode': AU.noiseHit(t, 1.6, 500, 0.4, 1.6 * v, p); AU.tone(t, 0.9, 70, 25, 1.4 * v, p); break;
     case 'punch': AU.tone(t, 0.09, 120, 50, 0.9 * v, p); AU.noiseHit(t, 0.06, 900, 1, 0.5 * v, p); break;
+    case 'punchH': AU.tone(t, 0.16, 95, 38, 1.2 * v, p); AU.noiseHit(t, 0.1, 700, 1, 0.8 * v, p); AU.noiseHit(t + 0.01, 0.05, 2400, 1, 0.35 * v, p); break; // 묵직한 타격음
+    case 'whoosh': AU.noiseHit(t, 0.13, 1500, 1.4, 0.32 * v, p, 'bandpass'); break; // 주먹 휘두르는 바람 소리
     case 'hit': AU.noiseHit(t, 0.08, 1400, 1, 0.5 * v, p); break;
     case 'axe': AU.noiseHit(t, 0.12, 900, 2, 0.6 * v, p, 'bandpass'); break;
     case 'chop': AU.noiseHit(t, 0.15, 700, 3, 1.0 * v, p, 'bandpass'); AU.tone(t, 0.07, 300, 150, 0.4 * v, p, 'triangle'); break;

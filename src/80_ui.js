@@ -15,6 +15,7 @@ const UI = {
   },
   // ---------- HUD ----------
   updateHud() {
+    { const adm = ADMIN.on && ADMIN.ready; const k = ME.name + '|' + adm; const el = $('#myName'); if (el && el._k !== k) { el._k = k; el.innerHTML = '🙂 <span></span>' + (adm ? '<span class="admBadge">👑 관리자</span>' : ''); el.querySelector('span').textContent = ME.name; } }
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
@@ -41,7 +42,7 @@ const UI = {
   sendChat() {
     const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); if (!m) return;
     if (m.startsWith('/')) { this.command(m); return; }
-    this.chatLine(ME.name, m); ME.char.say(m); NET.send({ t: 'chat', m });
+    this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
   command(m) {
     const [c, a] = m.slice(1).split(/\s+/);
@@ -197,7 +198,7 @@ const UI = {
     this.openMenu(`🐾 ${S.name}`, a.owner ? (a.owner === ME.id ? '내 반려동물' : '누군가의 반려동물') : a.zoo ? '동물원 동물' : a.farm ? '목장 동물' : a.wild ? '야생 동물' : '길동물', items);
   },
   openPlayer(rp) {
-    this.openMenu(`🤝 ${rp.name}`, '', [
+    this.openMenu(`🤝 ${displayName(rp.id, rp.name)}`, '', [
       ...(ADMIN.on && rp.jail ? [{ ic: '🔓', t: '무료 석방', p: 0, fn: () => NET.send({ t: 'free', to: rp.id }) }] : []),
       { ic: '💸', t: '₩1,000 송금', p: 1000, fn: () => { NET.send({ t: 'chat', m: `💸 ${ME.name} → ${rp.name} ₩1,000 송금`, sys: 1 }); NET.send({ t: 'income', to: rp.id, amt: 1000 }); } },
       { ic: '👋', t: '손 흔들기', p: 0, fn: () => { ME.action = 'wave'; ME.actionT = 0; NET.send({ t: 'act', a: 'wave' }); } },

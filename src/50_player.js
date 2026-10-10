@@ -144,10 +144,15 @@ function tryAttack() {
   if (ME.vehicle && (W.melee || ME.seat === 'd' && !INP.aim)) return;
   if (W.melee) {
     ME.fireT = W.rate;
-    if (ME.weapon === 'fist') { ME.punchSide ^= 1; ME.action = ME.punchSide ? 'punchR' : 'punchL'; }
-    else ME.action = ME.weapon === 'axe' ? 'axe' : 'bat';
-    ME.actionT = 0; sfx('axe', ME.x, ME.z, 0.4);
-    ME.meleeAt = G.t + (ME.weapon === 'fist' ? 0.11 : ME.weapon === 'axe' ? 0.33 : 0.26);
+    if (ME.weapon === 'fist') { // 콤보: 0.9초 안에 이어 치면 잽 → 크로스 → 훅 → 어퍼컷
+      ME.combo = (G.t - (ME.comboT || -9) < 0.9) ? ((ME.combo || 0) + 1) % COMBO.length : 0; ME.comboT = G.t;
+      ME.action = COMBO[ME.combo]; const mv = ME.action;
+      if (mv === 'upper') ME.fireT = W.rate * 1.6; else if (mv === 'hook') ME.fireT = W.rate * 1.2;
+      ME.meleeAt = G.t + 0.4 / actSpeed(mv); // 팔이 다 뻗는 순간에 판정
+      const fx = Math.sin(CAM.yaw), fz = Math.cos(CAM.yaw); const lunge = mv === 'upper' ? 2.2 : mv === 'cross' ? 2.6 : 1.8; if (!ME.vehicle) { ME.vx += fx * lunge; ME.vz += fz * lunge; } // 앞으로 내딛기
+      sfx('whoosh', ME.x, ME.z, mv === 'upper' ? 1 : 0.8);
+    } else { ME.action = ME.weapon === 'axe' ? 'axe' : 'bat'; sfx('axe', ME.x, ME.z, 0.4); ME.meleeAt = G.t + (ME.weapon === 'axe' ? 0.33 : 0.26); }
+    ME.actionT = 0;
     NET.send({ t: 'act', a: ME.action });
     return;
   }
@@ -181,7 +186,8 @@ function tryAttack() {
 }
 function meleeResolve() {
   if (ME.dead) return; const W = WEAPONS[ME.weapon]; const fx = Math.sin(ME.yaw), fz = Math.cos(ME.yaw); const R = W.range;
-  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1);
+  const mv = ME.weapon === 'fist' ? ME.action : null; const heavy = mv === 'upper' || mv === 'hook';
+  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1) * ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1);
   let best = null, bd = R + 0.01;
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
@@ -190,7 +196,13 @@ function meleeResolve() {
   for (const v of vehicles.values()) if (v.mesh.visible) for (const [cx, cz] of v.circles()) consider(cx, cz, 'veh', v.id, v);
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
-    else { dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' }); sfx(ME.weapon === 'fist' ? 'punch' : 'chop', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1.3, z: best.z }, ME.weapon === 'fist' ? 'dust' : 'blood'); UI.hitMarker(); }
+    else {
+      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' });
+      const hy = ME.y + (mv === 'upper' ? 1.55 : 1.35), ix = lerp(ME.x, best.x, 0.75), iz = lerp(ME.z, best.z, 0.75);
+      sfx(ME.weapon === 'fist' ? (heavy ? 'punchH' : 'punch') : 'chop', best.x, best.z); FX.impact({ x: ix, y: hy, z: iz }, ME.weapon === 'fist' ? 'dust' : 'blood');
+      if (ME.weapon === 'fist') { FX.impact({ x: ix, y: hy, z: iz }, 'spark'); FX.emoji(heavy ? '💥' : '✦', ix, hy + 0.15, iz, heavy ? 0.45 : 0.3); CAM.shake = Math.min(0.6, CAM.shake + (heavy ? 0.28 : 0.13)); ME.vx *= 0.3; ME.vz *= 0.3; G.hitStop = G.t + (heavy ? 0.07 : 0.035); NET.send({ t: 'punchFx', x: +ix.toFixed(2), y: +hy.toFixed(2), z: +iz.toFixed(2), h: heavy ? 1 : 0 }); }
+      UI.hitMarker();
+    }
     return;
   }
   if (W.chop || ME.weapon === 'fist') {
@@ -310,7 +322,7 @@ function updatePlayer(dt) {
   const c = ME.char;
   if (ME._py !== undefined && Math.abs(ME.y - ME._py) > 6) ME.fallTop = null; // 순간이동은 낙하로 치지 않는다
   if (ME.vehicle || ME.fly || ME.sitBench) ME.fallTop = null;
-  ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * (ME.action === 'axe' ? 1.4 : ME.action === 'bat' ? 1.8 : ME.action === 'shoot' ? 6 : 3));
+  ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * actSpeed(ME.action));
   if (ME.reloadT > 0) { ME.reloadT -= dt; if (ME.reloadT <= 0) finishReload(); }
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
   ME.drunk = Math.max(0, ME.drunk - dt * 0.01);
@@ -458,7 +470,7 @@ function renderRemotes(dt) {
       c.update(dt, { speed: rp.spd, grounded: rp.gr, state: rp.dead ? 'dead' : rp.st || 'normal', aiming: rp.aim, aimPitch: rp.ap, action: rp.act, actionT: rp.actT, dance: rp.dance, guard: rp.guard });
       if (rp.st === 'sit') c.root.position.y = rp.y - 0.45;
     }
-    rp.actT = Math.min(1, (rp.actT ?? 1) + dt * (rp.act === 'axe' ? 1.4 : rp.act === 'shoot' ? 6 : 3));
+    rp.actT = Math.min(1, (rp.actT ?? 1) + dt * actSpeed(rp.act));
     c.setWeapon(rp.w || 'fist');
   }
 }

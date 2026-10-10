@@ -172,7 +172,7 @@ const NET = {
     const aid = conn.pid; G.adminId = aid;
     try { conn.send({ t: 'hostTo', f: ME.id, plots: PLOTS.map(plotState), time: G.time, wt: G.weather }); } catch (e) { }
     savePlots(); this.becomeGuest(); this.hostConn = conn; G.hostId = aid;
-    const rp = G.players.get(aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a');
+    const rp = G.players.get(aid);
     announce('👑 관리자 입장', (rp ? rp.name : '관리자') + '님이 방장이 되었습니다'); UI.chatLine(null, '👑 방장 권한이 관리자에게 넘어갔습니다');
     this.updateRoomInfo();
   },
@@ -229,7 +229,7 @@ const NET = {
         if (conn.helloId && conn.helloId !== m.id) removeRemote(conn.helloId); conn.helloId = m.id; conn.pid = m.id; // 같은 연결이 id를 바꿔 다시 인사하면 예전 캐릭터 정리
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
+        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp._nk = null; refreshRemoteName(rp);
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
         else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
@@ -240,7 +240,7 @@ const NET = {
       case 'admProof': ADMIN.onProof(m, conn); break;
       case 'hostTo': {
         if (G.isHost || !conn || conn !== this.hostConn || !ADMIN.on) break;
-        conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id;
+        conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id; ADMIN.onHostGranted();
         for (const s of m.plots || []) applyPlotState(s); if (m.time !== undefined) G.time = m.time; if (m.wt) G.weather = m.wt;
         this.send({ t: 'admin', aid: ME.id }); announce('👑 방장 권한 획득', '관리자 인증 완료 — 이제 이 방의 방장입니다'); UI.chatLine(null, '👑 관리자 인증 완료: 방장 권한을 넘겨받았습니다');
         if (BANS.has(m.f)) setTimeout(() => this.kick(conn, true), 800);
@@ -250,7 +250,7 @@ const NET = {
       case 'taxiRm': TAXI.onRemove(m, f); break;
       case 'taxiHail': if (G.isHost) TAXI.parkTraffic(vehicles.get(m.v)); break;
       case 'welcome': {
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#ffd34a'); G.hostId = m.id;
+        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.baseCol = '#ffd34a'; rp._nk = null; refreshRemoteName(rp); G.hostId = m.id;
         G.time = m.time; G.weather = m.wt; for (const s of m.plots) applyPlotState(s);
         for (const i of m.trees) if (TREES[i] && TREES[i].alive) setTreeVisible(TREES[i], false);
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
@@ -262,9 +262,9 @@ const NET = {
       case 'bye': removeRemote(m.f); break;
       case 'p': {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
-        if (rp.name !== m.n) { rp.name = m.n; rp.char.setName(m.n, '#9fe0ff'); }
+        if (rp.name !== m.n) rp.name = m.n;
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
-        if (rp._jn !== rp.jail) { rp._jn = rp.jail; rp.char.setName(rp.name + (rp.jail ? ' 🔒수감 중' : ''), rp.jail ? '#ff9a6a' : '#9fe0ff'); }
+        refreshRemoteName(rp);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -284,9 +284,10 @@ const NET = {
         for (const a of m.an) { const A = ANIMALS[a[0]]; if (!A) continue; if (A.tx2 === undefined || Math.hypot(A.x - a[1], A.z - a[3]) > 20) { A.x = a[1]; A.y = a[2]; A.z = a[3]; A.yaw = a[4]; } A.tx2 = a[1]; A.ty2 = a[2]; A.tz2 = a[3]; A.tyaw = a[4]; A.spd = a[5]; A.state = a[6]; A.owner = a[7] || null; }
         break;
       }
-      case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? rp.name : '?', m.m); if (rp) rp.char.say(m.m); } break; }
+      case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? displayName(f, rp.name) : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
-      case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; } break; }
+      case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; if (PUNCH_MOVES[m.a] && sameSpace(rp)) sfx('whoosh', rp.x, rp.z, 0.7); } break; }
+      case 'punchFx': { const rp = G.players.get(f); if (rp && !sameSpace(rp)) break; sfx(m.h ? 'punchH' : 'punch', m.x, m.z); FX.impact({ x: m.x, y: m.y, z: m.z }, 'dust'); FX.impact({ x: m.x, y: m.y, z: m.z }, 'spark'); FX.emoji(m.h ? '💥' : '✦', m.x, m.y + 0.15, m.z, m.h ? 0.45 : 0.3); if (Math.hypot(ME.x - m.x, ME.z - m.z) < 3) CAM.shake = Math.min(0.6, CAM.shake + (m.h ? 0.22 : 0.1)); break; }
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
         const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));

@@ -51,16 +51,16 @@ const ADMIN = {
     if (this.on) this.panel(); else this.login();
   },
   login() {
-    UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px">' });
+    UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px"><button class="btn" id="admGo" type="button" style="width:100%;margin-bottom:10px">확인</button>' });
     const inp = $('#admPw'); setTimeout(() => inp && inp.focus(), 50);
     const go = async () => {
       if (performance.now() < this.lockT) { toast('⏳ 잠시 후 다시 시도'); return; }
-      if (this.busy) return; this.busy = true; toast('🔐 확인 중…', 1200);
+      if (this.busy) return; if (!inp.value) { this.status('err', '비밀번호를 입력하세요'); return; } this.busy = true; this.status('busy', '비밀번호 확인 중…');
       const sk = await this.check(inp.value); this.busy = false; inp.value = '';
-      if (sk) { this.sk = sk; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
-      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); }
+      if (sk) { this.sk = sk; this.fails = 0; UI.closeMenu(); this.enter(); }
+      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); this.status('err', '비밀번호가 틀렸어요', '다시 입력해 주세요'); }
     };
-    inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+    inp.onkeydown = e => { if (e.key === 'Enter') go(); }; const gb = $('#admGo'); if (gb) gb.onclick = () => go();
   },
   logout() { this.exit(); },
   // 방장 권한이 필요한 동작: 관리자는 곧바로 방장이 되므로 보통 로컬에서 실행. (이전 중이면 서명 인증된 연결로만 요청)

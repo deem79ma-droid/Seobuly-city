@@ -207,7 +207,7 @@ class Character {
   }
   setName(text, color = '#fff') {
     if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
-    if (!text) { this.nameTag = null; return; }
+    this.nameText = text || ''; if (!text) { this.nameTag = null; return; }
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
@@ -261,11 +261,8 @@ class Character {
       // actions
       if (s.action && s.actionT < 1) {
         const a = s.action, k = s.actionT;
-        if (a === 'punchR' || a === 'punchL') {
-          const e = Math.sin(clamp(k * 1.3, 0, 1) * Math.PI); const R = a === 'punchR';
-          if (R) { p.rSx = lerp(-1.15, -1.62, e); p.rSz = lerp(-0.1, 0.12, e); p.rE = lerp(-2.0, -0.05, e); p.lSx = -1.15; p.lE = -2.0; p.lSz = 0.1; p.spY = 0.45 * e; }
-          else { p.lSx = lerp(-1.15, -1.62, e); p.lSz = lerp(0.1, -0.12, e); p.lE = lerp(-2.0, -0.05, e); p.rSx = -1.15; p.rE = -2.0; p.rSz = -0.1; p.spY = -0.45 * e; }
-          p.pitch = 0.08 * e;
+        if (PUNCH_MOVES[a]) {
+          punchPose(p, a === 'punchR' ? 'cross' : a === 'punchL' ? 'jab' : a, k);
         } else if (a === 'kick') {
           const e = Math.sin(k * Math.PI); p.rHx = -1.5 * e; p.rK = 0.3 * (1 - e); p.pitch = -0.25 * e; p.lSx = -0.8; p.rSx = 0.4;
         } else if (a === 'axe') {
@@ -462,5 +459,36 @@ class Animal {
     if (this.head && !S.biped) { this.head.rotation.y = Math.sin(this.t * 0.4) * 0.3 * (sp < 0.1 ? 1 : 0.2); }
     if (this.head && S.biped && sp < 0.1 && S.comb) this.head.rotation.x = Math.max(0, Math.sin(this.t * 3)) * 0.8;
     if (this.trunk) this.trunk.forEach((g, i) => g.rotation.x = 0.2 + Math.sin(this.t * 1.3 + i * 0.6) * 0.15);
+  }
+}
+
+// ===== 주먹 콤보 애니메이션: 잽 → 크로스 → 훅 → 어퍼컷 =====
+// 준비(어깨·허리 비틀기) → 빠르게 뻗기(몸 기울이며 앞발 내딛기) → 임팩트 정지 → 반동 후 가드 복귀
+const PUNCH_MOVES = { jab: 1, cross: 1, hook: 1, upper: 1, punchR: 1, punchL: 1 };
+const COMBO = ['jab', 'cross', 'hook', 'upper'];
+function actSpeed(a) { return a === 'axe' ? 1.4 : a === 'bat' ? 1.8 : a === 'shoot' ? 6 : a === 'upper' ? 2.5 : a === 'hook' ? 2.9 : a === 'jab' ? 3.8 : a === 'cross' || a === 'punchR' || a === 'punchL' ? 3.3 : 3; }
+function punchPose(p, a, k) {
+  const ez = x => x * x * (3 - 2 * x); let w = 0, s = 0, rec = 0; // w: 준비, s: 뻗기
+  if (k < 0.24) w = ez(k / 0.24);
+  else if (k < 0.4) { const u = (k - 0.24) / 0.16; w = 1 - u; s = 1 - (1 - u) * (1 - u) * (1 - u); }
+  else if (k < 0.56) s = 1;
+  else { const u = (k - 0.56) / 0.44; s = 1 - ez(u); rec = Math.sin(u * Math.PI) * 0.6; }
+  // 기본 가드
+  p.lSx = -1.2; p.lSz = 0.14; p.lE = -2.1; p.rSx = -1.2; p.rSz = -0.14; p.rE = -2.1;
+  const knee = 0.22 + 0.18 * w; p.lK = knee; p.rK = knee; p.hipsY = 0.93 - 0.04 * w;
+  if (a === 'jab' || a === 'cross') {
+    const R = a === 'cross', sg = R ? 1 : -1, tw = R ? 0.75 : 0.42;
+    p.spY = sg * (-0.32 * w + tw * s); p.spX = 0.2 * s - 0.04 * rec; p.pitch = 0.12 * s;
+    if (R) { p.rSx = lerp(-1.2, -1.02, w) + (-1.62 + 1.2) * s; p.rSz = lerp(-0.14, -0.3, w) + 0.32 * s; p.rE = lerp(-2.1, -2.3, w) + 2.08 * s; }
+    else { p.lSx = lerp(-1.2, -1.05, w) + (-1.62 + 1.2) * s; p.lSz = lerp(0.14, 0.28, w) - 0.3 * s; p.lE = lerp(-2.1, -2.25, w) + 2.06 * s; }
+    p.lHx = -0.42 * s; p.rHx = 0.28 * s; p.lK += 0.28 * s; p.hipsY -= 0.05 * s; p.hdY = -sg * 0.3 * s;
+  } else if (a === 'hook') { // 왼손 훅: 팔꿈치 90도로 옆에서 휘둘러 감는다
+    p.spY = 0.55 * w - 0.95 * s; p.spX = 0.15 * s; p.pitch = 0.1 * s;
+    p.lSx = lerp(-1.2, -1.0, w) - 0.4 * s; p.lSz = lerp(0.14, 1.15, w) + (-0.15 - 1.15) * s * (1 - w); p.lE = lerp(-2.1, -1.55, Math.max(w, s));
+    p.lHx = -0.3 * s; p.rHx = 0.2 * s; p.hdY = 0.35 * s; p.hipsY -= 0.06 * s;
+  } else if (a === 'upper') { // 오른손 어퍼컷: 낮게 웅크렸다가 몸을 펴며 올려친다 (가장 묵직)
+    p.hipsY = 0.93 - 0.14 * w + 0.03 * s; p.lK = 0.25 + 0.6 * w; p.rK = 0.25 + 0.6 * w; p.spX = 0.28 * w - 0.18 * s; p.spY = -0.45 * w + 0.6 * s;
+    p.rSx = lerp(-1.2, -0.35, w) + (-2.35 + 0.35) * s * (1 - w * 0.5); p.rSz = -0.1; p.rE = lerp(-2.1, -1.7, w) + 0.45 * s;
+    p.pitch = 0.18 * w - 0.12 * s; p.hdX = -0.25 * s; p.rHx = 0.3 * w - 0.1 * s; p.lHx = -0.2 * w;
   }
 }

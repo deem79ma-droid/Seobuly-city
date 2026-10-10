@@ -100,6 +100,15 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #cross.hit:before,#cross.hit:after{background:#ff4a5a}
 #toasts{position:absolute;left:50%;top:70px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center}
 .toast{padding:8px 16px;font-size:14px;font-weight:700;animation:tin .25s ease-out;text-align:center;max-width:86vw}
+#admStatus{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:12px;padding:14px 22px;border-radius:16px;background:rgba(12,14,28,.92);border:1px solid #ffd34a88;box-shadow:0 8px 32px #000a;font-size:17px;font-weight:800;color:#fff;max-width:90vw;pointer-events:none}
+#admStatus small{display:block;font-size:12px;font-weight:600;opacity:.75;margin-top:2px}
+#admStatus.ok{border-color:#ffd34a;color:#ffd34a}#admStatus.err{border-color:#ff5a6a;color:#ff8a94}
+.spin{width:22px;height:22px;border:3px solid #ffd34a44;border-top-color:#ffd34a;border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.admBadge{display:inline-block;background:linear-gradient(#ffe27a,#e8a917);color:#2a1a00;font-size:11px;font-weight:900;padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:middle}
+#myName{font-size:13px;font-weight:800;margin-bottom:2px}
+#admMsg{font-size:13px;font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px;min-height:18px}
+#admMsg.ok{color:#ffd34a}#admMsg.err{color:#ff8a94}#admMsg .spin{width:16px;height:16px;border-width:2px}
 @keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1}}
 #bigMsg{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);font-family:'Black Han Sans';font-size:clamp(30px,6vw,64px);text-align:center;text-shadow:0 4px 24px #000;opacity:0;transition:opacity .4s;white-space:nowrap}
 #bigMsg small{display:block;font-family:'Noto Sans KR';font-size:.3em;color:var(--dim);font-weight:700;letter-spacing:2px}
@@ -166,7 +175,7 @@ body.touch #prompt{bottom:auto;top:58%}
    <div class="logo">서부리 시티<small>SEOBULY CITY 3D · ONLINE</small></div>
    <div class="sub">서벌리 · 지올르 · 이벤트광장 · 디산베이 · 캥지베, 그리고 시모느 아일랜드.<br>총, 도끼, 차, 오토바이, 말, 춤, 건축 의뢰까지 — 하고 싶은 거 다 해.</div>
    <div id="inviteBox" class="hidden"><div class="t">🎉 친구의 방 <b id="invCode"></b> 에 초대받았어요!</div><button class="btn big" id="invJoin">👉 바로 참가하기</button><div id="invCount"></div></div>
-   <div class="field" id="admField" style="display:none"><label>관리자</label><input id="admIn" class="inp" type="password" autocomplete="off" placeholder="비밀번호 (관리자만)"></div>
+   <div class="field" id="admField" style="display:none"><label>관리자</label><div class="row" style="gap:8px"><input id="admIn" class="inp" type="password" autocomplete="off" placeholder="비밀번호 (관리자만) · Enter"><button class="btn b3" id="admBtn" type="button" style="flex:0 0 auto;min-width:72px">확인</button></div><div id="admMsg"></div></div>
    <div class="field"><label>닉네임</label><input id="nameIn" class="inp" maxlength="12" placeholder="이름"></div>
    <div class="field"><label>그래픽 품질</label>
     <select id="qualIn" class="inp"><option value="3">최고 (울트라 · 그림자 4K · 블룸 · 잔디)</option><option value="2">높음</option><option value="1">보통</option><option value="0">낮음 (저사양 폰)</option></select></div>
@@ -185,7 +194,7 @@ body.touch #prompt{bottom:auto;top:58%}
 </div>
 
 <div id="hud" class="hidden">
- <div id="topL" class="panel"><div id="regionName">-</div><div id="zoneName"></div><div id="regionSub"></div><div id="clock"></div><div id="roomInfo"></div></div>
+ <div id="topL" class="panel"><div id="myName"></div><div id="regionName">-</div><div id="zoneName"></div><div id="regionSub"></div><div id="clock"></div><div id="roomInfo"></div></div>
  <div id="topR"><div id="money" class="panel">₩0</div><div id="stars"></div><div id="inv" class="panel"></div></div>
  <div id="toasts"></div>
  <div id="bigMsg"></div>
@@ -305,7 +314,7 @@ const AU = {
 };
 function sfx(type, x, z, vol = 1) {
   const c = AU.ctx; if (!c) return; const t = c.currentTime;
-  const ranges = { pistol: 220, smg: 220, shotgun: 260, rifle: 320, sniper: 400, explode: 600, punch: 30, hit: 40, axe: 40, chop: 60, coin: 1, ui: 1, horn: 120, step: 12, splash: 40, bark: 60, moo: 80, roar: 140, tree: 90, build: 70, siren: 200, cash: 1, levelup: 1, error: 1, door: 20, neigh: 80 };
+  const ranges = { pistol: 220, smg: 220, shotgun: 260, rifle: 320, sniper: 400, explode: 600, punch: 30, punchH: 36, whoosh: 18, hit: 40, axe: 40, chop: 60, coin: 1, ui: 1, horn: 120, step: 12, splash: 40, bark: 60, moo: 80, roar: 140, tree: 90, build: 70, siren: 200, cash: 1, levelup: 1, error: 1, door: 20, neigh: 80 };
   const s = AU.spatial(x, z, ranges[type] || 80); const v = s.v * vol; if (v < 0.01) return; const p = s.p;
   switch (type) {
     case 'pistol': AU.noiseHit(t, 0.18, 2600, 0.7, 0.9 * v, p); AU.tone(t, 0.12, 160, 50, 0.6 * v, p); break;
@@ -315,6 +324,8 @@ function sfx(type, x, z, vol = 1) {
     case 'sniper': AU.noiseHit(t, 0.5, 1800, 0.6, 1.3 * v, p); AU.tone(t, 0.3, 120, 30, 1 * v, p); AU.noiseHit(t + 0.08, 1.2, 400, 0.3, 0.35 * v, p); break;
     case 'explode': AU.noiseHit(t, 1.6, 500, 0.4, 1.6 * v, p); AU.tone(t, 0.9, 70, 25, 1.4 * v, p); break;
     case 'punch': AU.tone(t, 0.09, 120, 50, 0.9 * v, p); AU.noiseHit(t, 0.06, 900, 1, 0.5 * v, p); break;
+    case 'punchH': AU.tone(t, 0.16, 95, 38, 1.2 * v, p); AU.noiseHit(t, 0.1, 700, 1, 0.8 * v, p); AU.noiseHit(t + 0.01, 0.05, 2400, 1, 0.35 * v, p); break; // 묵직한 타격음
+    case 'whoosh': AU.noiseHit(t, 0.13, 1500, 1.4, 0.32 * v, p, 'bandpass'); break; // 주먹 휘두르는 바람 소리
     case 'hit': AU.noiseHit(t, 0.08, 1400, 1, 0.5 * v, p); break;
     case 'axe': AU.noiseHit(t, 0.12, 900, 2, 0.6 * v, p, 'bandpass'); break;
     case 'chop': AU.noiseHit(t, 0.15, 700, 3, 1.0 * v, p, 'bandpass'); AU.tone(t, 0.07, 300, 150, 0.4 * v, p, 'triangle'); break;
@@ -2027,7 +2038,7 @@ class Character {
   }
   setName(text, color = '#fff') {
     if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
-    if (!text) { this.nameTag = null; return; }
+    this.nameText = text || ''; if (!text) { this.nameTag = null; return; }
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
@@ -2081,11 +2092,8 @@ class Character {
       // actions
       if (s.action && s.actionT < 1) {
         const a = s.action, k = s.actionT;
-        if (a === 'punchR' || a === 'punchL') {
-          const e = Math.sin(clamp(k * 1.3, 0, 1) * Math.PI); const R = a === 'punchR';
-          if (R) { p.rSx = lerp(-1.15, -1.62, e); p.rSz = lerp(-0.1, 0.12, e); p.rE = lerp(-2.0, -0.05, e); p.lSx = -1.15; p.lE = -2.0; p.lSz = 0.1; p.spY = 0.45 * e; }
-          else { p.lSx = lerp(-1.15, -1.62, e); p.lSz = lerp(0.1, -0.12, e); p.lE = lerp(-2.0, -0.05, e); p.rSx = -1.15; p.rE = -2.0; p.rSz = -0.1; p.spY = -0.45 * e; }
-          p.pitch = 0.08 * e;
+        if (PUNCH_MOVES[a]) {
+          punchPose(p, a === 'punchR' ? 'cross' : a === 'punchL' ? 'jab' : a, k);
         } else if (a === 'kick') {
           const e = Math.sin(k * Math.PI); p.rHx = -1.5 * e; p.rK = 0.3 * (1 - e); p.pitch = -0.25 * e; p.lSx = -0.8; p.rSx = 0.4;
         } else if (a === 'axe') {
@@ -2282,6 +2290,37 @@ class Animal {
     if (this.head && !S.biped) { this.head.rotation.y = Math.sin(this.t * 0.4) * 0.3 * (sp < 0.1 ? 1 : 0.2); }
     if (this.head && S.biped && sp < 0.1 && S.comb) this.head.rotation.x = Math.max(0, Math.sin(this.t * 3)) * 0.8;
     if (this.trunk) this.trunk.forEach((g, i) => g.rotation.x = 0.2 + Math.sin(this.t * 1.3 + i * 0.6) * 0.15);
+  }
+}
+
+// ===== 주먹 콤보 애니메이션: 잽 → 크로스 → 훅 → 어퍼컷 =====
+// 준비(어깨·허리 비틀기) → 빠르게 뻗기(몸 기울이며 앞발 내딛기) → 임팩트 정지 → 반동 후 가드 복귀
+const PUNCH_MOVES = { jab: 1, cross: 1, hook: 1, upper: 1, punchR: 1, punchL: 1 };
+const COMBO = ['jab', 'cross', 'hook', 'upper'];
+function actSpeed(a) { return a === 'axe' ? 1.4 : a === 'bat' ? 1.8 : a === 'shoot' ? 6 : a === 'upper' ? 2.5 : a === 'hook' ? 2.9 : a === 'jab' ? 3.8 : a === 'cross' || a === 'punchR' || a === 'punchL' ? 3.3 : 3; }
+function punchPose(p, a, k) {
+  const ez = x => x * x * (3 - 2 * x); let w = 0, s = 0, rec = 0; // w: 준비, s: 뻗기
+  if (k < 0.24) w = ez(k / 0.24);
+  else if (k < 0.4) { const u = (k - 0.24) / 0.16; w = 1 - u; s = 1 - (1 - u) * (1 - u) * (1 - u); }
+  else if (k < 0.56) s = 1;
+  else { const u = (k - 0.56) / 0.44; s = 1 - ez(u); rec = Math.sin(u * Math.PI) * 0.6; }
+  // 기본 가드
+  p.lSx = -1.2; p.lSz = 0.14; p.lE = -2.1; p.rSx = -1.2; p.rSz = -0.14; p.rE = -2.1;
+  const knee = 0.22 + 0.18 * w; p.lK = knee; p.rK = knee; p.hipsY = 0.93 - 0.04 * w;
+  if (a === 'jab' || a === 'cross') {
+    const R = a === 'cross', sg = R ? 1 : -1, tw = R ? 0.75 : 0.42;
+    p.spY = sg * (-0.32 * w + tw * s); p.spX = 0.2 * s - 0.04 * rec; p.pitch = 0.12 * s;
+    if (R) { p.rSx = lerp(-1.2, -1.02, w) + (-1.62 + 1.2) * s; p.rSz = lerp(-0.14, -0.3, w) + 0.32 * s; p.rE = lerp(-2.1, -2.3, w) + 2.08 * s; }
+    else { p.lSx = lerp(-1.2, -1.05, w) + (-1.62 + 1.2) * s; p.lSz = lerp(0.14, 0.28, w) - 0.3 * s; p.lE = lerp(-2.1, -2.25, w) + 2.06 * s; }
+    p.lHx = -0.42 * s; p.rHx = 0.28 * s; p.lK += 0.28 * s; p.hipsY -= 0.05 * s; p.hdY = -sg * 0.3 * s;
+  } else if (a === 'hook') { // 왼손 훅: 팔꿈치 90도로 옆에서 휘둘러 감는다
+    p.spY = 0.55 * w - 0.95 * s; p.spX = 0.15 * s; p.pitch = 0.1 * s;
+    p.lSx = lerp(-1.2, -1.0, w) - 0.4 * s; p.lSz = lerp(0.14, 1.15, w) + (-0.15 - 1.15) * s * (1 - w); p.lE = lerp(-2.1, -1.55, Math.max(w, s));
+    p.lHx = -0.3 * s; p.rHx = 0.2 * s; p.hdY = 0.35 * s; p.hipsY -= 0.06 * s;
+  } else if (a === 'upper') { // 오른손 어퍼컷: 낮게 웅크렸다가 몸을 펴며 올려친다 (가장 묵직)
+    p.hipsY = 0.93 - 0.14 * w + 0.03 * s; p.lK = 0.25 + 0.6 * w; p.rK = 0.25 + 0.6 * w; p.spX = 0.28 * w - 0.18 * s; p.spY = -0.45 * w + 0.6 * s;
+    p.rSx = lerp(-1.2, -0.35, w) + (-2.35 + 0.35) * s * (1 - w * 0.5); p.rSz = -0.1; p.rE = lerp(-2.1, -1.7, w) + 0.45 * s;
+    p.pitch = 0.18 * w - 0.12 * s; p.hdX = -0.25 * s; p.rHx = 0.3 * w - 0.1 * s; p.lHx = -0.2 * w;
   }
 }
 
@@ -3194,10 +3233,15 @@ function tryAttack() {
   if (ME.vehicle && (W.melee || ME.seat === 'd' && !INP.aim)) return;
   if (W.melee) {
     ME.fireT = W.rate;
-    if (ME.weapon === 'fist') { ME.punchSide ^= 1; ME.action = ME.punchSide ? 'punchR' : 'punchL'; }
-    else ME.action = ME.weapon === 'axe' ? 'axe' : 'bat';
-    ME.actionT = 0; sfx('axe', ME.x, ME.z, 0.4);
-    ME.meleeAt = G.t + (ME.weapon === 'fist' ? 0.11 : ME.weapon === 'axe' ? 0.33 : 0.26);
+    if (ME.weapon === 'fist') { // 콤보: 0.9초 안에 이어 치면 잽 → 크로스 → 훅 → 어퍼컷
+      ME.combo = (G.t - (ME.comboT || -9) < 0.9) ? ((ME.combo || 0) + 1) % COMBO.length : 0; ME.comboT = G.t;
+      ME.action = COMBO[ME.combo]; const mv = ME.action;
+      if (mv === 'upper') ME.fireT = W.rate * 1.6; else if (mv === 'hook') ME.fireT = W.rate * 1.2;
+      ME.meleeAt = G.t + 0.4 / actSpeed(mv); // 팔이 다 뻗는 순간에 판정
+      const fx = Math.sin(CAM.yaw), fz = Math.cos(CAM.yaw); const lunge = mv === 'upper' ? 2.2 : mv === 'cross' ? 2.6 : 1.8; if (!ME.vehicle) { ME.vx += fx * lunge; ME.vz += fz * lunge; } // 앞으로 내딛기
+      sfx('whoosh', ME.x, ME.z, mv === 'upper' ? 1 : 0.8);
+    } else { ME.action = ME.weapon === 'axe' ? 'axe' : 'bat'; sfx('axe', ME.x, ME.z, 0.4); ME.meleeAt = G.t + (ME.weapon === 'axe' ? 0.33 : 0.26); }
+    ME.actionT = 0;
     NET.send({ t: 'act', a: ME.action });
     return;
   }
@@ -3231,7 +3275,8 @@ function tryAttack() {
 }
 function meleeResolve() {
   if (ME.dead) return; const W = WEAPONS[ME.weapon]; const fx = Math.sin(ME.yaw), fz = Math.cos(ME.yaw); const R = W.range;
-  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1);
+  const mv = ME.weapon === 'fist' ? ME.action : null; const heavy = mv === 'upper' || mv === 'hook';
+  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1) * ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1);
   let best = null, bd = R + 0.01;
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
@@ -3240,7 +3285,13 @@ function meleeResolve() {
   for (const v of vehicles.values()) if (v.mesh.visible) for (const [cx, cz] of v.circles()) consider(cx, cz, 'veh', v.id, v);
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
-    else { dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' }); sfx(ME.weapon === 'fist' ? 'punch' : 'chop', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1.3, z: best.z }, ME.weapon === 'fist' ? 'dust' : 'blood'); UI.hitMarker(); }
+    else {
+      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' });
+      const hy = ME.y + (mv === 'upper' ? 1.55 : 1.35), ix = lerp(ME.x, best.x, 0.75), iz = lerp(ME.z, best.z, 0.75);
+      sfx(ME.weapon === 'fist' ? (heavy ? 'punchH' : 'punch') : 'chop', best.x, best.z); FX.impact({ x: ix, y: hy, z: iz }, ME.weapon === 'fist' ? 'dust' : 'blood');
+      if (ME.weapon === 'fist') { FX.impact({ x: ix, y: hy, z: iz }, 'spark'); FX.emoji(heavy ? '💥' : '✦', ix, hy + 0.15, iz, heavy ? 0.45 : 0.3); CAM.shake = Math.min(0.6, CAM.shake + (heavy ? 0.28 : 0.13)); ME.vx *= 0.3; ME.vz *= 0.3; G.hitStop = G.t + (heavy ? 0.07 : 0.035); NET.send({ t: 'punchFx', x: +ix.toFixed(2), y: +hy.toFixed(2), z: +iz.toFixed(2), h: heavy ? 1 : 0 }); }
+      UI.hitMarker();
+    }
     return;
   }
   if (W.chop || ME.weapon === 'fist') {
@@ -3360,7 +3411,7 @@ function updatePlayer(dt) {
   const c = ME.char;
   if (ME._py !== undefined && Math.abs(ME.y - ME._py) > 6) ME.fallTop = null; // 순간이동은 낙하로 치지 않는다
   if (ME.vehicle || ME.fly || ME.sitBench) ME.fallTop = null;
-  ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * (ME.action === 'axe' ? 1.4 : ME.action === 'bat' ? 1.8 : ME.action === 'shoot' ? 6 : 3));
+  ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * actSpeed(ME.action));
   if (ME.reloadT > 0) { ME.reloadT -= dt; if (ME.reloadT <= 0) finishReload(); }
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
   ME.drunk = Math.max(0, ME.drunk - dt * 0.01);
@@ -3508,7 +3559,7 @@ function renderRemotes(dt) {
       c.update(dt, { speed: rp.spd, grounded: rp.gr, state: rp.dead ? 'dead' : rp.st || 'normal', aiming: rp.aim, aimPitch: rp.ap, action: rp.act, actionT: rp.actT, dance: rp.dance, guard: rp.guard });
       if (rp.st === 'sit') c.root.position.y = rp.y - 0.45;
     }
-    rp.actT = Math.min(1, (rp.actT ?? 1) + dt * (rp.act === 'axe' ? 1.4 : rp.act === 'shoot' ? 6 : 3));
+    rp.actT = Math.min(1, (rp.actT ?? 1) + dt * actSpeed(rp.act));
     c.setWeapon(rp.w || 'fist');
   }
 }
@@ -4513,7 +4564,7 @@ const NET = {
     const aid = conn.pid; G.adminId = aid;
     try { conn.send({ t: 'hostTo', f: ME.id, plots: PLOTS.map(plotState), time: G.time, wt: G.weather }); } catch (e) { }
     savePlots(); this.becomeGuest(); this.hostConn = conn; G.hostId = aid;
-    const rp = G.players.get(aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a');
+    const rp = G.players.get(aid);
     announce('👑 관리자 입장', (rp ? rp.name : '관리자') + '님이 방장이 되었습니다'); UI.chatLine(null, '👑 방장 권한이 관리자에게 넘어갔습니다');
     this.updateRoomInfo();
   },
@@ -4570,7 +4621,7 @@ const NET = {
         if (conn.helloId && conn.helloId !== m.id) removeRemote(conn.helloId); conn.helloId = m.id; conn.pid = m.id; // 같은 연결이 id를 바꿔 다시 인사하면 예전 캐릭터 정리
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
+        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp._nk = null; refreshRemoteName(rp);
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
         else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
@@ -4581,7 +4632,7 @@ const NET = {
       case 'admProof': ADMIN.onProof(m, conn); break;
       case 'hostTo': {
         if (G.isHost || !conn || conn !== this.hostConn || !ADMIN.on) break;
-        conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id;
+        conn.pid = m.f; this.hostConn = null; this.becomeAuthority(); G.adminId = ME.id; ADMIN.onHostGranted();
         for (const s of m.plots || []) applyPlotState(s); if (m.time !== undefined) G.time = m.time; if (m.wt) G.weather = m.wt;
         this.send({ t: 'admin', aid: ME.id }); announce('👑 방장 권한 획득', '관리자 인증 완료 — 이제 이 방의 방장입니다'); UI.chatLine(null, '👑 관리자 인증 완료: 방장 권한을 넘겨받았습니다');
         if (BANS.has(m.f)) setTimeout(() => this.kick(conn, true), 800);
@@ -4591,7 +4642,7 @@ const NET = {
       case 'taxiRm': TAXI.onRemove(m, f); break;
       case 'taxiHail': if (G.isHost) TAXI.parkTraffic(vehicles.get(m.v)); break;
       case 'welcome': {
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#ffd34a'); G.hostId = m.id;
+        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.baseCol = '#ffd34a'; rp._nk = null; refreshRemoteName(rp); G.hostId = m.id;
         G.time = m.time; G.weather = m.wt; for (const s of m.plots) applyPlotState(s);
         for (const i of m.trees) if (TREES[i] && TREES[i].alive) setTreeVisible(TREES[i], false);
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
@@ -4603,9 +4654,9 @@ const NET = {
       case 'bye': removeRemote(m.f); break;
       case 'p': {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
-        if (rp.name !== m.n) { rp.name = m.n; rp.char.setName(m.n, '#9fe0ff'); }
+        if (rp.name !== m.n) rp.name = m.n;
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
-        if (rp._jn !== rp.jail) { rp._jn = rp.jail; rp.char.setName(rp.name + (rp.jail ? ' 🔒수감 중' : ''), rp.jail ? '#ff9a6a' : '#9fe0ff'); }
+        refreshRemoteName(rp);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -4625,9 +4676,10 @@ const NET = {
         for (const a of m.an) { const A = ANIMALS[a[0]]; if (!A) continue; if (A.tx2 === undefined || Math.hypot(A.x - a[1], A.z - a[3]) > 20) { A.x = a[1]; A.y = a[2]; A.z = a[3]; A.yaw = a[4]; } A.tx2 = a[1]; A.ty2 = a[2]; A.tz2 = a[3]; A.tyaw = a[4]; A.spd = a[5]; A.state = a[6]; A.owner = a[7] || null; }
         break;
       }
-      case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? rp.name : '?', m.m); if (rp) rp.char.say(m.m); } break; }
+      case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? displayName(f, rp.name) : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
-      case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; } break; }
+      case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; if (PUNCH_MOVES[m.a] && sameSpace(rp)) sfx('whoosh', rp.x, rp.z, 0.7); } break; }
+      case 'punchFx': { const rp = G.players.get(f); if (rp && !sameSpace(rp)) break; sfx(m.h ? 'punchH' : 'punch', m.x, m.z); FX.impact({ x: m.x, y: m.y, z: m.z }, 'dust'); FX.impact({ x: m.x, y: m.y, z: m.z }, 'spark'); FX.emoji(m.h ? '💥' : '✦', m.x, m.y + 0.15, m.z, m.h ? 0.45 : 0.3); if (Math.hypot(ME.x - m.x, ME.z - m.z) < 3) CAM.shake = Math.min(0.6, CAM.shake + (m.h ? 0.22 : 0.1)); break; }
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
         const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
@@ -4698,6 +4750,7 @@ const UI = {
   },
   // ---------- HUD ----------
   updateHud() {
+    { const adm = ADMIN.on && ADMIN.ready; const k = ME.name + '|' + adm; const el = $('#myName'); if (el && el._k !== k) { el._k = k; el.innerHTML = '🙂 <span></span>' + (adm ? '<span class="admBadge">👑 관리자</span>' : ''); el.querySelector('span').textContent = ME.name; } }
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
@@ -4724,7 +4777,7 @@ const UI = {
   sendChat() {
     const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); if (!m) return;
     if (m.startsWith('/')) { this.command(m); return; }
-    this.chatLine(ME.name, m); ME.char.say(m); NET.send({ t: 'chat', m });
+    this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
   command(m) {
     const [c, a] = m.slice(1).split(/\s+/);
@@ -4880,7 +4933,7 @@ const UI = {
     this.openMenu(`🐾 ${S.name}`, a.owner ? (a.owner === ME.id ? '내 반려동물' : '누군가의 반려동물') : a.zoo ? '동물원 동물' : a.farm ? '목장 동물' : a.wild ? '야생 동물' : '길동물', items);
   },
   openPlayer(rp) {
-    this.openMenu(`🤝 ${rp.name}`, '', [
+    this.openMenu(`🤝 ${displayName(rp.id, rp.name)}`, '', [
       ...(ADMIN.on && rp.jail ? [{ ic: '🔓', t: '무료 석방', p: 0, fn: () => NET.send({ t: 'free', to: rp.id }) }] : []),
       { ic: '💸', t: '₩1,000 송금', p: 1000, fn: () => { NET.send({ t: 'chat', m: `💸 ${ME.name} → ${rp.name} ₩1,000 송금`, sys: 1 }); NET.send({ t: 'income', to: rp.id, amt: 1000 }); } },
       { ic: '👋', t: '손 흔들기', p: 0, fn: () => { ME.action = 'wave'; ME.actionT = 0; NET.send({ t: 'act', a: 'wave' }); } },
@@ -5149,16 +5202,16 @@ const ADMIN = {
     if (this.on) this.panel(); else this.login();
   },
   login() {
-    UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px">' });
+    UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px"><button class="btn" id="admGo" type="button" style="width:100%;margin-bottom:10px">확인</button>' });
     const inp = $('#admPw'); setTimeout(() => inp && inp.focus(), 50);
     const go = async () => {
       if (performance.now() < this.lockT) { toast('⏳ 잠시 후 다시 시도'); return; }
-      if (this.busy) return; this.busy = true; toast('🔐 확인 중…', 1200);
+      if (this.busy) return; if (!inp.value) { this.status('err', '비밀번호를 입력하세요'); return; } this.busy = true; this.status('busy', '비밀번호 확인 중…');
       const sk = await this.check(inp.value); this.busy = false; inp.value = '';
-      if (sk) { this.sk = sk; this.fails = 0; this.enter(); UI.closeMenu(); setTimeout(() => this.panel(), 60); }
-      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); toast('❌ 비밀번호가 틀렸다'); }
+      if (sk) { this.sk = sk; this.fails = 0; UI.closeMenu(); this.enter(); }
+      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); this.status('err', '비밀번호가 틀렸어요', '다시 입력해 주세요'); }
     };
-    inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+    inp.onkeydown = e => { if (e.key === 'Enter') go(); }; const gb = $('#admGo'); if (gb) gb.onclick = () => go();
   },
   logout() { this.exit(); },
   // 방장 권한이 필요한 동작: 관리자는 곧바로 방장이 되므로 보통 로컬에서 실행. (이전 중이면 서명 인증된 연결로만 요청)
@@ -5255,14 +5308,36 @@ const DOC_ADMIN = ['관리자 님입니까? 즉시 치료해드리겠습니다!'
 
 Object.assign(ADMIN, {
   prev: null, bonus: 0,
-  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const sk = await this.check(pw); if (sk) { this.sk = sk; this.pre = true; } else toastLater('❌ 관리자 비밀번호가 틀렸다'); } catch (e) { } },
+  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const sk = await this.check(pw); if (sk) { this.sk = sk; this.pre = true; } else { this.lobbyMsg('err', '❌ 비밀번호가 틀렸어요'); toastLater('❌ 비밀번호가 틀렸어요'); } } catch (e) { } },
   autoLogin() { if (this.pre && this.sk && !this.on) this.enter(); },
   enter() {
     this.on = true; this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
     if (ME.char) { ME.outfit = Object.assign({}, ME.outfit, ADMIN_SUIT); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); }
     for (const w of WEAPON_ORDER) ME.weapons[w] = 1; ME.money = 999999999999; UI.updateWeapon && UI.updateWeapon();
-    this.announce(); toast('👑 관리자 모드 — 무한 돈·무한 탄약·체포 면제');
+    this.announce(); this.beginProgress();
   },
+  // ---- 진입 진행 표시: 진입 중(스피너) → 완료 + 관리자 배지 ----
+  status(kind, text, sub) {
+    let el = $('#admStatus'); if (!el) { el = document.createElement('div'); el.id = 'admStatus'; document.body.appendChild(el); }
+    clearTimeout(this._stT); el.className = kind; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<div><b></b>' + (sub ? '<small></small>' : '') + '</div>';
+    el.querySelector('b').textContent = text; if (sub) el.querySelector('small').textContent = sub; el.style.display = 'flex';
+    if (kind !== 'busy') this._stT = setTimeout(() => { el.style.display = 'none'; }, kind === 'ok' ? 4200 : 3500);
+  },
+  hideStatus() { const el = $('#admStatus'); if (el) el.style.display = 'none'; clearTimeout(this._stT); },
+  lobbyMsg(kind, text) { const el = $('#admMsg'); if (!el) return; el.className = kind || ''; el.innerHTML = (kind === 'busy' ? '<span class="spin"></span>' : '') + '<span></span>'; el.querySelector('span:last-child').textContent = text || ''; },
+  beginProgress() {
+    this.pending = true; this.ready = false; clearTimeout(this._pT);
+    const needHost = G.online && !G.isHost;
+    this.status('busy', '관리자 모드 진입 중…', needHost ? '서명 인증 · 방장 권한 넘겨받는 중' : '관리자 권한 적용 중');
+    if (!needHost) this._pT = setTimeout(() => this.finish(true), 700);
+    else this._pT = setTimeout(() => this.finish(false), 20000);
+  },
+  finish(hostOk) {
+    if (!this.on || !this.pending) return; this.pending = false; this.ready = true; clearTimeout(this._pT);
+    this.status('ok', '👑 관리자 모드 완료', hostOk ? (G.online ? '이 방의 방장 · 무한 돈·탄약 · 체포 면제' : '무한 돈·탄약 · 체포 면제') : '방장 권한은 아직 못 받았어요 (관리자 기능은 사용 가능)');
+    sfx('levelup'); UI.updateHud && G.started && UI.updateHud();
+  },
+  onHostGranted() { G.adminId = ME.id; if (this.pending) this.finish(true); },
   announce() {
     if (!G.online) return;
     if (G.isHost) { G.adminId = ME.id; NET.send({ t: 'admin', aid: ME.id }); }
@@ -5272,7 +5347,7 @@ Object.assign(ADMIN, {
     this.on = false; this.sk = null; this.pre = false; ME.god = false; ME.fly = false; ME.speedMul = 1;
     if (this.prev) { ME.outfit = this.prev.outfit; if (ME.char) { ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); } ME.money = Math.min(ME.money, Math.max(this.prev.money, 50000)); }
     if (G.adminId === ME.id) { G.adminId = null; NET.send({ t: 'admin', aid: null }); }
-    toast('🔒 관리자 모드 OFF');
+    this.pending = false; this.ready = false; clearTimeout(this._pT); this.hideStatus(); toast('🔒 관리자 모드 OFF');
   },
   // ----- 방장 쪽: 관리자 증명 요청/검증 -----
   challenge(conn, banned) {
@@ -5295,7 +5370,7 @@ Object.assign(ADMIN, {
     const sig = await ACRYPTO.sign(this.sk, `sbc3d-admin-v2|${m.r}|${m.h}|${ME.id}|${m.n}`);
     try { conn.send({ t: 'admProof', s: sig, f: ME.id }); } catch (e) { }
   },
-  onAdminMsg(m) { if (G.isHost) return; G.adminId = m.aid || null; if (m.aid) { const rp = G.players.get(m.aid); if (rp) rp.char.setName((rp.name || '') + ' 👑', '#ffd34a'); if (m.aid !== ME.id) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다'); } },
+  onAdminMsg(m) { if (G.isHost) return; G.adminId = m.aid || null; if (m.aid) { if (m.aid === ME.id) this.onHostGranted(); if (m.aid !== ME.id) announce('👑 관리자 입장', '방장 권한이 관리자에게 이전되었습니다'); } },
   hostPower() { return G.adminId ? G.adminId === ME.id : G.isHost; },
   kickOthers(ban) {
     let n = 0;
@@ -5378,6 +5453,7 @@ const LAW = {
   },
   tick(dt) {
     if (!G.started || !ME.char) return; if (!this.built) this.build();
+    for (const rp of G.players.values()) refreshRemoteName(rp);
     if (ADMIN.on) ADMIN.adminTick(dt);
     if (this.esc) { const E = this.esc, pr = E.pr; const inside = ME.x > pr.x0 && ME.x < pr.x1 && ME.z > pr.z0 && ME.z < pr.z1; if ((G.t > E.until && !inside) || G.t > E.until + 60 || ME.jail) this.restoreDoors(); }
     if (ME.jail) {
@@ -5399,7 +5475,27 @@ const LAW = {
     } else this.arrestT = 0;
   },
 };
-if (ADMIN.enabled()) { const f = $('#admField'); if (f) f.style.display = ''; }
+// ---- 이름표 / 배지: 방장이 서명으로 검증한 관리자(G.adminId)에게만 '👑관리자' 배지 ----
+function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id); }
+function displayName(id, name) { return (isAdminId(id) ? '👑관리자 ' : '') + (name || ''); }
+function refreshRemoteName(rp) {
+  const adm = G.adminId === rp.id; const key = rp.name + '|' + !!rp.jail + '|' + adm; if (rp._nk === key) return; rp._nk = key;
+  rp.char.setName((adm ? '👑관리자 ' : '') + (rp.name || '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ffd34a' : rp.jail ? '#ff9a6a' : (rp.baseCol || '#9fe0ff'));
+}
+if (ADMIN.enabled()) {
+  const f = $('#admField'); if (f) f.style.display = '';
+  // 로비: 확인 버튼(또는 Enter)으로 게임에 들어가기 전에 비밀번호를 미리 확인 (비번은 이 브라우저 밖으로 안 나감)
+  const inp = $('#admIn'), btn = $('#admBtn');
+  const check = async () => {
+    const pw = inp.value; if (!pw) { ADMIN.lobbyMsg('err', '비밀번호를 입력하세요'); return; } if (ADMIN.busy) return;
+    ADMIN.busy = true; btn.disabled = true; ADMIN.lobbyMsg('busy', '비밀번호 확인 중…');
+    const sk = await ADMIN.check(pw); ADMIN.busy = false; btn.disabled = false; inp.value = '';
+    if (sk) { ADMIN.sk = sk; ADMIN.pre = true; inp.placeholder = '✓ 확인됨'; ADMIN.lobbyMsg('ok', '✅ 비밀번호 확인 완료 — 게임에 들어가면 관리자 모드가 켜져요'); }
+    else { ADMIN.sk = null; ADMIN.pre = false; ADMIN.lobbyMsg('err', '❌ 비밀번호가 틀렸어요'); try { sfx('error'); } catch (e) { } }
+  };
+  if (btn) btn.addEventListener('click', e => { e.preventDefault(); check(); });
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); check(); } });
+}
 
 
 // ================= COMFORT: 끼임 탈출 · 중력 보정 · 쉬운 조작 =================
@@ -5542,7 +5638,7 @@ function initLobby() {
     const tickCd = () => { if (left <= 0) { stop(); startGame('join', code); return; } cnt.innerHTML = `${left}초 뒤 자동으로 참가해요 · <a id="invCancel">잠깐, 외형부터 꾸밀래요</a>`; $('#invCancel').onclick = stop; left--; };
     $('#invJoin').onclick = () => { stop(); startGame('join', code); };
     tickCd(); LOBBY.cd = setInterval(tickCd, 1000);
-    for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
+    for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#admBtn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
   } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
 }
 const LOBBY = { cd: 0, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin'], lock(on) { for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } } };
@@ -5551,7 +5647,7 @@ async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
   ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd);
   const msg = t => { $('#lobbyMsg').textContent = t; };
-  if ($('#admIn') && $('#admIn').value) { msg('🔐 관리자 확인 중…'); await ADMIN.preAuth(); }
+  if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
   msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : '');
   G.isHost = mode !== 'join';
   try {
@@ -5661,7 +5757,7 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
+if (URLP.get("debug")) window.__SBC = { FX, TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
 
 </script>
 </body>
