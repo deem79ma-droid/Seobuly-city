@@ -37,7 +37,7 @@ button{font-family:inherit;cursor:pointer}
 .hidden{display:none!important}
 /* lobby */
 #lobby{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 70% 10%,#1d2a55 0%,#0b0d18 55%,#05060a 100%);overflow:auto;padding:16px}
-#lobby .card{width:min(920px,100%);display:grid;grid-template-columns:1.1fr 1fr;gap:18px;background:rgba(10,12,20,.72);border:1px solid var(--line);border-radius:22px;padding:22px;backdrop-filter:blur(10px);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#lobby .card{width:min(920px,100%);display:grid;position:relative;grid-template-columns:1.1fr 1fr;gap:18px;background:rgba(10,12,20,.72);border:1px solid var(--line);border-radius:22px;padding:22px;backdrop-filter:blur(10px);box-shadow:0 30px 80px rgba(0,0,0,.6)}
 @media(max-width:760px){#lobby{align-items:flex-start}#lobby .card{grid-template-columns:1fr;padding:16px}}
 .logo{font-family:'Black Han Sans',sans-serif;font-size:clamp(34px,6vw,58px);line-height:.95;letter-spacing:-1px;background:linear-gradient(100deg,#ffd84a,#ff6a3d 45%,#ff3d9a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px rgba(255,90,60,.35))}
 .logo small{display:block;font-size:.42em;letter-spacing:4px;color:#8fd8ff;-webkit-text-fill-color:#8fd8ff;margin-top:6px}
@@ -63,7 +63,7 @@ button{font-family:inherit;cursor:pointer}
 /* loading */
 #loading{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#05060a;gap:14px}
 #loading .bar{width:min(420px,80vw);height:8px;border-radius:9px;background:#151a2c;overflow:hidden}
-#loading .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd84a,#ff3d9a);transition:width .2s}
+#loading .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c8d0e0,#8aa0b8);transition:width .2s}
 #loadTxt{color:var(--dim);font-size:13px}
 /* hud */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
@@ -165,8 +165,8 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #joyBase{position:absolute;width:130px;height:130px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);transform:translate(-50%,-50%);display:none}
 #joyKnob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.35);transform:translate(-50%,-50%);display:none}
 #look{position:absolute;right:0;top:0;width:55%;height:100%;pointer-events:auto}
-.tb{position:absolute;pointer-events:auto;width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.28);background:rgba(10,12,20,.55);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-weight:900}
-.tb.big{width:82px;height:82px;font-size:30px;background:rgba(255,80,80,.35)}
+.tb{position:absolute;pointer-events:auto;width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.28);background:rgba(10,12,20,.55);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-weight:700;letter-spacing:0.5px}
+.tb.big{width:82px;height:82px;font-size:22px;background:rgba(255,80,80,.35)}
 .tb.sm{width:46px;height:46px;font-size:17px}
 .tb.on{background:rgba(255,204,51,.55)}
 .tb small{position:absolute;bottom:-15px;font-size:10px;color:#ddd;text-shadow:0 1px 2px #000;white-space:nowrap}
@@ -193,15 +193,15 @@ body.touch #prompt{bottom:auto;top:58%}
 <div id="lobby">
  <div class="card">
   <div>
-   <div class="logo">서부리 시티<small>SEOBULY CITY 3D · ONLINE</small></div>
+   <div class="logo">서부리 시티<small>SEOBULY CITY 3D · ONLINE</small></div><button id="secretHelp" style="position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#9aa3b8;font-size:16px;font-weight:700;cursor:pointer;z-index:10">?</button>
    <div class="sub">서벌리 · 지올르 · 이벤트광장 · 디산베이 · 캥지베, 그리고 시모느 아일랜드.<br>총, 도끼, 차, 오토바이, 말, 춤, 건축 의뢰까지 — 하고 싶은 거 다 해.</div>
-   <div id="inviteBox" class="hidden"><div class="t">🎉 친구의 방 <b id="invCode"></b> 에 초대받았어요!</div><button class="btn big" id="invJoin">👉 바로 참가하기</button><div id="invCount"></div></div>
+   <div id="inviteBox" class="hidden"><div class="t">친구의 방 <b id="invCode"></b> 에 초대받았어요!</div><button class="btn big" id="invJoin">바로 참가하기</button><div id="invCount"></div></div>
    <div class="field" id="admField" style="display:none"><label>관리자</label><div class="row" style="gap:8px"><input id="admIn" class="inp" type="password" autocomplete="off" placeholder="비밀번호 (관리자만) · Enter"><button class="btn b3" id="admBtn" type="button" style="flex:0 0 auto;min-width:72px">확인</button></div><div id="admMsg"></div></div>
    <div class="field"><label>닉네임</label><input id="nameIn" class="inp" maxlength="12" placeholder="이름"></div>
    <div class="field"><label>그래픽 품질</label>
     <select id="qualIn" class="inp"><option value="3">최고 (울트라 · 그림자 4K · 블룸 · 잔디)</option><option value="2">높음</option><option value="1">보통</option><option value="0">낮음 (저사양 폰)</option></select></div>
-   <div style="margin-bottom:12px"><button class="btn big" id="hostBtn">👫 친구랑 같이하기<small>누르면 방이 생기고 초대 링크가 나와요 (카톡으로 보내기)</small></button></div>
-   <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">⚡ 빠른 참가 (공개방)</button><button class="btn" id="soloBtn">🎮 혼자 플레이</button></div>
+   <div style="margin-bottom:12px"><button class="btn big" id="hostBtn">친구와 같이하기<small>누르면 방이 생기고 초대 링크가 나와요 (카톡으로 보내기)</small></button></div>
+   <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">빠른 참가 (공개방)</button><button class="btn" id="soloBtn">혼자 플레이</button></div>
    <div class="row"><input id="codeIn" class="inp" maxlength="6" placeholder="방 코드 (5자리)" style="text-transform:uppercase"><button class="btn b3" id="joinBtn">코드로 참가</button></div>
    <div id="lobbyMsg" class="tip" style="color:#ffcf5a"></div>
    <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴(🚕 택시 · 🔗 초대) · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
@@ -209,7 +209,7 @@ body.touch #prompt{bottom:auto;top:58%}
   <div>
    <canvas id="preview"></canvas>
    <div class="cust" id="cust"></div>
-   <div class="row" style="margin-top:8px"><button class="btn b3" id="randBtn">🎲 랜덤 외형</button></div>
+   <div class="row" style="margin-top:8px"><button class="btn b3" id="randBtn">랜덤 외형</button></div>
   </div>
  </div>
 </div>
@@ -1855,6 +1855,7 @@ function lightState(axis) { const c = (G.t % 24); const xGreen = c < 10, xYellow
 const OPT = {
   body: [['m', '남성형'], ['f', '여성형']],
   skin: ['#f8dcc8', '#f0c6a6', '#e0aa84', '#c48a62', '#9a6644', '#6a4430'],
+  eyeColor: [['#3a2a1a', '갈색'], ['#4a6a8a', '파랑'], ['#5a8a5a', '녹색'], ['#6a4a3a', '헤이즐'], ['#2a2a2a', '검정']],
   hair: [['short', '숏컷'], ['buzz', '반삭'], ['long', '장발'], ['ponytail', '포니테일'], ['bob', '단발'], ['curly', '곱슬'], ['spiky', '스파이키'], ['mohawk', '모히칸'], ['bald', '삭발']],
   hairColor: ['#1a1412', '#3a2418', '#6a4024', '#a87038', '#e0c070', '#c8c8c8', '#d04060', '#4060d0', '#f0f0f0'],
   top: [['tshirt', '반팔티'], ['long', '긴팔티'], ['hoodie', '후드티'], ['jacket', '재킷'], ['tank', '나시'], ['suit', '정장'], ['police', '경찰복'], ['doctor', '의사 가운'], ['vest', '조끼(작업복)']],
@@ -1872,7 +1873,7 @@ function randomOutfit(r = Math.random, kind = 'civ') {
     hairColor: p(OPT.hairColor.slice(0, 6)), top: p(['tshirt', 'long', 'hoodie', 'jacket', 'tank', 'tshirt', 'suit']), topColor: p(COLORS_CLOTH),
     bottom: body === 'f' ? p(['jeans', 'skirt', 'slacks', 'shorts']) : p(['jeans', 'slacks', 'cargo', 'shorts']), bottomColor: p(['#2a3a5a', '#1c1c22', '#5a4a3a', '#8a8a90', '#3a4a6a', '#c8b89a']),
     shoes: p(['#1a1a1a', '#f0f0f0', '#6a3a1a', '#d03a3a', '#3a6ad0']), hat: r() < 0.25 ? p(['cap', 'beanie', 'fedora']) : 'none', hatColor: p(COLORS_CLOTH),
-    glasses: r() < 0.2 ? p(['glasses', 'sunglasses']) : 'none', beard: body === 'm' && r() < 0.25 ? p(['stubble', 'full']) : 'none',
+    glasses: r() < 0.2 ? p(['glasses', 'sunglasses']) : 'none', beard: body === 'm' && r() < 0.25 ? p(['stubble', 'full']) : 'none', eyeColor: p(OPT.eyeColor)[0],
   };
   if (kind === 'police') Object.assign(o, { top: 'police', topColor: '#22305a', bottom: 'slacks', bottomColor: '#1a2240', hat: 'police', hatColor: '#1a2240', shoes: '#111111' });
   if (kind === 'doctor') Object.assign(o, { top: 'doctor', topColor: '#ffffff', bottom: 'slacks', bottomColor: '#4a6a8a', hat: 'none' });
@@ -1890,27 +1891,32 @@ function cmat(color, rough = 0.8, metal = 0, extra = '') {
 const CG = {}; // char geometry cache
 function initCharGeo() {
   if (CG.done) return; CG.done = true;
-  CG.chest = new THREE.CapsuleGeometry(0.15, 0.28, 6, 14);
-  CG.pelvis = new THREE.SphereGeometry(0.16, 14, 10);
-  CG.neck = new THREE.CylinderGeometry(0.052, 0.06, 0.12, 10);
-  CG.head = new THREE.SphereGeometry(0.115, 22, 18);
-  CG.uarm = new THREE.CapsuleGeometry(0.052, 0.19, 4, 10);
-  CG.farm = new THREE.CapsuleGeometry(0.045, 0.17, 4, 10);
-  CG.hand = new THREE.SphereGeometry(0.048, 10, 8);
-  CG.thigh = new THREE.CapsuleGeometry(0.074, 0.29, 4, 12);
-  CG.shin = new THREE.CapsuleGeometry(0.058, 0.3, 4, 10);
+  // Higher resolution geometries for smoother, higher-quality characters
+  CG.chest = new THREE.CapsuleGeometry(0.15, 0.28, 8, 20);
+  CG.pelvis = new THREE.SphereGeometry(0.16, 20, 16);
+  CG.neck = new THREE.CylinderGeometry(0.052, 0.06, 0.12, 16);
+  CG.head = new THREE.SphereGeometry(0.115, 32, 24);
+  CG.uarm = new THREE.CapsuleGeometry(0.052, 0.19, 6, 14);
+  CG.farm = new THREE.CapsuleGeometry(0.045, 0.17, 6, 14);
+  CG.hand = new THREE.SphereGeometry(0.048, 14, 12);
+  CG.thigh = new THREE.CapsuleGeometry(0.074, 0.29, 6, 16);
+  CG.shin = new THREE.CapsuleGeometry(0.058, 0.3, 6, 14);
   CG.foot = new THREE.BoxGeometry(0.1, 0.07, 0.25); CG.foot.translate(0, 0, 0.05);
-  CG.eyeW = new THREE.SphereGeometry(0.02, 10, 8); CG.pupil = new THREE.SphereGeometry(0.0115, 8, 6);
-  CG.brow = new THREE.BoxGeometry(0.045, 0.009, 0.012); CG.mouth = new THREE.BoxGeometry(0.045, 0.009, 0.01);
-  CG.nose = new THREE.ConeGeometry(0.018, 0.045, 8); CG.nose.rotateX(Math.PI / 2 + 0.3);
-  CG.ear = new THREE.SphereGeometry(0.028, 8, 6);
-  CG.cap = (t, r = 0.125) => new THREE.SphereGeometry(r, 18, 12, 0, TAU, 0, Math.PI * t);
+  CG.eyeW = new THREE.SphereGeometry(0.018, 16, 12);
+  CG.iris = new THREE.SphereGeometry(0.01, 12, 10);
+  CG.highlight = new THREE.SphereGeometry(0.004, 8, 6);
+  CG.pupil = new THREE.SphereGeometry(0.005, 8, 6);
+  CG.brow = new THREE.BoxGeometry(0.045, 0.008, 0.01);
+  CG.mouth = new THREE.BoxGeometry(0.04, 0.007, 0.008);
+  CG.nose = new THREE.ConeGeometry(0.016, 0.04, 12); CG.nose.rotateX(Math.PI / 2 + 0.25);
+  CG.ear = new THREE.SphereGeometry(0.026, 12, 10);
+  CG.cap = (t, r = 0.125) => new THREE.SphereGeometry(r, 24, 16, 0, TAU, 0, Math.PI * t);
   CG.box = new THREE.BoxGeometry(1, 1, 1);
-  CG.cyl = new THREE.CylinderGeometry(1, 1, 1, 14);
-  CG.sph = new THREE.SphereGeometry(1, 12, 10);
-  CG.cone = new THREE.ConeGeometry(1, 1, 10);
-  CG.skirt = new THREE.CylinderGeometry(0.17, 0.3, 0.42, 16, 1, true);
-  CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 16, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
+  CG.cyl = new THREE.CylinderGeometry(1, 1, 1, 20);
+  CG.sph = new THREE.SphereGeometry(1, 16, 12);
+  CG.cone = new THREE.ConeGeometry(1, 1, 14);
+  CG.skirt = new THREE.CylinderGeometry(0.17, 0.3, 0.42, 24, 1, true);
+  CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 24, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
 }
 function M(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; }
 // ---- weapons ----
@@ -2009,18 +2015,30 @@ class Character {
     }
     if (o.bottom === 'skirt') add(P.hips, M(CG.skirt, bot, 0, -0.17, 0));
     if (o.bottom === 'cargo') for (const s of [1, -1]) add(P['hip' + (s > 0 ? 'L' : 'R')], M(CG.box, bot, 0.075 * s, -0.25, 0, 0.03, 0.1, 0.08));
-    // head
+    // head - higher quality with detailed eyes
     const H = P.head;
-    add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.95 : 1, 1.12, 1.04));
-    add(H, M(CG.sph, skin, 0, 0.04, 0.035, 0.085, 0.07, 0.075));
+    add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.96 : 1.02, 1.1, 1.02));
+    add(H, M(CG.sph, skin, 0, 0.035, 0.04, 0.09, 0.065, 0.07)); // cheeks
+    // Eye color from outfit or default brown
+    const eyeCol = o.eyeColor || (f ? '#4a6a8a' : '#3a2a1a');
+    const irisMat = cmat(eyeCol, 0.15, 0.1);
+    const highlightMat = cmat('#ffffff', 0.05, 0.8);
     for (const s of [1, -1]) {
-      add(H, M(CG.eyeW, cmat('#ffffff', 0.3), 0.042 * s, 0.115, 0.098), false);
-      add(H, M(CG.pupil, cmat('#2a1a10', 0.2), 0.042 * s, 0.115, 0.115), false);
-      add(H, M(CG.brow, hairM, 0.043 * s, 0.148, 0.108), false).rotation.z = -0.12 * s;
-      add(H, M(CG.ear, skin, 0.112 * s, 0.1, -0.005, 0.5, 1, 0.8));
+      // Sclera
+      add(H, M(CG.eyeW, cmat('#f8f4f0', 0.2), 0.04 * s, 0.118, 0.095), false);
+      // Iris
+      add(H, M(CG.iris, irisMat, 0.04 * s, 0.118, 0.108), false);
+      // Pupil
+      add(H, M(CG.pupil, cmat('#111111', 0.1), 0.04 * s, 0.118, 0.112), false);
+      // Specular highlight
+      add(H, M(CG.highlight, highlightMat, 0.046 * s, 0.124, 0.114), false);
+      // Eyebrow
+      add(H, M(CG.brow, hairM, 0.041 * s, 0.15, 0.105), false).rotation.z = -0.1 * s;
+      // Ear
+      add(H, M(CG.ear, skin, 0.11 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
     }
-    add(H, M(CG.nose, skin, 0, 0.085, 0.122), false);
-    add(H, M(CG.mouth, cmat(f ? '#b8404a' : '#8a4040', 0.5), 0, 0.047, 0.108), false);
+    add(H, M(CG.nose, skin, 0, 0.082, 0.118), false);
+    add(H, M(CG.mouth, cmat(f ? '#c05060' : '#904848', 0.4), 0, 0.045, 0.105), false);
     // hair
     const hh = o.hair;
     if (hh === 'short' || hh === 'spiky' || hh === 'curly' || hh === 'long' || hh === 'ponytail') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
@@ -2083,7 +2101,7 @@ class Character {
         p.lHx = -Math.sin(ph) * A; p.rHx = Math.sin(ph) * A;
         p.lK = Math.max(0, -Math.cos(ph)) * A * 1.6 + 0.08; p.rK = Math.max(0, Math.cos(ph)) * A * 1.6 + 0.08;
         p.lA = -p.lHx * 0.3; p.rA = -p.rHx * 0.3;
-        p.lSx = -Math.sin(ph) * A * 0.85; p.rSx = Math.sin(ph) * A * 0.85;
+        p.lSx = -Math.sin(ph) * A * 1.05; p.rSx = Math.sin(ph) * A * 1.05;
         p.lE = -0.25 - runT * 1.2; p.rE = -0.25 - runT * 1.2;
         p.hipsY = 0.95 - Math.abs(Math.cos(ph)) * (0.025 + runT * 0.05) - runT * 0.04;
         p.pitch = runT * 0.22; p.spY = Math.sin(ph) * 0.12 * A;
@@ -2666,7 +2684,8 @@ function explosionDamage(x, y, z, radius, dmg, by) {
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 46; const PICKUPS = new Map(); let pickupSeq = 1;
-const PED_LINES = {
+const PED_LINES = { // 자아 있는 대사
+
   civ: ['안녕하세요!', '오늘 날씨 좋네요', '서벌리 집값 미쳤어…', '캥지베 쪽은 가지 마세요', '이벤트광장 클럽 가봤어요?', '시모느 아일랜드 놀러가고 싶다', '배고프다…', '디산베이 공기 좋아요', '말 타봤어요? 디산베이 목장에 있어요'],
   police: ['안전 운전하세요', '수상한 사람 보면 신고하세요', '캥지베 갱단 때문에 바빠요'],
   gangA: ['여기 레드 크루 구역이다', '뭘 봐?', '블루 놈들 보이면 말해'], gangB: ['블루 독스 구역이야', '꺼져라', '레드 놈들 어디 있냐'],
@@ -2693,7 +2712,7 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0;
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']);
 }
 function pedEnsureChar(p) {
   if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
@@ -3453,7 +3472,7 @@ function updatePlayer(dt) {
   const water = terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1);
   ME.swim = water;
   let sprint = (KEYS['shift'] || KEYS['ShiftLeft'] || INP.touchRun || (G.opt.autoRun && mag > 0.1) || (IS_TOUCH && INP.joyMag > 0.92)) && ME.stamina > 1 && !ME.aiming;
-  let speed = ME.swim ? (sprint ? 3.2 : 2.2) : ME.aiming ? 2.6 : sprint ? 7.4 + ME.skills.fit * 0.3 : (IS_TOUCH && mag < 0.5 ? 2.0 : 4.4);
+  let speed = ME.swim ? (sprint ? 3.6 : 2.4) : ME.aiming ? 2.8 : sprint ? 9.2 + ME.skills.fit * 0.35 : (IS_TOUCH && mag < 0.5 ? 2.2 : 4.8);
   speed *= ME.speedMul || 1;
   if (ME.drunk > 0.4) { dx += Math.sin(G.t * 1.3) * 0.4 * ME.drunk; dz += Math.cos(G.t * 1.1) * 0.4 * ME.drunk; }
   ME.stamina = clamp(ME.stamina + (sprint && mag > 0.1 ? -dt * (14 - ME.skills.fit * 1.5) : dt * 9), 0, 100);
@@ -4901,7 +4920,27 @@ const UI = {
   },
   openCasino() {
     const bet = (b) => ({ ic: '🎰', t: `슬롯머신 ₩${b.toLocaleString()}`, p: b, stay: true, d: '777 = 50배', fn: (btn) => { const S = ['🍒', '🍋', '🔔', '💎', '7️⃣']; const r = [0, 1, 2].map(() => Math.random() < 0.3 ? 4 : Math.floor(Math.random() * 4)); const res = r.map(i => S[i]).join(' '); let win = 0; if (r[0] === r[1] && r[1] === r[2]) win = r[0] === 4 ? b * 50 : b * 10; else if (r[0] === r[1] || r[1] === r[2]) win = b * 1.5; ME.money += win; btn.querySelector('.d').textContent = `${res} → ${win ? '+' + fmtMoney(win) : '꽝'}`; if (win) { sfx('cash'); if (win >= b * 10) announce('🎰 잭팟!', fmtMoney(win)); } else sfx('error'); return true; } });
-    const rou = (c, b) => ({ ic: c === 'red' ? '🔴' : '⚫', t: `룰렛 ${c === 'red' ? '레드' : '블랙'} ₩${b.toLocaleString()}`, p: b, stay: true, d: '2배', fn: (btn) => { const n = Math.floor(Math.random() * 37); const col = n === 0 ? 'green' : n % 2 ? 'red' : 'black'; const win = col === c ? b * 2 : 0; ME.money += win; btn.querySelector('.d').textContent = `${n} ${col === 'red' ? '🔴' : col === 'black' ? '⚫' : '🟢'} → ${win ? '+' + fmtMoney(win) : '꽝'}`; sfx(win ? 'cash' : 'error'); return true; } });
+    const rou = (c, b) => ({ ic: c === 'red' ? '🔴' : '⚫', t: `룰렛 ${c === 'red' ? '레드' : '블랙'} ₩${b.toLocaleString()}`, p: b, stay: true, d: '화려한 룰렛 2배', fn: (btn) => {
+  const d = btn.querySelector('.d');
+  d.textContent = '🎡 돌아가는 중...';
+  let spins = 0;
+  const iv = setInterval(() => {
+    const fake = Math.floor(Math.random() * 37);
+    const fc = fake === 0 ? '🟢' : fake % 2 ? '🔴' : '⚫';
+    d.textContent = `🎡 ${fake} ${fc}`;
+    spins++;
+    if (spins > 18) {
+      clearInterval(iv);
+      const n = Math.floor(Math.random() * 37);
+      const col = n === 0 ? 'green' : n % 2 ? 'red' : 'black';
+      const win = col === c ? b * 2 : 0;
+      ME.money += win;
+      d.innerHTML = `<b style="font-size:1.15em">${n} ${col==='red'?'🔴':col==='black'?'⚫':'🟢'}</b> → ${win ? '<span style="color:#7dff9a">+' + fmtMoney(win) + ' 🎉</span>' : '꽝'}`;
+      if (win) { sfx('cash'); if (win >= b * 2) announce('🎡 룰렛 당첨!', fmtMoney(win)); } else sfx('error');
+    }
+  }, 80);
+  return true;
+} });
     this.openMenu('🎰 카지노', '도박은 적당히…', [bet(100), bet(1000), bet(10000), rou('red', 1000), rou('black', 1000), rou('red', 10000)]);
   },
   factoryGame() {
@@ -5067,10 +5106,10 @@ const UI = {
     document.body.classList.add('touch'); const T = $('#touch'); T.classList.remove('hidden');
     const mk = (id, txt, css, cls = '', label = '') => { const b = document.createElement('div'); b.className = 'tb ' + cls; b.id = id; b.innerHTML = txt + (label ? `<small>${label}</small>` : ''); b.style.cssText = css; T.appendChild(b); return b; };
     const B = {
-      fire: mk('tFire', '🔥', 'right:18px;bottom:92px', 'big'), jump: mk('tJump', '⬆', 'right:112px;bottom:18px', '', '점프'), aim: mk('tAim', '🎯', 'right:114px;bottom:112px', '', '조준'),
-      use: mk('tUse', '✋', 'right:198px;bottom:32px', '', '상호작용'), car: mk('tCar', '🚗', 'right:200px;bottom:124px', '', '탑승'), run: mk('tRun', '🏃', 'left:22px;bottom:196px', 'sm', '달리기'),
-      wpn: mk('tWpn', '🔁', 'right:28px;bottom:192px', 'sm', '무기'), rel: mk('tRel', '♻', 'right:84px;bottom:196px', 'sm', '재장전'),
-      phone: mk('tPhone', '📱', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', '🗺', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', '💬', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', '💃', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', '🎥', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
+      fire: mk('tFire', '●', 'right:18px;bottom:92px', 'big'), jump: mk('tJump', '↑', 'right:112px;bottom:18px', '', '점프'), aim: mk('tAim', '◎', 'right:114px;bottom:112px', '', '조준'),
+      use: mk('tUse', 'E', 'right:198px;bottom:32px', '', '상호작용'), car: mk('tCar', '차', 'right:200px;bottom:124px', '', '탑승'), run: mk('tRun', 'RUN', 'left:22px;bottom:196px', 'sm', '달리기'),
+      wpn: mk('tWpn', 'W', 'right:28px;bottom:192px', 'sm', '무기'), rel: mk('tRel', 'R', 'right:84px;bottom:196px', 'sm', '재장전'),
+      phone: mk('tPhone', '☎', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', 'M', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', 'T', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', 'G', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', 'C', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
     };
     const hold = (el, on, off) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); AU.init(); on(); el.classList.add('on'); }, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off && off(); el.classList.remove('on'); }, { passive: false }); el.addEventListener('touchcancel', e => { off && off(); el.classList.remove('on'); }); };
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
@@ -5096,7 +5135,7 @@ const UI = {
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
-    B.jump.innerHTML = inV ? '🛑<small>브레이크</small>' : '⬆<small>점프</small>'; B.use.innerHTML = inV ? '📯<small>경적</small>' : '✋<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? '🚪<small>세워주세요</small>' : '🚪<small>하차</small>') : '🚗<small>탑승</small>';
+    B.jump.innerHTML = inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
@@ -5123,7 +5162,7 @@ function fastTravel(r) {
 // ---------- customizer (lobby + clothes shop) ----------
 function buildCustomizer(el, o, onChange) {
   el.innerHTML = '';
-  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['beard', '수염', OPT.beard]];
+  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['beard', '수염', OPT.beard]];
   for (const [k, label, opts] of fields) {
     const f = document.createElement('div'); f.className = 'f'; f.innerHTML = `<label>${label}</label>`;
     let inp; if (opts) { inp = document.createElement('select'); for (const [v, n] of opts) { const op = document.createElement('option'); op.value = v; op.textContent = n; inp.appendChild(op); } }
@@ -5178,7 +5217,7 @@ const SHARE = {
 //   ADMIN_PUB = 그 개인키의 공개키 (빌드에 포함, 누구나 볼 수 있음)
 // 방장은 관리자에게 무작위 nonce를 보내고, 관리자는 개인키로 서명만 돌려준다.
 // → 비밀번호·개인키는 관리자 브라우저 밖으로 절대 나가지 않고, 방장은 서명을 검증만 할 수 있을 뿐 흉내낼 수 없다.
-const ADMIN_PUB = '';
+const ADMIN_PUB = '1714594b1053197dead59267ac772bd95da09fcdc98dc9cb16110b41661f3c2e';
 const hexOf = b => Array.from(new Uint8Array(b), x => x.toString(16).padStart(2, '0')).join('');
 const unhex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
 const b64uDec = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
@@ -5552,7 +5591,24 @@ function refreshRemoteName(rp) {
   rp.char.setName((adm ? '👑관리자 ' : '') + (rp.name || '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ffd34a' : rp.jail ? '#ff9a6a' : (rp.baseCol || '#9fe0ff'));
 }
 if (ADMIN.enabled()) {
-  const f = $('#admField'); if (f) f.style.display = '';
+  // Admin field is hidden by default; revealed only after 7 consecutive clicks on the ? button
+  let clickCount = 0, lastClick = 0;
+  const helpBtn = document.getElementById('secretHelp');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const now = Date.now();
+      if (now - lastClick > 1200) clickCount = 0; // reset if not consecutive (1.2s window)
+      clickCount++;
+      lastClick = now;
+      if (clickCount >= 7) {
+        const f = $('#admField'); if (f) f.style.display = '';
+        helpBtn.style.color = '#ffcc33';
+        clickCount = 0;
+      }
+    });
+  }
+  const f = $('#admField'); // keep hidden until secret
   // 로비: 확인 버튼(또는 Enter)으로 게임에 들어가기 전에 비밀번호를 미리 확인 (비번은 이 브라우저 밖으로 안 나감)
   const inp = $('#admIn'), btn = $('#admBtn');
   const check = async () => {
