@@ -105,6 +105,7 @@ async function refreshPubList(manual) {
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
+  if (NET.badName(ME.name)) { $('#lobbyMsg').textContent = '❌ "관리자"가 들어간 닉네임은 쓸 수 없어요'; $('#nameIn').focus(); return; } // 관리자는 이름표에 자동으로 붙는다
   ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
   const msg = t => { $('#lobbyMsg').textContent = t; };
   if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
@@ -118,7 +119,7 @@ async function startGame(mode, code) {
     }
     if (mode === 'join') {
       let err = null;
-      for (let k = 0; k < 3; k++) { try { await NET.join(code, k ? 20000 : 15000); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
+      for (let k = 0; k < 3; k++) { try { await NET.join(code, k ? 20000 : 15000); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible' || e.code === 'namedup' || e.code === 'namebad') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
       if (err) throw err; G.online = true; G.isHost = false; G.room = code;
     }
     if (mode === 'pub') { const r = await NET.joinOrHost(code); G.online = true; G.isHost = r.mode === 'host'; G.room = r.room; }

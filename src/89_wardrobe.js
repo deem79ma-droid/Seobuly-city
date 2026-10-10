@@ -26,13 +26,24 @@ const WARDROBE = {
     if (ADMIN.on) { if (ADMIN.prev) ADMIN.prev.outfit = this.outfit(); return; }
     ME.outfit = this.outfit(); if (ME.char) ME.char.setOutfit(ME.outfit); if (send) NET.send({ t: 'outfit', o: ME.outfit });
   },
+  // 관리자 모드: 일반 옷 대신 관리자 전용 아이템만 (관리자 모드를 끄면 원래 옷으로)
+  renderAdmin() {
+    const box = $('#menuBox'); const on = ME.outfit.mask === 'admin';
+    box.innerHTML = `<h2>👑 관리자 옷장</h2><div class="desc">관리자 모드에서만 보이는 전용 아이템 · 관리자 모드를 끄면 원래 옷으로 돌아간다</div><div class="ctabs"><button class="ctab on">👑 관리자</button></div><div class="clist"><button class="citem${on ? ' on' : ''}" data-id="a_mask"><i class="sw" style="background:#0d0d10;box-shadow:inset 0 0 0 3px #ff2a2a"></i><span class="t">관리자 마스크</span><span class="p">${on ? '착용 중' : '무료'}</span></button></div><div class="cact"><span class="desc" style="margin:0">누르면 쓰기 / 벗기</span></div><button class="btn b3 close">닫기</button>`;
+    box.querySelector('.citem').onclick = () => { AU.init(); this.toggleAdminMask(); };
+    box.querySelector('.close').onclick = () => UI.closeMenu();
+  },
+  toggleAdminMask() {
+    if (!ADMIN.on) return; const on = ME.outfit.mask === 'admin';
+    ME.outfit = Object.assign({}, ME.outfit, { mask: on ? 'none' : 'admin' }); if (ME.char) ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit });
+    sfx('ui'); toast(on ? '마스크를 벗었다' : '👑 관리자 마스크 착용'); this.render();
+  },
   save() { return { wardrobe: this.own.slice(), worn: Object.assign({}, this.worn) }; },
   lose() { // 사망: 산 옷 전부 잃고 기본 외형으로
     const n = this.own.length; this.own = []; this.worn = {}; this.apply(); return n;
   },
   priceOf(it) { return ADMIN.on ? 0 : it.price; },
   open() {
-    if (ADMIN.on) { toast('👑 관리자는 정장·선글라스 고정 — 관리자 모드를 끄면 옷가게를 이용할 수 있다', 3500); return; }
     UI.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
     this.prev = null; this._yaw = CAM.yaw; CAM.yaw = ME.yaw + Math.PI; // 앞모습이 보이게 카메라를 돌린다
     $('#menu').classList.add('side'); UI._onClose = () => this.close(); this.render();
@@ -48,6 +59,7 @@ const WARDROBE = {
   wear(it) { this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('ui'); toast(`👕 ${it.name} 착용`); saveGame(); this.render(); },
   takeOff(slot) { delete this.worn[slot]; this.prev = null; this.apply(); sfx('ui'); toast('기본 옷으로 돌아왔다'); saveGame(); this.render(); },
   render() {
+    if (ADMIN.on) return this.renderAdmin();
     const box = $('#menuBox'); const tab = this.tab; const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const tabs = CLOTH_SLOTS.map(([s, n, ic]) => `<button class="ctab${tab === s ? ' on' : ''}" data-tab="${s}">${ic} ${n}</button>`).join('') + `<button class="ctab${tab === 'own' ? ' on' : ''}" data-tab="own">🧺 내 옷장 ${this.own.length}</button>`;
     const list = tab === 'own' ? this.own.map(id => CLOTH_BY.get(id)).filter(Boolean) : CLOTH.filter(c => c.slot === tab);

@@ -56,7 +56,7 @@ const UI = {
     else if (c === '습격' || c === 'raid') { G.raidT = 0; }
     else toast('명령어: /시간 20, /날씨 비|맑음|흐림, /습격, /admin');
   },
-  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
+  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; if (String(name).startsWith('[관리자]')) d.querySelector('b').style.color = '#ff3b3b'; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
   // ---------- menu ----------
   openMenu(title, desc, items, opts = {}) {
     { const f = this._onClose; this._onClose = null; if (f) f(); }

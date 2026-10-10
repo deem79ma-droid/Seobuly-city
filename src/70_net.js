@@ -8,6 +8,7 @@ const NET_ERR = {
   'unavailable-id': '이미 사용 중인 방 코드예요', full: `방이 가득 찼어요 (최대 ${MAX_PLAYERS}명)`, allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
   network: '매칭 서버에 연결할 수 없어요 (인터넷 연결 확인)', 'server-error': '매칭 서버 오류 — 잠시 후 다시 시도해 주세요', 'socket-error': '매칭 서버 연결 오류 — 다시 시도해 주세요', 'socket-closed': '매칭 서버 연결이 끊겼어요',
   'browser-incompatible': '이 브라우저는 P2P(WebRTC)를 지원하지 않아요 — 크롬/사파리 최신 버전을 써 주세요', webrtc: 'P2P 연결 실패 (방화벽/공유기 문제) — 같은 와이파이에 연결하거나 LTE로 바꿔서 다시 시도해 보세요',
+  namedup: '이 방에 같은 닉네임이 있어요 — 닉네임을 바꾸고 다시 참가해 주세요', namebad: '"관리자"가 들어간 닉네임은 쓸 수 없어요',
   timeout: '연결 시간 초과 — 네트워크를 확인하고 다시 시도해 주세요', nopeer: 'PeerJS를 불러오지 못했어요 (네트워크 확인 후 새로고침)',
 };
 function netErr(code) { const e = new Error(NET_ERR[code] || ('네트워크 오류: ' + code)); e.code = code; return e; }
@@ -43,6 +44,15 @@ const NET = {
     }
   },
   code() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; },
+  nameKey(n) { return String(n ?? '').replace(/\s+/g, '').toLowerCase(); },
+  badName(n) { return /관리자|운영자|admin/i.test(this.nameKey(n)); },
+  // 방장: 이 닉네임을 쓸 수 있는지 (방장 본인 + 접속 중인 사람과 겹치면 'dup'). 응답 없는 옛 연결(재접속 전 흔적)은 정리하고 허용
+  nameProblem(n, except) {
+    const k = this.nameKey(n); if (!k || this.badName(n)) return 'bad';
+    if (k === this.nameKey(ME.name)) return 'dup';
+    for (const c of this.conns.slice()) { if (c === except || !c.pname || this.nameKey(c.pname) !== k) continue; if (performance.now() - (c.lastRx || 0) > 4000) { this.onClose(c); continue; } return 'dup'; }
+    return null;
+  },
   ownsRoom() { if (this.bc) return this.localId === 'HOST'; return !!(this.peer && this.peer.open && !this.peer.destroyed); },
   // ---- 같은 브라우저 탭끼리 테스트 (?local=1) ----
   localTransport(room, host) {
@@ -79,6 +89,7 @@ const NET = {
     if (conn.metadata && conn.metadata.probe) { conn.on('open', () => { try { conn.send({ t: 'cnt', n: this.conns.length + 1, max: MAX_PLAYERS }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 1500); }); return; }
     conn.on('open', () => {
       if (this.conns.length >= MAX_PLAYERS - 1) { try { conn.send({ t: 'full' }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 600); return; }
+      if (conn.metadata && conn.metadata.n != null) { const np = this.nameProblem(conn.metadata.n, conn); if (np) { try { conn.send({ t: 'nameNo', r: np }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } }, 600); return; } }
       this.recovering = false; if (!G.isHost) this.becomeAuthority();
       conn.lastRx = performance.now(); this.conns.push(conn);
       conn.on('data', m => { conn.lastRx = performance.now(); this.onData(m, conn); });
@@ -97,11 +108,12 @@ const NET = {
       const fail = code => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch (e) { } if (this.gpeer === peer) this.gpeer = null; rej(netErr(code)); };
       const to = setTimeout(() => fail('timeout'), ms || 15000);
       peer.on('open', () => {
-        const conn = peer.connect(ROOM_PREFIX + room, { reliable: true, serialization: 'json' });
+        const conn = peer.connect(ROOM_PREFIX + room, { reliable: true, serialization: 'json', metadata: { n: ME.name } });
         conn.on('data', m => {
           conn.lastRx = performance.now();
           if (!done) { // 방장이 받아주면 'acc', 가득 차면 'full'
             if (m && m.t === 'full') fail('full');
+            else if (m && m.t === 'nameNo') fail(m.r === 'bad' ? 'namebad' : 'namedup');
             else if (m && m.t === 'acc') { done = true; clearTimeout(to); this.conns.push(conn); this.hostConn = conn; res(true); }
             return;
           }
@@ -154,7 +166,7 @@ const NET = {
     for (const r of order) {
       say && say(`⚡ 공개방 ${r} 확인 중…`);
       try { await this.join(r, 6000); return { mode: 'join', room: r }; }
-      catch (e) { if (e.code === 'full' || e.code === 'timeout' || e.code === 'webrtc') continue; if (e.code !== 'peer-unavailable') throw e; }
+      catch (e) { if (e.code === 'full' || e.code === 'timeout' || e.code === 'webrtc' || e.code === 'namedup') continue; if (e.code !== 'peer-unavailable') throw e; }
       try { await this.listen(r); return { mode: 'host', room: r }; }
       catch (e) { if (e.code === 'unavailable-id') { try { await this.join(r); return { mode: 'join', room: r }; } catch (e2) { continue; } } throw e; }
     }
@@ -191,7 +203,7 @@ const NET = {
       if (this.conns.length || this.ownsRoom()) break;
       const mig = this.migrateUntil > performance.now(), migMe = mig && this.migrateAid === ME.id;
       if (!migMe) try { await this.join(room); if (!this.recovering && this.conns.length > 1) break; this.recovering = false; this.becomeGuest(); this.hello(); toast('✅ 방에 다시 접속했다'); UI.chatLine(null, '방에 다시 접속했습니다'); break; }
-      catch (e) { if (e.code === 'full') { toast('방이 가득 찼다'); break; } }
+      catch (e) { if (e.code === 'full') { toast('방이 가득 찼다'); break; } if (e.code === 'namedup' || e.code === 'namebad') { toast('❌ ' + e.message, 5000); break; } }
       if (!this.recovering || this.conns.length) break;
       if (!mig || migMe) try { await this.listen(room); if (!migMe) toast(`🌐 방 ${room}을(를) 이어받았다 — 친구가 같은 링크로 다시 들어올 수 있다`, 5000); break; } catch (e) { }
       await sleep(mig ? 1200 : 2500 + k * 700 + Math.random() * 1500); // 여러 명이 동시에 방을 이어받으려 할 때 엇갈리게
@@ -282,6 +294,7 @@ const NET = {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
     if (m.n != null && (m.t === 'hello' || m.t === 'p' || m.t === 'welcome')) m.n = String(m.n).slice(0, 12); if (m.t === 'chat') m.m = String(m.m ?? '').slice(0, 80); // 조작된 클라이언트의 초장문 이름/채팅 방지 (로비·채팅 입력 길이와 같게)
+    if (G.isHost && conn && conn.pname && m.t === 'p') m.n = conn.pname; // 게임 중 닉네임 바꿔치기 방지
     if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
@@ -294,11 +307,12 @@ const NET = {
         if (!G.isHost || !conn) break;
         if (!m.id || m.id === ME.id || [...this.conns].some(c => c !== conn && c.pid === m.id)) { conn.pid = null; try { conn.send({ t: 'reid', f: ME.id }); } catch (e) { } break; } // 같은 브라우저 탭 등 id 충돌 → 새 id 요청
         if (conn.helloId && conn.helloId !== m.id) removeRemote(conn.helloId); conn.helloId = m.id; conn.pid = m.id; // 같은 연결이 id를 바꿔 다시 인사하면 예전 캐릭터 정리
+        { const np = this.nameProblem(m.n, conn); if (np) { try { conn.send({ t: 'nameNo', r: np }); } catch (e) { } setTimeout(() => { try { conn.close(); } catch (e) { } this.onClose(conn); }, 600); break; } }
+        conn.pname = m.n;
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp._nk = null; refreshRemoteName(rp);
+        const rp = getRemote(m.id); rp.name = m.n; setRemoteOutfit(rp, m.o); rp._nk = null; refreshRemoteName(rp);
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
-        conn.pname = m.n;
         for (const c of this.conns) { if (c === conn || !c.pid) continue; const o = G.players.get(c.pid); if (o) try { conn.send({ t: 'peer', f: ME.id, id: c.pid, n: o.name, o: o.char.outfit }); } catch (e) { } }
         this.relay({ t: 'peer', f: ME.id, id: m.id, n: m.n, o: m.o, join: 1 }, conn);
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
@@ -321,7 +335,7 @@ const NET = {
       case 'taxiRm': TAXI.onRemove(m, f); break;
       case 'taxiHail': if (G.isHost) TAXI.parkTraffic(vehicles.get(m.v)); break;
       case 'welcome': {
-        const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.baseCol = '#ffd34a'; rp._nk = null; refreshRemoteName(rp); G.hostId = m.id;
+        const rp = getRemote(m.id); rp.name = m.n; setRemoteOutfit(rp, m.o); rp.baseCol = '#ffd34a'; rp._nk = null; refreshRemoteName(rp); G.hostId = m.id;
         G.time = m.time; G.weather = m.wt; for (const s of m.plots) applyPlotState(s);
         for (const i of m.trees) if (TREES[i] && TREES[i].alive) setTreeVisible(TREES[i], false);
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
@@ -333,10 +347,11 @@ const NET = {
       case 'bye': { const rp = G.players.get(m.f); if (!rp) break; if (!G.isHost) UI.chatLine(null, `${rp.name}님이 나갔습니다`); removeRemote(m.f); TAXI.removeOwnedBy(m.f); this.updateRoomInfo(); break; }
       case 'peer': { // 방장이 알려주는 다른 게스트 정보 (이름·외형)
         if (G.isHost || conn !== this.hostConn || !m.id || m.id === ME.id) break;
-        const rp = getRemote(m.id); rp.name = String(m.n ?? '???').slice(0, 12); if (m.o) rp.char.setOutfit(m.o); rp._nk = null; refreshRemoteName(rp);
+        const rp = getRemote(m.id); rp.name = String(m.n ?? '???').slice(0, 12); if (m.o) setRemoteOutfit(rp, m.o); rp._nk = null; refreshRemoteName(rp);
         if (m.join) { toast(`🎉 ${rp.name} 입장!`); UI.chatLine(null, `${rp.name}님이 들어왔습니다`); }
         this.updateRoomInfo(); break;
       }
+      case 'nameNo': if (!G.isHost && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce('❌ 닉네임 사용 불가', m.r === 'bad' ? '"관리자"가 들어간 닉네임은 쓸 수 없어요' : '이 방에 같은 닉네임이 있어요 — 바꿔서 다시 들어와 주세요'); setTimeout(() => location.replace(inviteLink(G.room)), 2200); } break;
       case 'migrate': if (!G.isHost && conn === this.hostConn) { this.migrateUntil = performance.now() + 25000; this.migrateAid = m.aid; } break;
       case 'p': {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
@@ -412,12 +427,12 @@ const NET = {
       case 'panic': if (G.isHost) panicAround(m.x, m.z, 35); break;
       case 'adopt': if (G.isHost) { const a = ANIMALS[m.a]; if (a && !a.owner) { a.owner = f; a.state = 'follow'; notifyPlayer(f, { t: 'adopted', a: a.id }); } } break;
       case 'pet': { const a = ANIMALS[m.a]; if (a) FX.emoji('💕', a.x, a.y + 1.2, a.z); break; }
-      case 'outfit': { const rp = G.players.get(f); if (rp) rp.char.setOutfit(m.o); break; }
+      case 'outfit': { const rp = G.players.get(f); if (rp) setRemoteOutfit(rp, m.o); break; }
       case 'pedAct': if (G.isHost) { const p = PEDS[m.id]; if (p && p.state !== 'dead') { if (m.a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = m.d; } if (m.a === 'talk') { p.state = 'talk'; p.timer = 4; } if (m.a === 'rob') { p.state = 'flee'; p.timer = 10; const rp = G.players.get(f); if (rp) { p.fx = rp.x; p.fz = rp.z; } } } } break;
     }
   },
 };
-const NO_RELAY = new Set(['hello', 'peer', 'migrate', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
+const NO_RELAY = new Set(['hello', 'peer', 'migrate', 'nameNo', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
 // tree regrowth (host)
 function hostTrees(dt) {
   if ((G._treeT = (G._treeT || 0) - dt) > 0) return; G._treeT = 5;

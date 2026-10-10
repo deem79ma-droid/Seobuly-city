@@ -228,6 +228,11 @@ class Character {
       for (const s of [1, -1]) add(H, M(CG.box, gm, 0.043 * s, 0.115, 0.123, 0.05, 0.035, o.glasses === 'sunglasses' ? 0.01 : 0.004), false);
       add(H, M(CG.box, gm, 0, 0.12, 0.124, 0.03, 0.006, 0.006), false);
     }
+    if (o.mask === 'admin') { // 관리자 마스크: 얼굴 앞을 덮는 검은 가면 + 빨간 눈 + 금색 문양
+      const mk = add(H, M(CG.cap(0.5, 0.128), cmat('#0d0d10', 0.35, 0.6), 0, 0.1, 0.004, 1.02, 1.08, 1.04), false); mk.rotation.x = Math.PI / 2;
+      for (const s of [1, -1]) add(H, M(CG.box, cmat('#ff2a2a', 0.3, 0, 'emis'), 0.043 * s, 0.118, 0.135, 0.046, 0.013, 0.008), false);
+      add(H, M(CG.box, cmat('#e8c040', 0.3, 0.8), 0, 0.172, 0.118, 0.042, 0.022, 0.008), false);
+    }
     this.setShadow(this.shadow !== false); this.setDetail(this.detail !== false, true);
   }
   setDetail(v, force) { if (!force && this.detail === v) return; this.detail = v; if (this.meshes) for (const m of this.meshes) if (m.userData.det) m.visible = v; }
