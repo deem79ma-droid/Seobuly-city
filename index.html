@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="google-site-verification" content="6bog7EXcQvXpF35GhbPdJgBkD5aAElbaMYkgYsVpZt4" />
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#07080c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%99%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <title>서불리 시티 3D - 무료 브라우저 오픈월드 멀티플레이 게임</title>
 <meta name="description" content="설치 없이 브라우저에서 바로 즐기는 무료 3D 오픈월드 게임. 친구와 2인 멀티플레이로 도시를 누비며 차량 운전, 택시, 건축, 땅 구매, 카지노, 경찰·교도소까지 — 서불리 시티에서 나만의 이야기를 만들어 보세요.">
 <meta name="keywords" content="서불리 시티, 서불리 시티 3D, 브라우저 게임, 무료 게임, 오픈월드, 멀티플레이, 웹게임, 3D 게임, 설치 없는 게임, 친구랑 하는 게임, 도시 게임, 운전 게임, Seobuly City">
@@ -1949,6 +1950,7 @@ function buildWeaponMesh(type) {
   return g;
 }
 // ---- name/chat sprites ----
+function disposeSprite(s) { if (!s) return; if (s.parent) s.parent.remove(s); if (s.material) { if (s.material.map) s.material.map.dispose(); s.material.dispose(); } }
 function textSprite(text, color = '#fff', bg = 'rgba(0,0,0,.55)', size = 48) {
   const c = document.createElement('canvas'); const x = c.getContext('2d'); x.font = `900 ${size}px "Noto Sans KR",sans-serif`;
   const w = Math.min(1024, Math.ceil(x.measureText(text).width + size * 0.9)); c.width = w; c.height = size * 1.5;
@@ -2080,18 +2082,18 @@ class Character {
     out.copy(m.userData.muzzle); m.localToWorld(out); return out;
   }
   setName(text, color = '#fff') {
-    if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
+    if (this.nameTag) disposeSprite(this.nameTag);
     this.nameText = text || ''; if (!text) { this.nameTag = null; return; }
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
-    if (this.bubble) { this.root.remove(this.bubble); this.bubble.material.map.dispose(); }
-    this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
+    if (this.bubble) disposeSprite(this.bubble);
+    text = String(text ?? ''); this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
   }
   // s: {speed, grounded, state, aiming, aimPitch, action, actionT, dance, carry}
   update(dt, s) {
     this.t += dt; const P = this.P; const p = {}; const t = this.t; s.spin = 0;
-    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { this.root.remove(this.bubble); this.bubble = null; } }
+    if (this.bubble) { this.bubbleT -= dt; if (this.bubbleT <= 0) { disposeSprite(this.bubble); this.bubble = null; } }
     const spd = s.speed || 0; const runT = clamp((spd - 1.8) / 4.2, 0, 1);
     const st = s.state || 'normal';
     // defaults
@@ -3166,16 +3168,18 @@ const ME = {
 const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
 const KEYS = {}; const INP = { mx: 0, mz: 0, run: false, fire: false, aim: false, touchRun: false, joyMag: 0 };
 let pointerLocked = false;
+// 한글 입력 상태(ㅈㄴㅁㅇ… 또는 IME 'Process')에서도 WASD·단축키가 동작하도록, 글자키는 물리 키(e.code)로 맞춘다
+function keyOf(e) { const k = (e.key || '').toLowerCase(); if (/^Key[A-Z]$/.test(e.code) && !/^[a-z]$/.test(k)) return e.code.slice(3).toLowerCase(); return k; }
 function initInput() {
   const cv = renderer.domElement;
   addEventListener('keydown', e => {
-    if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
-    if (!G.started) return; const k = e.key.toLowerCase(); KEYS[k] = true; KEYS[e.code] = true;
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { if (e.isComposing || e.keyCode === 229) { const ci = document.activeElement; if (!ci._imeWait) { ci._imeWait = true; ci.addEventListener('compositionend', () => setTimeout(() => { ci._imeWait = false; if (!ci.classList.contains('hidden')) UI.sendChat(); }, 0), { once: true }); } } else UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
+    if (!G.started) return; const k = keyOf(e); KEYS[k] = true; KEYS[e.code] = true;
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
     if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
     if (UI.menuOpen) { if (k === 'escape' || k === 'e' || k === 'tab') UI.closeMenu(); return; }
-    if (k === 't' || k === 'enter') { e.preventDefault(); UI.openChat(); return; }
+    if (k === 't' || k === 'enter') { e.preventDefault(); if (k === 'enter' && performance.now() - (UI._chatSentT || 0) < 250) return; UI.openChat(); return; } // 한글 조합 중 Enter로 보낸 직후 따라오는 Enter에 채팅창이 다시 열리지 않게
     if (e.repeat) return;
     if (k === 'e') doInteract(); if (k === 'f') toggleVehicle(); if (k === 'r') startReload();
     if (k === 'g') UI.openDance(); if (k === 'm') UI.openMap(); if (k === 'v') CAM.fp = !CAM.fp; if (k === 'p' || k === 'escape' || k === 'tab') UI.openPhone();
@@ -3186,7 +3190,7 @@ function initInput() {
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
   });
-  addEventListener('keyup', e => { KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
+  addEventListener('keyup', e => { KEYS[keyOf(e)] = false; KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
   addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; INP.fire = false; INP.aim = false; });
   cv.addEventListener('mousedown', e => {
     if (!G.started || IS_TOUCH) return; AU.init();
@@ -3590,7 +3594,7 @@ function getRemote(id) {
   if (!rp) { rp = { id, name: '???', x: 0, y: LAND, z: 0, yaw: 0, tx: 0, ty: LAND, tz: 0, tyaw: 0, char: new Character(randomOutfit()), anim: {}, veh: null, dead: false, wanted: 0, grudge: {}, hp: 100, first: true }; scene.add(rp.char.root); G.players.set(id, rp); }
   return rp;
 }
-function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene.remove(rp.char.root); for (const v of vehicles.values()) { if (v.driver === id) { v.driver = null; if (G.isHost) v.ctrl = 'local'; } if (v.passenger === id) v.passenger = null; } G.players.delete(id); }
+function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene.remove(rp.char.root); disposeSprite(rp.char.nameTag); rp.char.nameTag = null; disposeSprite(rp.char.bubble); rp.char.bubble = null; for (const v of vehicles.values()) { if (v.driver === id) { v.driver = null; if (G.isHost) v.ctrl = 'local'; } if (v.passenger === id) v.passenger = null; } G.players.delete(id); }
 function renderRemotes(dt) {
   for (const rp of G.players.values()) {
     const c = rp.char; const v = rp.veh ? vehicles.get(rp.veh) : null;
@@ -4378,7 +4382,7 @@ function syncPlotVisual(p) {
     for (let i = 0; i < 3; i++) { const c = new Character(randomOutfit(Math.random, 'worker'), { shadow: false }); c.setWeapon(null); scene.add(c.root); V.workers.push({ c, a: i / 3 * TAU + 0.5 }); }
     V.label = null;
   }
-  if (p.state !== 'building' && V.site) { scene.remove(V.site); for (const w of V.workers) scene.remove(w.c.root); V.site = null; V.workers = []; if (V.label) { scene.remove(V.label); V.label = null; } }
+  if (p.state !== 'building' && V.site) { scene.remove(V.site); for (const w of V.workers) scene.remove(w.c.root); V.site = null; V.workers = []; if (V.label) { disposeSprite(V.label); V.label = null; } }
   if (p.state === 'done' && V.group && !V.collider) {
     const fp = plotFootprint(p, p.design); V.collider = addCollider(p.x - fp.hw, p.z - fp.hd, p.x + fp.hw, p.z + fp.hd, p.y + (V.group.userData.H || 8), 'bld');
     if (V.clip) V.clip.constant = 9999; if (V.doneFx !== true) { V.doneFx = true; }
@@ -4407,7 +4411,7 @@ function updateConstruction(dt, cam) {
     if (near && Math.random() < dt * 3) { FX.impact({ x: p.x + rnd(-p.w / 3, p.w / 3), y: p.y + rnd(0.2, H * p.progress + 1), z: p.z + rnd(-p.d / 3, p.d / 3) }, 'dust'); }
     if (near && Math.random() < dt * 1.5) sfx('build', p.x, p.z, 0.6);
     // label
-    const pct = Math.floor(p.progress * 100); if (V.lastPct !== pct) { V.lastPct = pct; if (V.label) { scene.remove(V.label); V.label.material.map.dispose(); } V.label = textSprite(`🏗️ ${BUILD_DESIGNS[p.design].name} ${pct}%`, '#ffd34a'); V.label.scale.multiplyScalar(4); V.label.position.set(p.x, top + 4, p.z); scene.add(V.label); }
+    const pct = Math.floor(p.progress * 100); if (V.lastPct !== pct) { V.lastPct = pct; if (V.label) disposeSprite(V.label); V.label = textSprite(`🏗️ ${BUILD_DESIGNS[p.design].name} ${pct}%`, '#ffd34a'); V.label.scale.multiplyScalar(4); V.label.position.set(p.x, top + 4, p.z); scene.add(V.label); }
     V.label.position.y = top + 4;
   }
 }
@@ -4658,6 +4662,7 @@ const NET = {
   onData(m, conn) {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
+    if (m.n != null && (m.t === 'hello' || m.t === 'p' || m.t === 'welcome')) m.n = String(m.n).slice(0, 12); if (m.t === 'chat') m.m = String(m.m ?? '').slice(0, 80); // 조작된 클라이언트의 초장문 이름/채팅 방지 (로비·채팅 입력 길이와 같게)
     if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
@@ -4826,7 +4831,7 @@ const UI = {
   openChat() { const i = $('#chatIn'); i.classList.remove('hidden'); i.focus(); if (document.pointerLockElement) document.exitPointerLock(); },
   closeChat() { const i = $('#chatIn'); i.value = ''; i.classList.add('hidden'); i.blur(); },
   sendChat() {
-    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); if (!m) return;
+    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); this._chatSentT = performance.now(); if (!m) return;
     if (m.startsWith('/')) { this.command(m); return; }
     this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
@@ -5139,7 +5144,7 @@ const UI = {
     hold(B.phone, () => this.openPhone()); hold(B.map, () => this.openMap()); hold(B.chat, () => this.openChat()); hold(B.dance, () => this.openDance()); hold(B.cam, () => { CAM.fp = !CAM.fp; });
     this.touchBtns = B;
     // joystick
-    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
+    const joy = $('#joy'), base = $('#joyBase'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0, jox = 0, joy0 = 0; // jox/joy0: #joy 박스의 화면 위치 (조이스틱 그림은 #joy 안에서 상대 좌표로 그림)
     joy.addEventListener('touchstart', e => {
   const menu = document.getElementById('menu');
   const bigmap = document.getElementById('bigmap');
@@ -5151,11 +5156,12 @@ const UI = {
   if (anyOpen) return;
   e.preventDefault(); AU.init();
   const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
+  const jr = joy.getBoundingClientRect(); jox = jr.left; joy0 = jr.top;
   base.style.display = knob.style.display = 'block';
-  base.style.left = knob.style.left = jx + 'px';
-  base.style.top = knob.style.top = jy + 'px';
+  base.style.left = knob.style.left = (jx - jox) + 'px';
+  base.style.top = knob.style.top = (jy - joy0) + 'px';
 }, { passive: false });
-    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx + dx) + 'px'; knob.style.top = (jy + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
+    joy.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid) { let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy), m = 60; if (l > m) { dx *= m / l; dy *= m / l; } knob.style.left = (jx - jox + dx) + 'px'; knob.style.top = (jy - joy0 + dy) + 'px'; INP.mx = dx / m; INP.mz = -dy / m; INP.joyMag = Math.min(1, l / m); } }, { passive: false });
     UI.joyReset = () => { if (jid !== null) { jid = null; base.style.display = knob.style.display = 'none'; } };
     const jend = e => { for (const t of e.changedTouches) if (t.identifier === jid) { jid = null; INP.mx = INP.mz = 0; INP.joyMag = 0; base.style.display = knob.style.display = 'none'; } };
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
@@ -5801,12 +5807,7 @@ async function startGame(mode, code) {
     if (mode === 'host') {
       for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
       G.online = true; G.isHost = true;
-      setTimeout(() => {
-        const msg = `//: 방코드 ${G.room}`;
-        if (UI && UI.chatLine) UI.chatLine(null, msg);
-        else if (typeof toast === 'function') toast(msg);
-        console.log(msg);
-      }, 500);
+      console.log(`//: 방코드 ${G.room}`); // 채팅창 안내는 월드 로딩이 끝난 뒤 한 번만 (loadWorld) — 예전엔 로딩 중에도 찍혀서 두 줄로 보였음
     }
     if (mode === 'join') {
       let err = null;
