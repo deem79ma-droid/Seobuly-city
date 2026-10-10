@@ -56,11 +56,12 @@ function edgeNearPoint(px, pz, minD, maxD, filter) {
   return null;
 }
 function playersList() { // positions of all players (host view)
-  const L = []; if (!ME.dead) L.push({ id: ME.id, x: ME.x, y: ME.y, z: ME.z, wanted: ME.wanted, grudge: ME.grudge, inVeh: !!ME.vehicle, me: true });
-  for (const [id, rp] of G.players) if (!rp.dead) L.push({ id, x: rp.x, y: rp.y, z: rp.z, wanted: rp.wanted || 0, grudge: rp.grudge || {}, inVeh: !!rp.veh });
+  // 실내에 있는 사람은 건물 문 앞 좌표로 취급(NPC가 실내 좌표로 몰려가지 않게), 수감자는 수배 0
+  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, inVeh: !!ME.vehicle, me: true, inside: ins }); }
+  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, inVeh: !!rp.veh, inside: ins }); }
   return L;
 }
-function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') d = Math.hypot(ME.x - x, ME.z - z); for (const rp of G.players.values()) d = Math.min(d, Math.hypot(rp.x - x, rp.z - z)); return d; }
+function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') { const a = anchorOf(ME); d = Math.hypot(a.x - x, a.z - z); } for (const rp of G.players.values()) { const a = anchorOf(rp); d = Math.min(d, Math.hypot(a.x - x, a.z - z)); } return d; }
 function spawnPedNear(p, px, pz) {
   const r = edgeNearPoint(px, pz, 50, 190, e => !e.bridge); if (!r) return false;
   placePedOnEdge(p, r.e, r.t, Math.random() < 0.5 ? 1 : -1, Math.random() < 0.5 ? 1 : -1);
@@ -156,8 +157,8 @@ function pedFlee(p, dt) {
 }
 function targetPos(tg) {
   if (!tg) return null;
-  if (tg.kind === 'me') return ME.dead ? null : { x: ME.x, y: ME.y, z: ME.z, veh: ME.vehicle };
-  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead ? { x: rp.x, y: rp.y, z: rp.z } : null; }
+  if (tg.kind === 'me') return ME.dead || INTERIOR.cur || ME.jail ? null : { x: ME.x, y: ME.y, z: ME.z, veh: ME.vehicle };
+  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead && !((rp.bi ?? -1) >= 0) && !rp.jail ? { x: rp.x, y: rp.y, z: rp.z } : null; }
   if (tg.kind === 'ped') { const q = PEDS[tg.id]; return q && q.state !== 'dead' && q.state !== 'parked' ? { x: q.x, y: q.y, z: q.z } : null; }
   return null;
 }

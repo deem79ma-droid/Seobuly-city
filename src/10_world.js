@@ -115,10 +115,33 @@ function landF(x, z) {
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
   let h = wW * (fbm(x * 0.0032, z * 0.0032, 5) * 0.5 + 0.55) * 48;
-  h += wW * 170 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 220 * 220));
+  h += wW * 210 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 230 * 230)); // 디산베이 북쪽 큰 산 (서부리산)
   h += wW * 70 * Math.exp(-((x + 1350) ** 2 + (z - 820) ** 2) / (2 * 170 * 170));
-  h += 34 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 100 * 100));
+  // 시모느 아일랜드: 동쪽 언덕 + 북쪽 작은 봉우리
+  h += 46 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 110 * 110));
+  h += 24 * Math.exp(-((x - 1830) ** 2 + (z - 230) ** 2) / (2 * 80 * 80));
+  // 지올르 북쪽 · 캥지베 남쪽 해안 구릉
+  const band = smooth(-760, -680, x) * smooth(300, 220, x);
+  h += band * smooth(-990, -1060, z) * (fbm(x * 0.006 + 2, z * 0.006, 3) * 0.5 + 0.7) * 30;
+  h += band * smooth(975, 1045, z) * (fbm(x * 0.006 - 4, z * 0.006 + 1, 3) * 0.5 + 0.7) * 24;
   return Math.max(0, h);
+}
+// 도로까지 함께 올라가는 완만한 기복 (디산베이 외곽 언덕길). 마을·농장·호수 주변은 평지 유지
+function gradeAt(x, z) {
+  const wW = smooth(-760, -900, x); if (wW <= 0) return 0;
+  let g = (fbm(x * 0.0019 + 5, z * 0.0019 - 3, 3) * 0.5 + 0.5) * 20;
+  g += 26 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 300 * 300));
+  g += 12 * Math.exp(-((x + 1350) ** 2 + (z - 820) ** 2) / (2 * 260 * 260));
+  for (const f of FLAT) g *= smooth(f.r + 10, f.r + 170, distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]));
+  g *= smooth(LAKE.r + 25, LAKE.r + 170, Math.hypot(x - LAKE.x, z - LAKE.z));
+  return Math.max(0, g) * wW;
+}
+// 해안까지의 대략적인 거리 (육지 안쪽 +). 모래사장 색칠용
+function coastDist(x, z) {
+  const qx = Math.abs(x + 50) - 1450 + 220, qz = Math.abs(z) - 1100 + 220;
+  const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220;
+  const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430;
+  return -Math.min(sd, sdI);
 }
 function hmIdx(i, j) { return j * HM.W + i; }
 function hmSample(arr, x, z) {
@@ -151,10 +174,11 @@ function buildHeightmap() {
   for (let j = 0; j < HM.H; j++) for (let i = 0; i < HM.W; i++) {
     const x = HM.x0 + i * HM.res, z = HM.z0 + j * HM.res, k = hmIdx(i, j);
     const land = landF(x, z);
-    let h = lerp(-9, LAND, land);
+    const l3 = land * land * land;
+    let h = lerp(-9, LAND, land) + gradeAt(x, z) * l3;
     let mask = smooth(12, 70, roadDistF[k]);
     for (const f of FLAT) { const d = distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]); mask *= smooth(f.r, f.r + 45, d); }
-    h += (hillsAt(x, z) + fbm(x * 0.02, z * 0.02, 2) * 0.8 * smooth(-650, -760, x)) * mask * land * land * land;
+    h += (hillsAt(x, z) + fbm(x * 0.02, z * 0.02, 2) * 0.8 * smooth(-650, -760, x)) * mask * l3;
     const dl = Math.hypot(x - LAKE.x, z - LAKE.z); h = lerp(h, -3.5, smooth(LAKE.r + 30, LAKE.r - 15, dl));
     hmData[k] = h;
   }
@@ -343,6 +367,7 @@ function gridInsert(c) {
   }
 }
 function removeCollider(c) {
+  const k = COLLIDERS.lastIndexOf(c); if (k >= 0) COLLIDERS.splice(k, 1);
   for (let i = Math.floor(c.x0 / COL_CELL); i <= Math.floor(c.x1 / COL_CELL); i++) for (let j = Math.floor(c.z0 / COL_CELL); j <= Math.floor(c.z1 / COL_CELL); j++) {
     const a = colGrid.get(i * 100000 + j); if (a) { const ix = a.indexOf(c); if (ix >= 0) a.splice(ix, 1); }
   }
@@ -362,7 +387,7 @@ function resolveCircle(x, z, r, y = 0, h = 1.8) {
   _res.hit = false; _res.c = null;
   const list = collidersNear(x, z, r + 2);
   for (let it = 0; it < 2; it++) for (const c of list) {
-    if (y > c.y1 || y + h < c.y0) continue;
+    if (y > c.y1 - 0.08 || y + h < c.y0) continue; // 윗면에 서 있으면 충돌 아님 (옥상·바닥 위)
     if (c.circle) {
       const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), m = r + c.r;
       if (d < m && d > 1e-4) { const k = (m - d); x += dx / d * k; z += dz / d * k; _res.hit = true; _res.nx = dx / d; _res.nz = dz / d; _res.c = c; }
@@ -450,6 +475,30 @@ function addSign(text, sub, bg, x, y, z, w, h, faceYaw, fg) {
 // face side helpers: side 'n'(-z),'s'(+z),'e'(+x),'w'(-x)
 const SIDE_YAW = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
 const SIDE_VEC = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
+// ---- 들어갈 수 있는 건물 목록 (모든 건물에 문 + 실내) ----
+const BLD_KIND = {
+  office: '오피스 빌딩', bank: '서부리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
+  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
+  food: '음식점', pcbang: 'PC방', gym: '헬스장', pool: '실내 수영장', gun: '총포사', clothes: '옷가게', casino: '카지노', guard: '교도관실', home: '내 집',
+};
+const BUILDINGS = []; const BLD_GRID = new Map(); const BLD_CELL = 64;
+function regBuilding(kind, x, z, w, d, top, side, extra = {}) {
+  const [sx, sz] = SIDE_VEC[side] || [0, 1];
+  const wx = x + sx * (w / 2), wz = z + sz * (d / 2); // 문이 붙은 벽면 중앙
+  const door = extra.door || { x: wx + sx * 1.4, z: wz + sz * 1.4 };
+  const b = Object.assign({ id: BUILDINGS.length, kind, name: BLD_KIND[kind] || '건물', x, z, w, d, top, side }, extra);
+  b.door = { x: door.x, z: door.z, wx, wz, sx, sz }; b.y0 = extra.y0 ?? groundHeight(door.x, door.z);
+  BUILDINGS.push(b); bldInsert(b);
+  if (!extra.noDoorMesh) { // 문짝 (벽에 살짝 붙인 판)
+    const m = mbAt('plain', wx, wz); const y = b.y0 - 0.05;
+    m.box(wx + sx * 0.06, y, wz + sz * 0.06, sx ? 0.14 : 1.9, 2.6, sz ? 0.14 : 1.9, C(0x2e2620));
+    m.box(wx + sx * 0.1, y + 2.6, wz + sz * 0.1, sx ? 0.2 : 2.3, 0.25, sz ? 0.2 : 2.3, C(0xd8c890));
+  }
+  return b;
+}
+function bldInsert(b) { const k = Math.floor(b.door.x / BLD_CELL) + ',' + Math.floor(b.door.z / BLD_CELL); let a = BLD_GRID.get(k); if (!a) { a = []; BLD_GRID.set(k, a); } a.push(b); }
+function buildingsNear(x, z) { const out = []; const i0 = Math.floor(x / BLD_CELL), j0 = Math.floor(z / BLD_CELL); for (let i = i0 - 1; i <= i0 + 1; i++) for (let j = j0 - 1; j <= j0 + 1; j++) { const a = BLD_GRID.get(i + ',' + j); if (a) out.push(...a); } return out; }
+const PRISONS = [];
 
 // ================= BUILD WORLD =================
 async function buildWorld(progress) {
@@ -517,11 +566,14 @@ function fillBlock(b) {
   const R = b.region;
   if (b.use === 'fac' && (b.fac === 'zoo' || b.fac === 'school')) { if (b.fac === 'zoo') buildZooBlock(b); else buildSchoolBlock(b); return; }
   if (b.use === 'park' || b.use === 'court') { buildParkBlock(b); return; }
-  if (b.use === 'factoryblock') { buildFactoryHall((b.ix0 + b.ix1) / 2, (b.iz0 + b.iz1) / 2, b.ix1 - b.ix0 - 8, b.iz1 - b.iz0 - 8, R); return; }
+  if (b.use === 'factoryblock') { buildFactoryHall((b.ix0 + b.ix1) / 2, (b.iz0 + b.iz1) / 2, b.ix1 - b.ix0 - 8, b.iz1 - b.iz0 - 8, R, false, 's'); return; }
   if (b.use === 'parking') { buildParking(b); return; }
+  const prisonBlock = b.use === 'fac' && b.fac === 'police' && b.lots.length > 1;
+  const lot0 = b.lots[0];
   b.lots.forEach((lot, li) => {
     const side = lotFront(lot);
-    if (b.use === 'fac' && li === 0) { buildFacility(b.fac, lot, side, R); return; }
+    if (b.use === 'fac' && li === 0) { const f = buildFacility(b.fac, lot, side, R); if (prisonBlock) buildPrison(b, lot0, f); return; }
+    if (prisonBlock && lot.z0 > lot0.z0 + 1) return; // 경찰서 뒤편은 교도소 부지
     if (b.use === 'fac' && b.fac === 'pool' && li === 1) { buildOutdoorPool(lot); return; }
     if (b.use === 'plotblock' && li === 0) { makePlot(lot, side, R); return; }
     buildLotBuilding(lot, side, R, b);
@@ -560,6 +612,7 @@ function roofProps(x, z, w, d, top, n = 3) {
     else m.box(px, top, pz, wr(3, 5), 2.6, wr(3, 5), C(0xd0ccc4));
   }
 }
+function seoKind(x, z) { const k = hash2(x * 7 | 0, z * 13 | 0); return k < 0.12 ? 'bank' : k < 0.27 ? 'cafe' : k < 0.4 ? 'mart' : k < 0.5 ? 'restaurant' : k < 0.55 ? 'church' : 'office'; }
 function buildLotBuilding(lot, side, R, b) {
   const lw = lot.x1 - lot.x0, ld = lot.z1 - lot.z0, cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
   if (R === 'seoburi') {
@@ -573,18 +626,20 @@ function buildLotBuilding(lot, side, R, b) {
       const top = addBuildingBox(cx, cz, tw, td, h - podH, style, col, { y0: LAND - 0.2 + podH + 0.7 });
       if (wrng() < 0.5) { const t2 = addBuildingBox(cx, cz, tw * 0.6, td * 0.6, wr(8, 25), style, col, { y0: top }); roofProps(cx, cz, tw * 0.6, td * 0.6, t2, 2); if (wrng() < 0.5) mbAt('plain', cx, cz).box(cx, t2, cz, 0.4, wr(10, 25), 0.4, C(0x888888)); }
       else roofProps(cx, cz, tw, td, top, 4);
-    } else { const top = addBuildingBox(cx, cz, w, d, h, style, col, { shop: true }); roofProps(cx, cz, w, d, top, 4); }
+      regBuilding(seoKind(cx, cz), cx, cz, w + 0.4, d + 0.4, top, side, { roofW: tw, roofD: td });
+    } else { const top = addBuildingBox(cx, cz, w, d, h, style, col, { shop: true }); roofProps(cx, cz, w, d, top, 4); regBuilding(seoKind(cx, cz), cx, cz, w + 0.4, d + 0.4, top, side); }
   } else if (R === 'jiolle') {
     if (wrng() < 0.6) { // houses
       const n = 2; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
         const hx = lot.x0 + lw * (i + 0.5) / n, hz = lot.z0 + ld * (j + 0.5) / n; buildHouse(hx, hz, lw / n - 5, ld / n - 5, wrng() < 0.5 ? 1 : 2, R);
       }
-    } else { const h = wr(12, 24); const top = addBuildingBox(cx, cz, lw - 6, ld - 6, h, 'apt', C(wpick(PALETTE.apt))); roofProps(cx, cz, lw - 6, ld - 6, top, 2); }
+    } else { const h = wr(12, 24); const top = addBuildingBox(cx, cz, lw - 6, ld - 6, h, 'apt', C(wpick(PALETTE.apt))); roofProps(cx, cz, lw - 6, ld - 6, top, 2); regBuilding('apartment', cx, cz, lw - 6, ld - 6, top, side); }
   } else if (R === 'kaengjibe') {
     const k = wrng();
-    if (k < 0.15) { buildFactoryHall(cx, cz, lw - 6, ld - 6, R, true); return; }
+    if (k < 0.15) { buildFactoryHall(cx, cz, lw - 6, ld - 6, R, true, side); return; }
     const h = wr(9, 24); const w = lw - wr(3, 7), d = ld - wr(3, 7); const col = C(wpick(PALETTE.brick));
-    const top = addBuildingBox(cx, cz, w, d, h, 'brick', col, { shop: wrng() < 0.5 });
+    const shopF = wrng() < 0.5; const top = addBuildingBox(cx, cz, w, d, h, 'brick', col, { shop: shopF });
+    { const hk = hash2(cx * 3 | 0, cz * 5 | 0); regBuilding(hk < 0.1 ? 'church' : shopF ? (hk < 0.55 ? 'mart' : 'restaurant') : 'apartment', cx, cz, w + (shopF ? 0.4 : 0), d + (shopF ? 0.4 : 0), top, side); }
     roofProps(cx, cz, w, d, top, 2);
     // fire escape
     const fs = side; const [sx, sz] = SIDE_VEC[fs];
@@ -594,7 +649,7 @@ function buildLotBuilding(lot, side, R, b) {
     // fence + barrels
     if (wrng() < 0.5) { const bx = cx + wr(-lw / 3, lw / 3), bz = cz + (sz || 1) * (d / 2 + 2); mbAt('metalPlain', bx, bz).cyl(bx, LAND, bz, 0.4, 1.1, C(0x6a3a1a), 8); SMOKERS.push({ x: bx, y: LAND + 1.2, z: bz, fire: true, rate: 0.12 }); }
   } else if (R === 'simone') {
-    if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); }
+    if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); regBuilding('hotel', cx, cz, lw - 10, ld - 10, top, side); }
     else buildVilla(cx, cz, lw - 6, ld - 6, side);
   }
 }
@@ -617,7 +672,8 @@ function buildHouse(x, z, w, d, floors, R, y0 = LAND - 0.3) {
   mbAt('plain', x, z).box(x + w * 0.25, y0 + h, z - d * 0.15, 0.8, 3.2, 0.8, C(0x7a5a4a));
   // door
   mbAt('plain', x, z).box(x, y0 + 0.4, z + d / 2 + 0.02, 1.2, 2.2, 0.1, C(0x6a4026));
-  addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, y0 + h + 4, 'bld');
+  const apex = y0 + 0.4 + h + Math.min(w, d) * 0.38; addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, apex, 'bld');
+  regBuilding('house', x, z, w, d, apex, 's', { noDoorMesh: true, y0: y0 + 0.3, floors: floors });
 }
 function buildVilla(x, z, w, d, side) {
   w = Math.min(w, 30); d = Math.min(d, 26);
@@ -629,18 +685,20 @@ function buildVilla(x, z, w, d, side) {
   m.box(x + w * 0.05, y0 + 4.9, z - d * 0.1, w * 0.4, 3.2, d * 0.4, wall);
   mbAt('glass', x, z).box(x + w * 0.05, y0 + 5.4, z - d * 0.1, w * 0.41, 1.8, d * 0.41, C(0xbfe0f0), BAY.glass, { noTop: true, noTopx: 1 });
   addCollider(x - w * 0.45, z - d * 0.33, x + w * 0.25, z + d * 0.33, y0 + 8.5, 'bld');
+  regBuilding('villa', x - w * 0.1, z, w * 0.7, d * 0.66, y0 + 8.5, side === 'n' || side === 's' ? side : 's');
   // pool
   const px = x + w * 0.3, pz = z + d * 0.15;
   m.box(px, y0, pz, w * 0.3, 0.5, d * 0.5, C(0xdfe8ec));
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.25, d * 0.42), MAT.poolWater); pool.rotation.x = -Math.PI / 2; pool.position.set(px, y0 + 0.52, pz); scene.add(pool);
   TREES.push({ type: 'palm', x: x - w * 0.42, z: z + d * 0.42, s: wr(0.8, 1.1) });
 }
-function buildFactoryHall(x, z, w, d, R, small) {
+function buildFactoryHall(x, z, w, d, R, small, side = 's', noReg = false) {
   const y0 = LAND - 0.2; const h = small ? wr(8, 11) : wr(12, 16);
   mbAt('metal', x, z).box(x, y0, z, w, h, d, C(wpick([0xb8bec4, 0x9aa8b4, 0xc4b8a0, 0x8fa0a8])), BAY.metal, { noTop: true });
   const n = Math.max(2, Math.floor(w / 12)); const rm = mbAt('metal', x, z);
   for (let i = 0; i < n; i++) { const sx = x - w / 2 + (i + 0.5) * w / n; rm.gable(sx, y0 + h, z, w / n, d, 3, C(0x9aa0a6), 'z', 6); }
   addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, y0 + h + 3, 'bld');
+  if (!noReg) regBuilding('factory', x, z, w, d, y0 + h, side === 'n' ? 's' : side);
   const cm = mbAt('plain', x, z);
   const nch = small ? 1 : wri(1, 3);
   for (let i = 0; i < nch; i++) {
@@ -700,15 +758,15 @@ function addDoorRing(x, z, color = 0xffcc33) {
 function buildFacility(type, lot, side, R) {
   const F = FAC[type]; const cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
   let w = Math.min(lot.x1 - lot.x0 - 6, 44), d = Math.min(lot.z1 - lot.z0 - 6, 40);
-  const y0 = groundHeight(cx, cz) - 0.2; let h = 12; const col = C(F.col);
   const [sx, sz] = SIDE_VEC[side];
+  const y0 = Math.min(groundHeight(cx, cz), groundHeight(cx + sx * (w * 0.35 + 2.6), cz + sz * (d * 0.35 + 2.6))) - 0.2; let h = 12; const col = C(F.col); // 입구(앞쪽) 지면에 맞춘다
   const m = mbAt('plain', cx, cz);
   switch (type) {
     case 'police': h = 13; addBuildingBox(cx, cz, w, d, h, 'office', C(0xdfe6f0), { y0 }); m.box(cx, y0 + 4, cz, w + 0.3, 1.2, d + 0.3, C(0x2a4a9a)); m.box(cx + sx * (w / 2 + 4) + (sz ? w / 3 : 0), y0, cz + sz * (d / 2 + 4) + (sx ? d / 3 : 0), 0.15, 10, 0.15, C(0xcccccc)); break;
     case 'hospital': h = 26; addBuildingBox(cx, cz, w, d, h, 'office', C(0xffffff), { y0 }); { const s = addSign('✚', '', '#e52a3a', cx + sx * (w / 2 + 0.1), y0 + h - 3, cz + sz * (d / 2 + 0.1), 4, 4, SIDE_YAW[side]); } break;
     case 'dealer': h = 9; m.box(cx, y0, cz, w, 0.5, d, C(0xe6e6e6)); mbAt('glass', cx, cz).box(cx, y0 + 0.5, cz, w, h, d, C(0xd8ecf8), BAY.glass, { topCol: C(0x888888) }); addCollider(cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2, y0 + h + 1);
       for (let i = 0; i < 4; i++) PARKED.push({ x: cx + sx * (w / 2 + 6) + (sz ? -w / 3 + i * w / 4.5 : 0), z: cz + sz * (d / 2 + 6) + (sx ? -d / 3 + i * d / 4.5 : 0), yaw: SIDE_YAW[side] + Math.PI / 2, display: true, region: R }); break;
-    case 'factory': buildFactoryHall(cx, cz, w, d, R, true); h = 10; break;
+    case 'factory': buildFactoryHall(cx, cz, w, d, R, true, side, true); h = 10; break;
     case 'academy': h = 22; addBuildingBox(cx, cz, w * 0.8, d * 0.8, h, 'office', C(0xf0ece4), { y0, shop: true }); for (let i = 0; i < 3; i++) addSign(['영어', '수학', '코딩', '입시', '피아노', '태권도'][wri(0, 5)] + ' 학원', '', ['#1a6ad0', '#d02a6a', '#2aa05a'][i], cx + sx * (w * 0.4 + 0.1) + (sz ? (i - 1) * w * 0.25 : 0), y0 + 8 + i * 4, cz + sz * (d * 0.4 + 0.1) + (sx ? (i - 1) * d * 0.25 : 0), 6, 1.5, SIDE_YAW[side]); w *= 0.8; d *= 0.8; break;
     case 'food': h = 8; addBuildingBox(cx, cz, w * 0.7, d * 0.7, h, 'house', C(0xf4e0c0), { y0, shop: true }); w *= 0.7; d *= 0.7;
       for (let i = 0; i < 3; i++) { const tx = cx + sx * (w / 2 + 5) + (sz ? (i - 1) * 6 : 0), tz = cz + sz * (d / 2 + 5) + (sx ? (i - 1) * 6 : 0); m.cyl(tx, y0, tz, 0.08, 2.4, C(0x888888), 6); m.cyl(tx, y0 + 2.4, tz, 1.8, 0.6, C(i % 2 ? 0xd04030 : 0xffffff), 10, 0.05); m.cyl(tx, y0 + 0.75, tz, 0.7, 0.06, C(0xffffff), 10); } break;
@@ -725,7 +783,9 @@ function buildFacility(type, lot, side, R) {
   addSign(F.name, F.eng, bgCol, cx + sx * (w / 2 + 0.12), Math.max(signY, y0 + 5.2), cz + sz * (d / 2 + 0.12), Math.min(10, Math.max(w, d) * 0.6), 2.5, SIDE_YAW[side]);
   const door = { x: cx + sx * (w / 2 + 2.6), z: cz + sz * (d / 2 + 2.6) };
   const f = { id: FACILITIES.length, type, name: F.name, icon: F.icon, region: R, x: door.x, z: door.z, cx, cz, side };
-  f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f); return f;
+  f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f);
+  f.bld = regBuilding(type, cx, cz, w, d, y0 + h, side, { fac: f, door: { x: door.x, z: door.z }, y0: y0 + 0.2 });
+  return f;
 }
 function buildSchoolBlock(b) {
   const lot = { x0: b.ix0, x1: b.ix1, z0: b.iz0, z1: b.iz0 + (b.iz1 - b.iz0) * 0.42 }; lot.sides = ['n', 'e', 'w'];
@@ -735,11 +795,83 @@ function buildSchoolBlock(b) {
   // clock
   const door = { x: cx, z: cz + d / 2 + 3 };
   const f = { id: FACILITIES.length, type: 'school', name: '학교', icon: '🏫', region: b.region, x: door.x, z: door.z, cx, cz, side: 's' }; f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f);
+  f.bld = regBuilding('school', cx, cz, w, d, LAND + 14, 's', { fac: f, door: { x: door.x, z: door.z } });
   // field
   const fz0 = lot.z1 + 4, fz1 = b.iz1 - 2; const fcx = cx, fcz = (fz0 + fz1) / 2; const fw = b.ix1 - b.ix0 - 6, fd = fz1 - fz0;
   const m = mbAt('plain', fcx, fcz); m.box(fcx, LAND - 0.2, fcz, fw, 0.41, fd, C(0xb8643a)); m.box(fcx, LAND + 0.21, fcz, fw - 8, 0.02, fd - 8, C(0x3e8a3a));
   m.box(fcx, LAND + 0.23, fcz, 0.3, 0.02, fd - 8, C(0xffffff));
   for (const s of [-1, 1]) { m.box(fcx + s * (fw / 2 - 6), LAND, fcz, 0.2, 2.4, 0.2, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND + 2.4, fcz, 0.2, 0.2, 7, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND, fcz - 3.5, 0.2, 2.4, 0.2, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND, fcz + 3.5, 0.2, 2.4, 0.2, C(0xffffff)); }
+}
+// ================= 교도소 (경찰서 바로 뒤편) =================
+function buildPrison(b, lot0, pf) {
+  const x0 = b.ix0 + 1, x1 = b.ix1 - 1, z0 = lot0.z1 + 2.5, z1 = b.iz1 - 1;
+  const W = x1 - x0, D = z1 - z0; if (W < 50 || D < 40) return;
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, y = LAND - 0.2;
+  const m = mbAt('concrete', cx, cz), mp = mbAt('plain', cx, cz), mm = mbAt('metalPlain', cx, cz), gl = mbAt('glow', cx, cz);
+  markGrass(x0 - 1, z0 - 1, x1 + 1, z1 + 1, 0);
+  mp.box(cx, LAND - 0.3, cz, W, 0.47, D, C(0x6f6f6a)); // 마당 바닥
+  const WH = 7.5, T = 0.8, GW = 6; const gx = clamp((lot0.x0 + lot0.x1) / 2, x0 + 14, x1 - 14);
+  const wall = (ax, az, bx, bz) => {
+    const w = Math.max(T, Math.abs(bx - ax)), d = Math.max(T, Math.abs(bz - az)), mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    m.box(mx, y, mz, w, WH, d, C(0xbdb8ac), null, { topUV: 4 }); addCollider(mx - w / 2, mz - d / 2, mx + w / 2, mz + d / 2, y + WH + 1.5, 'bld');
+    mm.box(mx, y + WH, mz, w, 0.12, d, C(0x555555)); // 철조망 받침
+    const n = Math.ceil(Math.max(w, d) / 2.5); for (let i = 0; i <= n; i++) { const t = i / n; mm.box(lerp(ax, bx, t), y + WH, lerp(az, bz, t), 0.08, 1.1, 0.08, C(0x444444)); }
+    mm.box(mx, y + WH + 0.55, mz, w, 0.06, d, C(0x9a9a9a)); mm.box(mx, y + WH + 1.0, mz, w, 0.06, d, C(0x9a9a9a));
+  };
+  wall(x0, z1, x1, z1); wall(x0, z0, x0, z1); wall(x1, z0, x1, z1); wall(x0, z0, gx - GW / 2, z0); wall(gx + GW / 2, z0, x1, z0);
+  // 정문 (철창문) — 탈옥한 사람에게만 로컬로 열린다
+  const gmb = new MB(); for (let i = 0; i <= 20; i++) gmb.box(gx - GW / 2 + i * GW / 20, y, z0, 0.1, 5.2, 0.1, C(0x2a2c30)); gmb.box(gx, y + 5.1, z0, GW, 0.25, 0.2, C(0x2a2c30)); gmb.box(gx, y + 2.6, z0, GW, 0.15, 0.15, C(0x2a2c30));
+  const gateMesh = new THREE.Mesh(gmb.geo(), MAT.metalPlain); gateMesh.castShadow = true; scene.add(gateMesh);
+  const gateCol = addCollider(gx - GW / 2, z0 - 0.3, gx + GW / 2, z0 + 0.3, y + WH + 1.5, 'bld');
+  for (const sx of [-1, 1]) { m.box(gx + sx * (GW / 2 + 0.6), y, z0, 1.2, WH + 1.2, 1.4, C(0x8a867c)); gl.box(gx + sx * (GW / 2 + 0.6), y + WH + 1.2, z0, 0.6, 0.3, 0.6, CS(1, 0.25, 0.2)); }
+  const name = (REGIONS[b.region] ? REGIONS[b.region].name : '') + ' 교도소';
+  addSign(name, 'PRISON · 무단 출입 금지', '#2a2f3a', gx, y + WH - 1.2, z0 - T / 2 - 0.08, 10, 2.2, Math.PI);
+  // 감시탑 4개
+  for (const [tx, tz] of [[x0 + 3, z0 + 3], [x1 - 3, z0 + 3], [x0 + 3, z1 - 3], [x1 - 3, z1 - 3]]) {
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mm.box(tx + lx * 1.3, y, tz + lz * 1.3, 0.25, 9, 0.25, C(0x4a4c50));
+    mp.box(tx, y + 9, tz, 3.6, 0.3, 3.6, C(0x6a6c70)); mp.box(tx, y + 9.3, tz, 3.4, 1.0, 3.4, C(0x50545a)); mm.box(tx, y + 11.8, tz, 3.8, 0.25, 3.8, C(0x3a3c40));
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mm.box(tx + lx * 1.6, y + 10.3, tz + lz * 1.6, 0.12, 1.5, 0.12, C(0x3a3c40));
+    gl.box(tx, y + 11.6, tz + 1.95, 0.6, 0.2, 0.1, CS(1, 1, 0.8));
+    addCollider(tx - 1.8, tz - 1.8, tx + 1.8, tz + 1.8, y + 12, 'bld');
+  }
+  // 교도관실 (경비 구역) — 정문 옆
+  const gw = 10, gd = 7, ghx = clamp(gx + GW / 2 + 9, x0 + 9, x1 - 9), ghz = z0 + 6.5;
+  addBuildingBox(ghx, ghz, gw, gd, 4.2, 'office', C(0x9aa4b4), { y0: y });
+  addSign('교도관실', 'GUARD', '#20304a', ghx, y + 3, ghz + gd / 2 + 0.1, 4, 1, 0);
+  regBuilding('guard', ghx, ghz, gw, gd, y + 4.9, 's', { y0: LAND });
+  // 감방동
+  const bw = Math.min(W - 14, 58), bd = 15, bx = cx, bz1 = z1 - 2.5, bz0 = bz1 - bd, BH = 4.2;
+  mp.box(bx, y, (bz0 + bz1) / 2, bw, 0.42, bd, C(0x8d8c88));
+  const cw = (ax, az, bx2, bz2, h = BH, col = C(0xd8d4c8)) => { const w = Math.max(0.35, Math.abs(bx2 - ax)), d = Math.max(0.35, Math.abs(bz2 - az)), mx = (ax + bx2) / 2, mz = (az + bz2) / 2; mp.box(mx, y, mz, w, h, d, col); addCollider(mx - w / 2, mz - d / 2, mx + w / 2, mz + d / 2, y + h, 'bld'); };
+  cw(bx - bw / 2, bz1, bx + bw / 2, bz1); cw(bx - bw / 2, bz0, bx - bw / 2, bz1); cw(bx + bw / 2, bz0, bx + bw / 2, bz1);
+  cw(bx - bw / 2, bz0, bx - 2, bz0); cw(bx + 2, bz0, bx + bw / 2, bz0);
+  mp.box(bx, y + BH, bz0, 4, 0.6, 0.4, C(0xd8d4c8));
+  addSign('감방동', 'CELL BLOCK', '#3a3a3a', bx, y + BH - 0.55, bz0 - 0.25, 4, 0.9, Math.PI);
+  { const rmb = new MB(); rmb.box(bx, y + BH, (bz0 + bz1) / 2, bw + 0.6, 0.4, bd + 0.6, C(0x9a978e)); const roof = new THREE.Mesh(rmb.geo(), MAT.plain); roof.receiveShadow = true; roof.castShadow = false; scene.add(roof); addCollider(bx - bw / 2 - 0.3, bz0 - 0.3, bx + bw / 2 + 0.3, bz1 + 0.3, y + BH + 0.4, 'roof', null, y + BH); }
+  for (let gx2 = bx - bw / 2 + 4; gx2 < bx + bw / 2 - 2; gx2 += 6) gl.box(gx2, y + BH - 0.08, bz0 + 3, 2.4, 0.06, 0.3, CS(1, 0.97, 0.85));
+  const CW = 4.2, CD = 4.6, n = Math.floor((bw - 1) / CW); const cells = [];
+  const sx0 = bx - n * CW / 2;
+  for (let i = 0; i < n; i++) {
+    const a = sx0 + i * CW, b2 = a + CW, fz = bz1 - CD;
+    cw(a, fz, a, bz1, BH, C(0xcfcabd)); if (i === n - 1) cw(b2, fz, b2, bz1, BH, C(0xcfcabd)); // 감방 사이 벽 (양 끝 포함 — 문 말고는 빠져나갈 틈 없음)
+    // 쇠창살 (왼쪽은 고정, 오른쪽 1.4m는 감방 문)
+    for (let k = 0.2; k < CW; k += 0.3) mm.box(a + k, y + 0.2, fz, 0.06, BH - 0.2, 0.06, C(0x2a2c30));
+    mm.box((a + b2) / 2, y + BH - 0.3, fz, CW, 0.12, 0.12, C(0x2a2c30)); mm.box((a + b2) / 2, y + 1.2, fz, CW, 0.08, 0.08, C(0x2a2c30));
+    addCollider(a, fz - 0.15, b2 - 1.5, fz + 0.15, y + BH, 'bld');
+    const doorCol = addCollider(b2 - 1.5, fz - 0.15, b2, fz + 0.15, y + BH, 'bld');
+    // 침대 · 변기 · 세면대
+    mp.box(a + 0.65, y + 0.2, bz1 - CD / 2 + 0.3, 0.95, 0.5, 2.1, C(0x6a6a70)); mp.box(a + 0.65, y + 0.7, bz1 - CD / 2 + 0.3, 0.9, 0.15, 2.0, C(0xe8e4dc));
+    mp.cyl(b2 - 0.6, y + 0.2, bz1 - 0.6, 0.25, 0.45, C(0xf2f2f0), 10); mp.box(b2 - 0.5, y + 0.9, bz1 - 1.6, 0.5, 0.15, 0.4, C(0xf2f2f0));
+    cells.push({ i, x: a + CW / 2 + 0.3, z: bz1 - CD / 2, x0: a + 0.25, x1: b2 - 0.25, z0: fz + 0.25, z1: bz1 - 0.25, doorCol, dx: b2 - 0.75, dz: fz });
+  }
+  // 운동장: 농구 코트 · 벤치 · 철봉
+  const yz = (z0 + 12 + bz0) / 2; const ycx = clamp(gx - 16, x0 + 12, x1 - 30);
+  mp.box(ycx, LAND + 0.18, yz, 24, 0.03, 14, C(0x8a4a32)); mp.box(ycx, LAND + 0.2, yz, 0.15, 0.02, 14, C(0xffffff));
+  for (const s2 of [-1, 1]) { mm.box(ycx + s2 * 11.5, y, yz, 0.25, 3.6, 0.25, C(0x333333)); mp.box(ycx + s2 * 11.1, y + 3.4, yz, 0.1, 1.1, 1.8, C(0xffffff)); }
+  for (let i = 0; i < 3; i++) { BENCHES.push({ x: ycx - 8 + i * 8, z: yz + 9, yaw: Math.PI }); }
+  for (let i = 0; i < 2; i++) { const px = x1 - 14 + i * 4; mm.box(px - 1, y, yz, 0.12, 2.6, 0.12, C(0x555555)); mm.box(px + 1, y, yz, 0.12, 2.6, 0.12, C(0x555555)); mm.box(px, y + 2.5, yz, 2.1, 0.08, 0.08, C(0x555555)); }
+  const pr = { id: PRISONS.length, name, region: b.region, x0, x1, z0, z1, gx, release: { x: gx, z: z0 - 3.2 }, inside: { x: gx, z: z0 + 3 }, cells, gateMesh, gateCol, police: pf, block: { x0: bx - bw / 2, x1: bx + bw / 2, z0: bz0, z1: bz1 } };
+  PRISONS.push(pr); if (pf) pf.prison = pr.id; return pr;
 }
 function fenceRect(x0, z0, x1, z1, col = C(0x777a80), h = 2.2, gap = null) {
   const m = mbAt('metalPlain', x0, z0);
@@ -871,6 +1003,7 @@ function buildPlaza() {
   mbAt('glow', k.x, k.z).box(k.x, LAND + 4.6, k.z + 18.3, 50.4, 0.35, 0.3, CS(1, 0.75, 0.2)); mbAt('glow', k.x, k.z).box(k.x, LAND + 15.6, k.z + 18.3, 50.4, 0.35, 0.3, CS(1, 0.3, 0.6));
   addSign('CASINO', '카지노 · 잭팟을 노려라', '#3a2000', k.x, LAND + 10, k.z + 18.25, 22, 5.5, 0, '#ffd34a');
   const fk = { id: FACILITIES.length, type: 'casino', name: '카지노', icon: '🎰', region: 'plaza', x: k.x, z: k.z + 21, cx: k.x, cz: k.z, side: 's' }; fk.ring = addDoorRing(fk.x, fk.z, 0xffd34a); FACILITIES.push(fk);
+  fk.bld = regBuilding('casino', k.x, k.z, 50, 36, LAND + 16, 's', { fac: fk, door: { x: fk.x, z: fk.z } });
   // stage south
   m.box(0, LAND - 0.2, 120, 30, 1.6, 14, C(0x333340)); addCollider(-15, 113, 15, 127, LAND + 1.4, 'prop');
   addSign('EVENT PLAZA', '이벤트광장', '#c0285a', 0, LAND + 7, 113.2, 18, 4, Math.PI);
@@ -917,7 +1050,7 @@ function genCountryside() {
     lots.push(r); const side = c.px > 0.5 ? 'w' : c.px < -0.5 ? 'e' : c.pz > 0.5 ? 'n' : 's'; r.sides = [side]; return { lot: r, side };
   };
   for (const c of cands) {
-    if (facs.length) { const p = place(c, 34, 30); if (p) { const f = facs.shift(); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 0); mbAt('concrete', p.lot.x0, p.lot.z0).box((p.lot.x0 + p.lot.x1) / 2, LAND - 0.45, (p.lot.z0 + p.lot.z1) / 2, 34, 0.5, 30, C(0xc8c4bc), null, { topUV: 6 }); buildFacility(f, p.lot, p.side, 'disanbay'); } continue; }
+    if (facs.length) { const p = place(c, 34, 30); if (p) { const f = facs.shift(); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 0); mbAt('concrete', p.lot.x0, p.lot.z0).box((p.lot.x0 + p.lot.x1) / 2, terrainH((p.lot.x0 + p.lot.x1) / 2, (p.lot.z0 + p.lot.z1) / 2) - 0.45, (p.lot.z0 + p.lot.z1) / 2, 34, 0.5, 30, C(0xc8c4bc), null, { topUV: 6 }); buildFacility(f, p.lot, p.side, 'disanbay'); } continue; }
     if (plots < 4) { const p = place(c, 34, 34); if (p) { plots++; makePlot(p.lot, p.side, 'disanbay'); } continue; }
     if (wrng() < 0.55) { const p = place(c, 18, 16); if (p) { const cx = (p.lot.x0 + p.lot.x1) / 2, cz = (p.lot.z0 + p.lot.z1) / 2; buildHouse(cx, cz, 11, 10, wrng() < 0.4 ? 2 : 1, 'disanbay', terrainH(cx, cz) - 0.3); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 2); } }
   }
@@ -928,6 +1061,7 @@ function genCountryside() {
   fenceRect(fx - 60, fz - 50, fx + 10, fz + 20, C(0x8a6a4a), 1.4, 's');
   const bm = mbAt('plain', fx, fz); bm.box(fx + 40, LAND - 0.3, fz - 30, 20, 9, 14, C(0xa8322a)); mbAt('roof', fx, fz).gable(fx + 40, LAND + 8.7, fz - 30, 21, 15, 5, C(0x5a5a5a), 'x'); addCollider(fx + 30, fz - 37, fx + 50, fz - 23, LAND + 14);
   bm.box(fx + 40, LAND - 0.3, fz - 22.95, 6, 5.5, 0.1, C(0xffffff));
+  regBuilding('barn', fx + 40, fz - 30, 20, 14, LAND + 14, 's', { noDoorMesh: true });
   bm.cyl(fx + 56, LAND - 0.3, fz - 30, 3.5, 16, C(0xb8bcc0), 16); bm.cyl(fx + 56, LAND + 15.7, fz - 30, 3.6, 2.5, C(0x8a8e92), 16, 0.3); addCircleCollider(fx + 56, fz - 30, 3.6, 'bld', null, LAND + 18);
   // windmill
   const wx = fx + 30, wz = fz + 60; bm.cyl(wx, LAND - 0.3, wz, 3.2, 14, C(0xe8e0d0), 12, 2.2); addCircleCollider(wx, wz, 3.2, 'bld', null, LAND + 15);
@@ -964,6 +1098,8 @@ function buildTerrainMesh() {
     if (slope > 0.55 || h > 70) { const t = Math.max(smooth(0.55, 1.0, slope), smooth(70, 100, h)); r = lerp(r, 0.46 + n * 0.05, t); g = lerp(g, 0.44 + n * 0.05, t); b = lerp(b, 0.42, t); }
     if (h > 118) { const t = smooth(118, 135, h + n * 10); r = lerp(r, 0.95, t); g = lerp(g, 0.96, t); b = lerp(b, 0.98, t); }
     const land = landF(x, z);
+    // 모래사장: 섬 전체 해안, 서벌리 동쪽 항구 해변, 남북 해안
+    if (rd > 6 && h < LAND + 3 && !(R === 'disanbay')) { const cd = coastDist(x, z) + n * 12; const wide = R === 'simone' ? 70 : R === 'seoburi' ? 45 : 30; if (cd < wide) { const t = smooth(wide, wide * 0.5, cd) * smooth(LAND + 3, LAND + 1, h); r = lerp(r, 0.86, t); g = lerp(g, 0.79, t); b = lerp(b, 0.6, t); } }
     if (h < LAND - 0.15 || land < 0.985) { const t = smooth(LAND - 0.1, LAND - 0.9, h); r = lerp(r, 0.86, Math.max(t, land < 0.985 ? 0.9 : 0)); g = lerp(g, 0.78, Math.max(t, land < 0.985 ? 0.9 : 0)); b = lerp(b, 0.58, Math.max(t, land < 0.985 ? 0.9 : 0)); }
     if (h < -0.5) { const t = smooth(-0.5, -8, h); r = lerp(r, 0.45, t); g = lerp(g, 0.5, t); b = lerp(b, 0.42, t); }
     c.setRGB(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1), THREE.SRGBColorSpace);
@@ -978,7 +1114,8 @@ function buildTerrainMesh() {
     if (roadDistF[k] < 2.5) { grassMask[k] = 0; continue; }
     const R = regionAt(x, z);
     const ok = h > LAND - 0.1 && h < 95 && landF(x, z) > 0.99 && roadDistF[k] > 2.5 && R !== 'sea';
-    grassMask[k] = ok && !insideAnyBlock(x, z) ? 1 : 0;
+    const beach = R !== 'disanbay' && h < LAND + 3 && coastDist(x, z) < (R === 'simone' ? 45 : R === 'seoburi' ? 28 : 18);
+    grassMask[k] = ok && !beach && !insideAnyBlock(x, z) ? 1 : 0;
   }
   const idx = new Uint32Array((W - 1) * (H - 1) * 6); let p = 0;
   for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) { const a = j * W + i, b = a + 1, c2 = a + W, d = c2 + 1; idx[p++] = a; idx[p++] = c2; idx[p++] = b; idx[p++] = b; idx[p++] = c2; idx[p++] = d; }

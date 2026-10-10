@@ -17,10 +17,10 @@ const UI = {
   updateHud() {
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
-    const R = ME.vehicle ? regionAt(ME.vehicle.x, ME.vehicle.z) : regionAt(ME.x, ME.z); const RG = REGIONS[R];
+    const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
     const regionChanged = R !== this.lastRegion;
     if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
-    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const dId = districtAt(px, pz);
+    const px = AP.x, pz = AP.z; const dId = districtAt(px, pz);
     if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
@@ -166,7 +166,10 @@ const UI = {
     if (p.state === 'empty') { this.openMenu('🪧 매물 — ' + R, `${Math.round(p.w)}m × ${Math.round(p.d)}m 부지. 구매 후 시공사에 건축을 맡길 수 있다.`, [{ ic: '📝', t: '땅 구매', p: p.price, fn: () => { plotRequest({ t: 'buyLand', p: p.id }); toast('📝 계약 진행 중…'); } }]); return; }
     if (p.state === 'owned') {
       if (!mine) { this.openMenu(`🏗️ ${p.ownerName}의 땅`, '아직 건물이 없다', []); return; }
-      this.openMenu('🏗️ 건축 의뢰 — ' + R, '시공사(서부리 건설)에 맡기면 인부들이 직접 지어준다', Object.entries(BUILD_DESIGNS).map(([k, D]) => ({ ic: D.icon, t: D.name, p: D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { plotRequest({ t: 'build', p: p.id, d: k }); announce('🏗️ 착공!', `${D.name} — 서부리 건설`); } })));
+      const order = (k, fl) => { const D = BUILD_DESIGNS[k]; fl = clampFloors(k, fl); plotRequest({ t: 'build', p: p.id, d: k, fl }); announce('🏗️ 착공!', `${D.name} ${fl}층 — 서부리 건설`); };
+      const pickFloors = (k) => { const D = BUILD_DESIGNS[k], r = DESIGN_FLOORS[k]; const opts = [r[0], 3, 4, 5, 6, 8, 10, 12, MAX_FLOORS].filter((v, i, a) => v >= r[0] && v <= Math.min(r[1], MAX_FLOORS) && a.indexOf(v) === i);
+        this.openMenu(`${D.icon} ${D.name} — 층수 선택`, `건물은 <b>최대 ${MAX_FLOORS}층</b>까지 지을 수 있다 (1층 ≈ ${FLOOR_H}m)`, opts.map(fl => ({ ic: '🏢', t: `${fl}층${fl === MAX_FLOORS ? ' (최대)' : ''}`, p: designPrice(k, fl), d: `높이 약 ${Math.round(fl * FLOOR_H)}m${D.income ? ` · 분당 ₩${Math.round(D.income * fl / r[2]).toLocaleString()}` : ''}`, fn: () => order(k, fl) }))); };
+      this.openMenu('🏗️ 건축 의뢰 — ' + R, `시공사(서부리 건설)에 맡기면 인부들이 직접 지어준다 · <b>최대 ${MAX_FLOORS}층</b>`, Object.entries(BUILD_DESIGNS).map(([k, D]) => { const r = DESIGN_FLOORS[k]; const multi = r[0] !== r[1]; return { ic: D.icon, t: D.name + (multi ? ` (${r[0]}~${Math.min(r[1], MAX_FLOORS)}층)` : ` (${r[0]}층)`), p: multi ? `${fmtMoney(designPrice(k, r[0]))}~` : D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { if (multi) { setTimeout(() => pickFloors(k), 30); return; } order(k, r[0]); } }; }));
       return;
     }
     if (p.state === 'building') { this.openMenu('🏗️ 공사 현장', `${BUILD_DESIGNS[p.design].name} · 진행률 ${Math.floor(p.progress * 100)}% · 건축주 ${p.ownerName}`, []); return; }
@@ -206,7 +209,7 @@ const UI = {
   openPhone() {
     if (this.menuOpen) { this.closeMenu(); return; }
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
-    const dz = DISTRICTS[districtAt(ME.x, ME.z) - 1];
+    const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
@@ -255,7 +258,7 @@ const UI = {
   },
   drawMini() {
     const cv = $('#mini'); const x = cv.getContext('2d'); const S = cv.width; const cx = S / 2; const scale = (ME.vehicle ? 0.65 : 1.0) * S / 340;
-    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const cy = Math.cos(CAM.yaw), sy = Math.sin(CAM.yaw);
+    const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const px = AP.x, pz = AP.z; const cy = Math.cos(CAM.yaw), sy = Math.sin(CAM.yaw);
     const a = -cy * scale, c = sy * scale, b = -sy * scale, d = -cy * scale;
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, S, S); x.save(); x.beginPath(); x.arc(cx, cx, cx, 0, TAU); x.clip(); x.fillStyle = '#1c3c5c'; x.fillRect(0, 0, S, S);
     x.setTransform(a, b, c, d, cx - (a * px + c * pz), cx - (b * px + d * pz));
@@ -273,7 +276,7 @@ const UI = {
     TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
     if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
     if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
-    for (const rp of G.players.values()) { const s = clampS(toS(rp.x, rp.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
+    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = clampS(toS(ra.x, ra.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
     // player arrow
     const ang = -(ME.vehicle ? ME.vehicle.yaw : ME.yaw) + CAM.yaw; x.save(); x.translate(cx, cx); x.rotate(ang); x.fillStyle = '#fff'; x.strokeStyle = '#000'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -S / 22); x.lineTo(S / 32, S / 30); x.lineTo(0, S / 60); x.lineTo(-S / 32, S / 30); x.closePath(); x.stroke(); x.fill(); x.restore();
     // north
@@ -291,15 +294,15 @@ const UI = {
     if (this.zoneImg) x.drawImage(this.zoneImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     x.textAlign = 'center'; x.textBaseline = 'middle';
     for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 24px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.globalAlpha = 0.85; x.strokeText(R.name, p[0], p[1] - 40); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 40); x.globalAlpha = 1; }
-    const myD = districtAt(ME.x, ME.z);
+    const myD = districtAt(anchorOf(ME).x, anchorOf(ME).z);
     for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
     x.font = '15px sans-serif'; for (const f of FACILITIES) { const p = P(f.x, f.z); x.fillText(f.icon, p[0], p[1]); }
     x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
     TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
-    for (const rp of G.players.values()) { const s = P(rp.x, rp.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
-    const me = P(ME.x, ME.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
+    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
+    const MA = anchorOf(ME); const me = P(MA.x, MA.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
     x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 숫자 = 16개 구역 (택시 목적지) · 🚕 내 택시 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
   },
   // ---------- touch ----------
@@ -353,7 +356,7 @@ function spawnOwned(g, nx, nz) {
   UI.waypoint = { x, z };
 }
 function fastTravel(r) {
-  const R = REGIONS[r]; if (ME.vehicle) exitVehicle(true);
+  const R = REGIONS[r]; if (ME.jail) { toast('수감 중에는 이동할 수 없다'); return; } INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true);
   const tgt = edgeNearPoint(R.cx, R.cz, 0, 120) || { e: 0, t: 0 }; const E = EDGES[tgt.e]; const a = NODES[E.a], b = NODES[E.b]; const dx = (b.x - a.x) / E.len, dz = (b.z - a.z) / E.len;
   ME.x = a.x + dx * tgt.t + (-dz) * (E.w / 2 + 2.5); ME.z = a.z + dz * tgt.t + dx * (E.w / 2 + 2.5); ME.y = groundHeight(ME.x, ME.z) + 0.2; ME.vx = ME.vz = ME.vy = 0;
   const res = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = res.x; ME.z = res.z;

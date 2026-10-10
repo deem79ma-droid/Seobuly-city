@@ -21,6 +21,7 @@ const ME = {
     $('#death').classList.remove('hidden'); $('#deathSub').textContent = '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
   },
   respawn() {
+    if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
     this.dead = false; this.hp = 100; this.armor = 0; const fee = Math.min(5000, Math.floor(this.money * 0.1)); this.money -= fee; this.wanted = 0;
     let sp = null;
     if (this.homePlot != null && PLOTS[this.homePlot] && PLOTS[this.homePlot].state === 'done' && PLOTS[this.homePlot].owner === this.id) { const p = PLOTS[this.homePlot]; sp = { x: p.x + SIDE_VEC[p.side][0] * (p.w / 2 + 2), z: p.z + SIDE_VEC[p.side][1] * (p.d / 2 + 2) }; }
@@ -87,7 +88,7 @@ function raycastWorld(o, d, maxD, opt = {}) {
   const near = (x, z) => { const px = x - o.x, pz = z - o.z; const along = px * d.x + pz * d.z; if (along < -3 || along > maxD + 3) return false; const lat = Math.abs(px * d.z - pz * d.x); return lat < 4; };
   for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked' || !near(p.x, p.z)) continue; test(raySphere(o, d, p.x, p.y + 1.63, p.z, 0.16), 'ped', p, true); test(raySphere(o, d, p.x, p.y + 1.18, p.z, 0.32), 'ped', p); test(raySphere(o, d, p.x, p.y + 0.55, p.z, 0.3), 'ped', p); }
   for (const a of ANIMALS) { if (a.state === 'dead' || !near(a.x, a.z)) continue; const S = a.S; const r = S.biped ? S.h * 0.4 : Math.max(S.body[1], S.body[2]) * 0.6; test(raySphere(o, d, a.x, a.y + (S.biped ? S.h * 0.5 : S.leg + S.body[1] * 0.4), a.z, r), 'animal', a); if (!S.biped) { const fx = Math.sin(a.yaw) * S.body[0] * 0.35, fz = Math.cos(a.yaw) * S.body[0] * 0.35; test(raySphere(o, d, a.x + fx, a.y + S.leg + S.body[1] * 0.4, a.z + fz, r), 'animal', a); test(raySphere(o, d, a.x - fx, a.y + S.leg + S.body[1] * 0.4, a.z - fz, r), 'animal', a); } }
-  for (const [id, rp] of G.players) { if (rp.dead || rp.veh || !near(rp.x, rp.z)) continue; test(raySphere(o, d, rp.x, rp.y + 1.63, rp.z, 0.16), 'player', rp, true); test(raySphere(o, d, rp.x, rp.y + 1.18, rp.z, 0.32), 'player', rp); test(raySphere(o, d, rp.x, rp.y + 0.55, rp.z, 0.3), 'player', rp); }
+  for (const [id, rp] of G.players) { if (id === ME.id || rp.dead || rp.veh || !sameSpace(rp) || !near(rp.x, rp.z)) continue; test(raySphere(o, d, rp.x, rp.y + 1.63, rp.z, 0.16), 'player', rp, true); test(raySphere(o, d, rp.x, rp.y + 1.18, rp.z, 0.32), 'player', rp); test(raySphere(o, d, rp.x, rp.y + 0.55, rp.z, 0.3), 'player', rp); }
   if (opt.self) { test(raySphere(o, d, ME.x, ME.y + 1.2, ME.z, 0.35), 'me', ME); }
   for (const v of vehicles.values()) { if (v === opt.ignoreVeh || !v.mesh.visible || !near(v.x, v.z)) continue; for (const [cx, cz] of v.circles()) test(raySphere(o, d, cx, v.y + (v.kind === 'car' ? 0.8 : 0.9), cz, v.radius + 0.2), 'veh', v); }
   const rc = rayColliders(o.x, o.y, o.z, d.x, d.y, d.z, best.t); if (rc.c && rc.t < best.t) best = { t: rc.t, kind: rc.c.type === 'tree' ? 'tree' : 'world', ref: rc.c };
@@ -99,7 +100,12 @@ function raycastWorld(o, d, maxD, opt = {}) {
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
   if (tg.kind === 'me') { if (from !== ME.id) ME.takeDamage(amt, from); return; }
-  if (tg.kind === 'player') { if (tg.id === ME.id) { ME.takeDamage(amt, from); return; } NET.send({ t: 'dmg', to: tg.id, amt, from, k: opts.kind }); return; }
+  // PvP: 피해는 오직 맞은 사람에게만 — 공격자 자신(같은 id)은 절대 피해를 받지 않는다. 맞은 쪽이 hitAck로 결과를 돌려준다.
+  if (tg.kind === 'player') {
+    if (!tg.id || tg.id === ME.id || tg.id === from) return;
+    const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
+    NET.send({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind }); return;
+  }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
   if (tg.kind === 'veh') { const v = vehicles.get(tg.id); if (v) v.damage(amt, from); }
@@ -122,7 +128,7 @@ function damageArea(x, y, z, r, dmg, by) {
   if (G.isHost) {
     for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked') continue; const d = Math.hypot(p.x - x, p.z - z); if (d < r) pedDamage(p, dmg * (1 - d / r), from, { kind: 'gun' }); }
     for (const a of ANIMALS) { const d = Math.hypot(a.x - x, a.z - z); if (d < r) animalDamage(a, dmg * (1 - d / r), from); }
-    for (const [id, rp] of G.players) { const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
+    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
   }
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
@@ -180,7 +186,7 @@ function meleeResolve() {
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
   for (const a of ANIMALS) if (a.state !== 'dead') consider(a.x, a.z, 'animal', a.id, a);
-  for (const [id, rp] of G.players) if (!rp.dead && !rp.veh) consider(rp.x, rp.z, 'player', id, rp);
+  for (const [id, rp] of G.players) if (id !== ME.id && !rp.dead && !rp.veh && sameSpace(rp) && Math.abs(rp.y - ME.y) < 2) consider(rp.x, rp.z, 'player', id, rp);
   for (const v of vehicles.values()) if (v.mesh.visible) for (const [cx, cz] of v.circles()) consider(cx, cz, 'veh', v.id, v);
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
@@ -264,13 +270,15 @@ function exitVehicle(force) {
 // ----- interaction -----
 let curInteract = null;
 function findInteract() {
-  if (ME.jail) return (ME.inv.card | 0) > 0 ? { label: `🪪 출소카드 사용 (보유 ${ME.inv.card}장)`, key: 'E', fn: () => { ME.inv.card--; LAW.release('🪪 출소카드로 즉시 출소했다'); } } : null;
+  if (ME.jail) return LAW.interact();
   if (ME.dead) return null;
   if (ME.vehicle && ME.vehicle.taxiCab) return { label: TAXI.phase === 'ride' ? '🚕 여기서 세워주세요 (요금 정산 후 하차)' : '🚕 택시에서 내리기', key: 'E', fn: () => TAXI.stopHere() };
   if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
   let best = null, bd = 99;
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
-  for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
+  INTERIOR.interacts(cand); if (INTERIOR.cur) { for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); } return best; }
+  for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, f.bld ? { label: `🚪 ${f.icon} ${f.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(f.bld) } : { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
+  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, { label: `🚪 ${nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
   const v = nearestVehicle(2.8);
   if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });
@@ -279,14 +287,29 @@ function findInteract() {
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead' || p.state === 'fight') continue; const d = Math.hypot(p.x - ME.x, p.z - ME.z); if (d < 2.2) cand(d + 0.3, { label: `💬 ${p.kind === 'police' ? '경찰' : p.kind.startsWith('gang') ? '갱단원' : '시민'}과 상호작용`, key: 'E', fn: () => UI.openPed(p) }); }
   for (const a of ANIMALS) { if (a.state === 'dead') continue; const d = Math.hypot(a.x - ME.x, a.z - ME.z); const r = a.S.biped ? 1.6 : 1.4 + a.S.body[0] * 0.5; if (d < r) cand(d, { label: `🐾 ${a.S.name}`, key: 'E', fn: () => UI.openAnimal(a) }); }
   for (const b of BENCHES) { const d = Math.hypot(b.x - ME.x, b.z - ME.z); if (d < 1.4) cand(d + 0.4, { label: '🪑 앉기', key: 'E', fn: () => { ME.sitBench = b; ME.dance = -1; } }); }
-  for (const [id, rp] of G.players) { const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2 && !rp.veh) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); }
+  for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2 && !rp.veh) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); }
   return best;
 }
 function doInteract() { if (curInteract) curInteract.fn(); }
 // ----- player update -----
 const _tmpV = new THREE.Vector3();
+// ----- 중력 · 낙하 피해 -----
+// 약 4m 이하는 무피해, 그 이상은 높이에 비례 (약 19m 이상이면 치명상). 물·차량·택시는 무피해, 관리자 면역.
+const FALL_SAFE = 4, FALL_K = 6.5;
+function fallDamageFor(h) { return h <= FALL_SAFE ? 0 : (h - FALL_SAFE) * FALL_K; }
+function landed(fv) {
+  const top = ME.fallTop; ME.fallTop = null; if (top == null) return;
+  const h = top - ME.y; const dmg = fallDamageFor(h);
+  if (dmg <= 0 || ME.vehicle) return;
+  if (ME.swim || (terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.6)) { toast(`🌊 물에 떨어졌다 — 다치지 않았다 (${h.toFixed(1)}m)`, 1800); return; }
+  if (ADMIN.on || ME.god) { toast(`🦴 낙하 ${h.toFixed(1)}m — 관리자 면역`, 1500); return; }
+  ME.takeDamage(dmg, 'fall'); sfx('hit', ME.x, ME.z); ME.lastFall = { h, dmg, t: G.t };
+  toast(ME.dead ? `💀 추락사 (${h.toFixed(1)}m)` : `🦴 낙하 피해 -${Math.round(dmg)} (${h.toFixed(1)}m)`, 2200);
+}
 function updatePlayer(dt) {
   const c = ME.char;
+  if (ME._py !== undefined && Math.abs(ME.y - ME._py) > 6) ME.fallTop = null; // 순간이동은 낙하로 치지 않는다
+  if (ME.vehicle || ME.fly || ME.sitBench) ME.fallTop = null;
   ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * (ME.action === 'axe' ? 1.4 : ME.action === 'bat' ? 1.8 : ME.action === 'shoot' ? 6 : 3));
   if (ME.reloadT > 0) { ME.reloadT -= dt; if (ME.reloadT <= 0) finishReload(); }
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
@@ -304,7 +327,6 @@ function updatePlayer(dt) {
   const fwdX = Math.sin(CAM.yaw), fwdZ = Math.cos(CAM.yaw), rX = -Math.cos(CAM.yaw), rZ = Math.sin(CAM.yaw);
   let dx = fwdX * mi.z + rX * mi.x, dz = fwdZ * mi.z + rZ * mi.x; const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
   ME.aiming = INP.aim && !WEAPONS[ME.weapon].melee;
-  if (ME.jail) { LAW.jailStep(dt, dx, dz, mag); placeChar(); return; }
   if (ME.fly) { ADMIN.flyStep(dt, dx, dz, mag); placeChar(); return; }
   const water = terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1);
   ME.swim = water;
@@ -329,23 +351,24 @@ function updatePlayer(dt) {
   for (const v of vehicles.values()) { if (!v.mesh.visible) continue; for (const [cx, cz] of v.circles()) { const ddx = ME.x - cx, ddz = ME.z - cz, d = Math.hypot(ddx, ddz), m = v.radius + 0.35; if (d < m && d > 0.01 && Math.abs(ME.y - v.y) < 1.6) { ME.x += ddx / d * (m - d); ME.z += ddz / d * (m - d); } } }
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead') continue; const ddx = ME.x - p.x, ddz = ME.z - p.z; if (Math.abs(ddx) > 1 || Math.abs(ddz) > 1) continue; const d = Math.hypot(ddx, ddz); if (d < 0.65 && d > 0.01) { ME.x += ddx / d * (0.65 - d) * 0.6; ME.z += ddz / d * (0.65 - d) * 0.6; } }
   // vertical
-  const gy = groundHeight(ME.x, ME.z, ME.y + 0.5);
+  const gy = floorAt(ME.x, ME.z, ME.y);
+  if (ME.swim) { ME.fallTop = null; }
   if (ME.swim) { ME.y = damp(ME.y, -0.32, 4, dt); ME.vy = 0; ME.grounded = false; if (Math.random() < dt * ME.spd * 0.5) FX.impact({ x: ME.x, y: -0.1, z: ME.z }, 'water'); }
   else {
     const jh = KEYS[' '] || INP.jump; ME.coyote = ME.grounded ? 0.12 : (ME.coyote || 0) - dt; ME.jumpBuf = jh ? 0.14 : (ME.jumpBuf || 0) - dt;
     if (ME.jumpBuf > 0 && ME.coyote > 0 && ME.knockT <= 0 && !ME.sitBench) { ME.vy = 5.8; ME.grounded = false; ME.coyote = 0; ME.jumpBuf = 0; INP.jump = false; ME.dance = -1; }
     if (!jh && ME.vy > 2.5 && !ME.grounded) ME.vy -= 28 * dt; // 짧게 누르면 낮은 점프
     ME.vy = Math.max(-38, ME.vy - (ME.vy < 0 ? 24 : 19) * dt); ME.y += ME.vy * dt;
-    if (ME.y <= gy) { const fv = ME.vy; if (fv < -16) ME.takeDamage((-fv - 16) * 9, 'fall'); if (fv < -7) { CAM.shake = Math.min(0.5, CAM.shake + (-fv - 7) / 30); sfx('step'); } ME.y = gy; ME.vy = 0; ME.grounded = true; }
+    if (ME.y <= gy) { const fv = ME.vy; const wasAir = !ME.grounded; ME.y = gy; ME.vy = 0; ME.grounded = true; if (wasAir) landed(fv); if (fv < -7) { CAM.shake = Math.min(0.5, CAM.shake + (-fv - 7) / 30); sfx('step'); } }
     else if (ME.y - gy < 0.25 && ME.vy <= 0 && ME.grounded) { ME.y = gy; ME.vy = 0; }
-    else ME.grounded = false;
-    if (ME.y < -0.25 && terrainH(ME.x, ME.z) < LAND - 1.6) ME.swim = true;
+    else { if (ME.grounded || ME.fallTop == null) ME.fallTop = Math.max(ME.y, ME.fallTop ?? -1e9); ME.grounded = false; ME.fallTop = Math.max(ME.fallTop, ME.y); }
+    if (ME.y < -0.25 && terrainH(ME.x, ME.z) < LAND - 1.6) { if (ME.fallTop != null && ME.fallTop - ME.y > 4) toast(`🌊 물에 떨어졌다 — 다치지 않았다 (${(ME.fallTop - ME.y).toFixed(1)}m)`, 1800); ME.swim = true; ME.fallTop = null; }
   }
   // footsteps
   if (ME.grounded && ME.spd > 1) { ME.stepT -= dt * ME.spd; if (ME.stepT <= 0) { ME.stepT = 1.6; sfx('step'); } }
   // pickups
   for (const [id, p] of PICKUPS) if (Math.abs(p.x - ME.x) < 1.2 && Math.abs(p.z - ME.z) < 1.2 && Math.abs(p.y - ME.y) < 2) { if (G.isHost) { removePickup(id); ME.money += p.amount; sfx('cash'); toast(`💵 +${fmtMoney(p.amount)}`); NET.send({ t: 'pickRm', id }); } else { if (!p.req) { p.req = 1; NET.send({ t: 'pick', id }); } } }
-  placeChar();
+  placeChar(); ME._py = ME.y;
 }
 function placeChar() {
   const c = ME.char; const v = ME.vehicle;
@@ -424,6 +447,7 @@ function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene
 function renderRemotes(dt) {
   for (const rp of G.players.values()) {
     const c = rp.char; const v = rp.veh ? vehicles.get(rp.veh) : null;
+    const vis = sameSpace(rp); c.root.visible = vis; if (!vis) { rp.x = rp.tx; rp.y = rp.ty; rp.z = rp.tz; continue; } // 다른 실내(또는 바깥)에 있는 사람은 숨긴다
     if (v) {
       const s = rp.seat === 'p' ? (v.seatP || v.seat) : v.seat; _tmpV.copy(s); v.mesh.updateMatrixWorld(); _tmpV.applyMatrix4(v.mesh.matrixWorld);
       c.root.position.copy(_tmpV); c.root.rotation.set(-v.pitch, rp.aim ? rp.yaw : v.yaw, v.roll, 'YXZ'); rp.x = v.x; rp.z = v.z; rp.y = v.y;

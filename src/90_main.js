@@ -1,9 +1,21 @@
 
 // ================= MAIN =================
+// 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
+// 상대를 때릴 때 내가 맞는 버그가 생긴다 → 탭마다 고유 id(잠금 + 탭 전용 id)를 쓴다.
+const TAB_NONCE = Math.random().toString(36).slice(2, 10);
+const UID_LOCKS = 'sbc3d_uid_locks';
+function uidLocks() { try { return JSON.parse(localStorage.getItem(UID_LOCKS) || '{}') || {}; } catch (e) { return {}; } }
+function uidTaken(id) { const e = uidLocks()[id]; return !!(e && e.n !== TAB_NONCE && Date.now() - e.t < 75000); }
+function uidBeat(release) { try { const L = uidLocks(), now = Date.now(); for (const k in L) if (now - L[k].t > 120000 || L[k].n === TAB_NONCE) delete L[k]; if (!release && ME.id && ME.id !== 'me') L[ME.id] = { n: TAB_NONCE, t: now }; localStorage.setItem(UID_LOCKS, JSON.stringify(L)); } catch (e) { } }
+function newTabId() { const base = (ME.id || 'u').replace(/t[a-z0-9]{4}$/, ''); let id; do { id = base + 't' + Math.random().toString(36).slice(2, 6); } while (uidTaken(id)); try { sessionStorage.setItem('sbc3d_tab_uid', id); } catch (e) { } ME.id = id; uidBeat(); return id; }
 function uid() {
   const K = 'sbc3d_uid'; let id = null;
   try { id = URLP.get('local') ? sessionStorage.getItem(K) : localStorage.getItem(K); } catch (e) { }
   if (!id) { id = 'u' + Math.random().toString(36).slice(2, 10); try { (URLP.get('local') ? sessionStorage : localStorage).setItem(K, id); } catch (e) { } }
+  try { const t = sessionStorage.getItem('sbc3d_tab_uid'); if (t) id = t; } catch (e) { }
+  if (uidTaken(id)) { ME.id = id; id = newTabId(); }
+  try { sessionStorage.setItem('sbc3d_tab_uid', id); } catch (e) { }
+  ME.id = id; uidBeat(); if (!uid._iv) { uid._iv = setInterval(() => uidBeat(), 2000); addEventListener('pagehide', () => uidBeat(true)); }
   return id;
 }
 function loadSave() { try { return JSON.parse(localStorage.getItem('sbc3d_save') || 'null'); } catch (e) { return null; } }
@@ -146,7 +158,7 @@ function loop() {
 function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t += dt; frame(dt, true); } }
 function frame(dt, noRender) {
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -175,4 +187,4 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };
+if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };

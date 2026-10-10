@@ -78,46 +78,74 @@ Object.assign(ADMIN, {
 });
 
 const LAW = {
-  JX: -60, JZ: -60, JY: 420, built: false, arrestT: 0, hud: null,
+  arrestT: 0, hud: null, built: false, esc: null,
   build() {
-    this.built = true; const g = new THREE.Group(); const conc = new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.9 }), bar = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.4, metalness: 0.8 });
-    const fl = new THREE.Mesh(new THREE.BoxGeometry(13, 1, 13), conc); fl.position.set(0, -0.5, 0); fl.receiveShadow = true; g.add(fl);
-    for (let s = 0; s < 4; s++) for (let i = -6; i <= 6; i += 0.8) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.4, 6), bar); const a = s < 2 ? 6.2 : i, c = s < 2 ? i : 6.2; b.position.set(s === 0 ? -6.2 : s === 1 ? 6.2 : i, 1.7, s === 2 ? -6.2 : s === 3 ? 6.2 : i); g.add(b); }
-    for (let s = 0; s < 4; s++) { const r = new THREE.Mesh(new THREE.BoxGeometry(s < 2 ? 0.2 : 12.6, 0.2, s < 2 ? 12.6 : 0.2), bar); r.position.set(s === 0 ? -6.2 : s === 1 ? 6.2 : 0, 3.4, s === 2 ? -6.2 : s === 3 ? 6.2 : 0); g.add(r); }
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1), new THREE.MeshStandardMaterial({ color: 0x5a5448 })); bed.position.set(4.5, 0.25, -5); g.add(bed);
-    const lamp = new THREE.PointLight(0xfff0d0, 25, 25); lamp.position.set(0, 3, 0); g.add(lamp);
-    g.position.set(this.JX, this.JY, this.JZ); scene.add(g);
+    this.built = true;
     const h = document.createElement('div'); h.id = 'jailHud'; h.className = 'panel'; h.style.cssText = 'position:fixed;top:92px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:12px;font-size:15px;z-index:20;display:none;text-align:center;pointer-events:none'; document.body.appendChild(h); this.hud = h;
   },
+  nearestPrison(x, z) { let best = null, bd = 1e9; for (const pr of PRISONS) { const d = Math.hypot(pr.gx - x, pr.z0 - z); if (d < bd) { bd = d; best = pr; } } return best; },
   nearestPolice() { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'police') { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < bd) { bd = d; best = f; } } return best; },
+  cellOf(j) { const pr = j && PRISONS[j.pr]; return pr ? pr.cells[j.cell] : null; },
+  putInCell(c) { ME.x = c.x; ME.z = c.z; ME.y = groundHeight(c.x, c.z) + 0.05; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; },
   arrest() {
-    const stars = ME.wanted; const f = this.nearestPolice(); const s = Math.max(40, stars * 40);
-    if (ME.vehicle) exitVehicle(true); ME.jail = { t: s, total: s, ret: f ? { x: f.x, z: f.z } : { x: 30, z: 30 } }; ME.wanted = 0; ME.wantedCool = 0; UI.updateStars();
-    ME.x = this.JX; ME.z = this.JZ; ME.y = this.JY; ME.vx = ME.vz = ME.vy = 0; ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
-    announce('🚔 체포!', `범죄 ★${stars} · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포됨 (형량 ${s}초)`, sys: 1 }); sfx('error');
+    if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
+    const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
+    INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
+    const stars = ME.wanted; const s = Math.max(40, stars * 40);
+    ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
+    if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
+    const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
+    ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
+    this.putInCell(pr.cells[ci]);
+    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
   },
   release(msg) {
-    if (!ME.jail) return; const r = ME.jail.ret; ME.jail = null; ME.x = r.x + 1.5; ME.z = r.z + 3; ME.y = groundHeight(ME.x, ME.z) + 0.3; ME.vx = ME.vz = ME.vy = 0; ME.wanted = 0; UI.updateStars();
-    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', ''); sfx('levelup');
+    if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;
+    const r = pr ? pr.release : { x: 30, z: 30 }; ME.x = r.x + rnd(-1.2, 1.2); ME.z = r.z; ME.y = groundHeight(ME.x, ME.z) + 0.1; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.wanted = 0; UI.updateStars(); ME.yaw = Math.PI; CAM.yaw = Math.PI;
+    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', pr ? pr.name + ' 정문' : ''); sfx('levelup');
     NET.send({ t: 'chat', m: `🔓 ${ME.name} 출소`, sys: 1 });
   },
-  jailStep(dt, dx, dz, mag) {
-    const sp = 3.2; ME.vx = damp(ME.vx, dx * sp * mag, 12, dt); ME.vz = damp(ME.vz, dz * sp * mag, 12, dt);
-    ME.x = clamp(ME.x + ME.vx * dt, this.JX - 5.5, this.JX + 5.5); ME.z = clamp(ME.z + ME.vz * dt, this.JZ - 5.5, this.JZ + 5.5); ME.y = this.JY; ME.vy = 0; ME.grounded = true; ME.swim = false;
-    ME.spd = Math.hypot(ME.vx, ME.vz); if (ME.spd > 0.3) ME.yaw = dampAng(ME.yaw, Math.atan2(ME.vx, ME.vz), 12, dt);
+  // 감방 문 앞에서 E: 탈옥 시도 (3초, 약 35% 성공) — 성공하면 내 화면에서만 감방 문·정문이 열리고 수배 ★3
+  interact() {
+    const j = ME.jail; const c = this.cellOf(j); const card = ME.inv.card | 0;
+    if (card > 0) return { label: `🪪 출소카드 사용 (보유 ${card}장)`, key: 'E', fn: () => { ME.inv.card--; this.release('🪪 출소카드로 즉시 출소했다'); } };
+    if (c && Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) < 1.7) {
+      if (j.escT) return { label: '⛓️ 자물쇠 따는 중…', key: 'E', fn: () => { } };
+      if (G.t < j.escCool) return { label: `⛓️ 탈옥 시도 (교도관 경계 중 ${Math.ceil(j.escCool - G.t)}초)`, key: 'E', fn: () => toast('🚨 교도관이 지켜보고 있다') };
+      return { label: '⛓️ 탈옥 시도 (성공하면 수배 ★3 · 실패하면 형량 +30초)', key: 'E', fn: () => { j.escT = G.t + 3; toast('⛓️ 자물쇠를 따는 중… (3초간 문 앞에 있어야 한다)', 2500); sfx('ui'); } };
+    }
+    return null;
+  },
+  escapeResolve() {
+    const j = ME.jail; const pr = PRISONS[j.pr]; const c = this.cellOf(j); j.escT = 0;
+    if (Math.random() < 0.35 || ME.forceEscape) {
+      ME.jail = null; removeCollider(c.doorCol); removeCollider(pr.gateCol); pr.gateMesh.visible = false;
+      this.esc = { pr, c, until: G.t + 75 };
+      addWanted(3); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
+    } else { j.t += 30; j.escCool = G.t + 20; toast('❌ 탈옥 실패 — 교도관에게 들켰다! 형량 +30초', 2600); sfx('error'); CAM.shake = 0.3; }
+  },
+  restoreDoors() {
+    const E = this.esc; if (!E) return; this.esc = null;
+    const re = (col) => { const n = addCollider(col.x0, col.z0, col.x1, col.z1, col.y1, col.type, col.ref, col.y0); return n; };
+    E.c.doorCol = re(E.c.doorCol); E.pr.gateCol = re(E.pr.gateCol); E.pr.gateMesh.visible = true;
   },
   tick(dt) {
     if (!G.started || !ME.char) return; if (!this.built) this.build();
     if (ADMIN.on) ADMIN.adminTick(dt);
+    if (this.esc) { const E = this.esc, pr = E.pr; const inside = ME.x > pr.x0 && ME.x < pr.x1 && ME.z > pr.z0 && ME.z < pr.z1; if ((G.t > E.until && !inside) || G.t > E.until + 60 || ME.jail) this.restoreDoors(); }
     if (ME.jail) {
-      ME.hp = 100; ME.dead = false; if (ADMIN.on) { this.release('👑 관리자는 수감되지 않는다'); return; }
-      ME.jail.t -= dt; const t = Math.max(0, Math.ceil(ME.jail.t)); const card = ME.inv.card | 0;
-      this.hud.style.display = ''; this.hud.innerHTML = `🔒 수감 중 · 남은 형량 <b style="color:#ffd34a">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b><br><small style="opacity:.8">${card > 0 ? `🪪 출소카드 ${card}장 보유 — E 로 사용` : '출소카드 없음 (경찰서에서 구입)'}</small>`;
-      if (ME.jail.t <= 0) this.release('🔓 형기를 마치고 출소했다');
+      const j = ME.jail; ME.hp = Math.max(ME.hp, 100); ME.dead = false; if (ADMIN.on) { this.release('👑 관리자는 수감되지 않는다'); return; }
+      const c = this.cellOf(j); if (!c) { this.release(); return; }
+      // 감방 밖으로 나가면(벽 끼임·순간이동 등) 감방으로 되돌린다
+      if (ME.x < c.x0 - 0.6 || ME.x > c.x1 + 0.6 || ME.z < c.z0 - 0.7 || ME.z > c.z1 + 0.6 || Math.abs(ME.y - groundHeight(c.x, c.z)) > 3) this.putInCell(c);
+      if (j.escT) { if (Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) > 2) { j.escT = 0; toast('⛓️ 탈옥 시도 중단'); } else if (G.t >= j.escT) { this.escapeResolve(); if (!ME.jail) { this.hud.style.display = 'none'; return; } } }
+      j.t -= dt; const t = Math.max(0, Math.ceil(j.t)); const card = ME.inv.card | 0; const pr = PRISONS[j.pr];
+      this.hud.style.display = ''; this.hud.innerHTML = `🔒 ${pr.name} ${j.cell + 1}번 감방 · 남은 형량 <b style="color:#ffd34a">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b><br><small style="opacity:.8">${j.escT ? `⛓️ 자물쇠 따는 중… ${Math.max(0, j.escT - G.t).toFixed(1)}초` : card > 0 ? `🪪 출소카드 ${card}장 보유 — E 로 사용` : '감방 문 앞에서 E: 탈옥 시도 · 출소카드는 경찰서에서 구입'}</small>`;
+      if (j.t <= 0) this.release('🔓 형기를 마치고 정문으로 출소했다');
       return;
     }
     this.hud.style.display = 'none';
-    if (ME.wanted > 0 && !ME.dead && !ADMIN.on) {
+    if (ME.wanted > 0 && !ME.dead && !ADMIN.on && !INTERIOR.cur) {
       const slow = !ME.vehicle || Math.abs(ME.vehicle.speed) < 4; let near = false;
       if (slow) for (const p of PEDS) { if (p.kind !== 'police' || p.state === 'dead' || p.state === 'parked') continue; if (Math.abs(p.x - ME.x) < 2.3 && Math.abs(p.z - ME.z) < 2.3 && Math.abs(p.y - ME.y) < 2) { near = true; break; } }
       if (near) { this.arrestT += dt; if (this._w !== 1) { this._w = 1; toast('🚔 경찰에게 붙잡혔다! 뿌리쳐라!'); } if (this.arrestT > 1.8) this.arrest(); } else { this.arrestT = Math.max(0, this.arrestT - dt * 2); this._w = 0; }

@@ -6,10 +6,18 @@ const BUILD_DESIGNS = {
   modern: { name: '2층 모던하우스', price: 60000, time: 100, desc: '통유리 2층 주택', icon: '🏠' },
   villa: { name: '수영장 빌라', price: 120000, time: 140, desc: '야외 수영장 포함 고급 빌라', icon: '🏖️' },
   shop: { name: '상가 건물', price: 150000, time: 160, desc: '임대 수익 분당 ₩500', icon: '🏪', income: 500 },
-  tower: { name: '펜트하우스 타워', price: 450000, time: 240, desc: '18층 유리 타워 · 분당 ₩1,500', icon: '🏙️', income: 1500 },
+  tower: { name: '펜트하우스 타워', price: 450000, time: 240, desc: '최대 15층 유리 타워 · 분당 ₩1,500(15층 기준)', icon: '🏙️', income: 1500 },
 };
+// ---- 층수 제한: 최대 15층 ----
+const MAX_FLOORS = 15, FLOOR_H = 3.5;
+const DESIGN_FLOORS = { container: [2, 2, 2], cottage: [1, 1, 1], modern: [2, 2, 2], villa: [2, 2, 2], shop: [2, 15, 4], tower: [5, 15, 15] }; // [최소, 최대, 기본]
+function clampFloors(design, fl) { const r = DESIGN_FLOORS[design] || [1, 1, 1]; return clamp(Math.round(+fl || r[2]), r[0], Math.min(r[1], MAX_FLOORS)); }
+function plotFloors(p) { return clampFloors(p.design, p.fl); }
+function designPrice(design, fl) { const D = BUILD_DESIGNS[design]; if (!D) return 0; const r = DESIGN_FLOORS[design]; return r && r[0] !== r[1] ? Math.round(D.price * clampFloors(design, fl) / r[2] / 1000) * 1000 : D.price; }
+function designIncome(p) { const D = BUILD_DESIGNS[p.design]; if (!D || !D.income) return 0; const r = DESIGN_FLOORS[p.design]; return D.income * plotFloors(p) / r[2]; }
 const CONSTR = new Map(); // plot id -> visual state
 function designGroup(p, design, ownerName) {
+  const FL = plotFloors(p);
   const g = new THREE.Group(); const w = p.w - 4, d = p.d - 4; const y0 = p.y - 0.1; const mbs = {};
   const mb = (k) => mbs[k] || (mbs[k] = new MB());
   const [sx, sz] = SIDE_VEC[p.side]; let H = 6;
@@ -43,16 +51,16 @@ function designGroup(p, design, ownerName) {
     }
     case 'shop': {
       const hw = Math.min(30, w * 0.85), hd = Math.min(22, d * 0.75); mb('shop').box(p.x, y0, p.z, hw + 0.4, 4.4, hd + 0.4, C(0xffffff), BAY.shop, { noTop: true });
-      mb('office').box(p.x, y0 + 4.4, p.z, hw, 8, hd, C(0xe8dcc8), BAY.office, { topCol: C(0x777777) }); mb('plain').box(p.x, y0 + 12.4, p.z, hw + 0.6, 0.6, hd + 0.6, C(0x8a8070));
+      const oh = (FL - 1) * FLOOR_H; mb('office').box(p.x, y0 + 4.4, p.z, hw, oh, hd, C(0xe8dcc8), BAY.office, { topCol: C(0x777777) }); mb('plain').box(p.x, y0 + 4.4 + oh, p.z, hw + 0.6, 0.6, hd + 0.6, C(0x8a8070));
       const s = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(14, hw * 0.7), 2.4), new THREE.MeshBasicMaterial({ map: makeSignTex((ownerName || '') + ' 상가', 'SHOPPING', '#9a2a2a') }));
-      s.position.set(p.x + sx * (hw / 2 + 0.25), y0 + 5.6, p.z + sz * (hd / 2 + 0.25)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 13; break;
+      s.position.set(p.x + sx * (hw / 2 + 0.25), y0 + 5.6, p.z + sz * (hd / 2 + 0.25)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 4.4 + (FL - 1) * FLOOR_H + 0.6; break;
     }
     case 'tower': {
       const hw = Math.min(24, w * 0.7), hd = Math.min(24, d * 0.7); mb('office').box(p.x, y0, p.z, hw + 4, 8, hd + 4, C(0xd8d4cc), BAY.office);
-      mb('glass').box(p.x, y0 + 8, p.z, hw, 58, hd, C(0x9fc0e0), BAY.glass, { topCol: C(0x444444) }); mb('plain').box(p.x, y0 + 66, p.z, hw * 0.7, 4, hd * 0.7, C(0x333a44));
-      mb('plain').box(p.x, y0 + 70, p.z, hw * 0.55, 0.3, hd * 0.55, C(0x222222)); mb('plain').box(p.x, y0 + 70.3, p.z, 0.4, 8, 0.4, C(0xcccccc));
+      const gh = (FL - 2) * FLOOR_H; mb('glass').box(p.x, y0 + 8, p.z, hw, gh, hd, C(0x9fc0e0), BAY.glass, { topCol: C(0x444444) }); mb('plain').box(p.x, y0 + 8 + gh, p.z, hw * 0.7, 4, hd * 0.7, C(0x333a44));
+      mb('plain').box(p.x, y0 + 12 + gh, p.z, hw * 0.55, 0.3, hd * 0.55, C(0x222222)); mb('plain').box(p.x, y0 + 12.3 + gh, p.z, 0.4, 8, 0.4, C(0xcccccc));
       const s = new THREE.Mesh(new THREE.PlaneGeometry(10, 2.5), new THREE.MeshBasicMaterial({ map: makeSignTex((ownerName || '') + ' TOWER', 'PENTHOUSE', '#1a2a4a') }));
-      s.position.set(p.x + sx * (hw / 2 + 2.3), y0 + 6, p.z + sz * (hd / 2 + 2.3)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 78; break;
+      s.position.set(p.x + sx * (hw / 2 + 2.3), y0 + 6, p.z + sz * (hd / 2 + 2.3)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 12.3 + (FL - 2) * FLOOR_H; break;
     }
   }
   if (!MAT.wood) MAT.wood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
@@ -69,10 +77,10 @@ function plotFootprint(p, design) {
 function syncPlotVisual(p) {
   let V = CONSTR.get(p.id); if (!V) { V = { id: p.id }; CONSTR.set(p.id, V); }
   // sign
-  const signText = p.state === 'empty' ? ['매물', fmtMoney(p.price) + ' · ' + REGIONS[p.region].name, '#0f6a3a'] : p.state === 'owned' ? [p.ownerName + '의 땅', '건축 의뢰 가능', '#2a4a8a'] : p.state === 'building' ? ['공사중', (BUILD_DESIGNS[p.design]?.name || '') + ' · ' + p.ownerName, '#c87a10'] : [p.ownerName, BUILD_DESIGNS[p.design]?.name || '', '#3a3a3a'];
+  const flT = p.design && DESIGN_FLOORS[p.design] ? ` ${plotFloors(p)}층` : ''; const signText = p.state === 'empty' ? ['매물', fmtMoney(p.price) + ' · ' + REGIONS[p.region].name, '#0f6a3a'] : p.state === 'owned' ? [p.ownerName + '의 땅', '건축 의뢰 가능 · 최대 15층', '#2a4a8a'] : p.state === 'building' ? ['공사중', (BUILD_DESIGNS[p.design]?.name || '') + flT + ' · ' + p.ownerName, '#c87a10'] : [p.ownerName, (BUILD_DESIGNS[p.design]?.name || '') + flT, '#3a3a3a'];
   const key = signText.join('|'); if (V.signKey !== key) { V.signKey = key; p.sign.material.map.dispose(); p.sign.material.map = makeSignTex(signText[0], signText[1], signText[2]); p.sign.material.needsUpdate = true; }
-  if ((p.state === 'building' || p.state === 'done') && (!V.group || V.design !== p.design)) {
-    if (V.group) scene.remove(V.group); V.group = designGroup(p, p.design, p.ownerName); V.design = p.design; scene.add(V.group);
+  if ((p.state === 'building' || p.state === 'done') && (!V.group || V.design !== p.design || V.fl !== plotFloors(p))) {
+    if (V.group) scene.remove(V.group); if (V.collider) { removeCollider(V.collider); V.collider = null; } V.group = designGroup(p, p.design, p.ownerName); V.design = p.design; V.fl = plotFloors(p); scene.add(V.group); PLOT_BLD.delete(p.id);
     V.clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); for (const m of V.group.userData.mats) { m.clippingPlanes = [V.clip]; m.clipShadows = true; }
   }
   if (p.state === 'building' && !V.site) {
@@ -110,7 +118,7 @@ function updateConstruction(dt, cam) {
   if (G.isHost) {
     for (const p of PLOTS) {
       if (p.state === 'building') { p.progress = Math.min(1, p.progress + dt / (BUILD_DESIGNS[p.design].time)); if (p.progress >= 1) { p.state = 'done'; syncPlotVisual(p); onBuildDone(p); NET.send({ t: 'plot', p: plotState(p) }); savePlots(); } }
-      if (p.state === 'done' && BUILD_DESIGNS[p.design].income) p.bank = (p.bank || 0) + BUILD_DESIGNS[p.design].income * dt / 60;
+      if (p.state === 'done' && BUILD_DESIGNS[p.design].income) p.bank = (p.bank || 0) + designIncome(p) * dt / 60;
     }
     if ((G._plotSync = (G._plotSync || 0) - dt) <= 0) { G._plotSync = 2; const act = PLOTS.filter(p => p.state === 'building'); if (act.length) NET.send({ t: 'plots', ps: act.map(plotState) }); }
   }
@@ -133,13 +141,13 @@ function updateConstruction(dt, cam) {
 }
 function onBuildDone(p) {
   FX.confetti(p.x, p.y + 8, p.z); sfx('levelup');
-  if (p.owner === ME.id) { announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} — ${REGIONS[p.region].name}`); }
+  if (p.owner === ME.id) { announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} ${plotFloors(p)}층 — ${REGIONS[p.region].name} · 문으로 들어가 볼 수 있다`); }
   else toast(`🏗️ ${p.ownerName}의 ${BUILD_DESIGNS[p.design].name} 완공`);
 }
-function plotState(p) { return { id: p.id, o: p.owner, on: p.ownerName, d: p.design, pr: +p.progress.toFixed(4), s: p.state, b: Math.floor(p.bank || 0) }; }
+function plotState(p) { return { id: p.id, o: p.owner, on: p.ownerName, d: p.design, fl: p.fl || 0, pr: +p.progress.toFixed(4), s: p.state, b: Math.floor(p.bank || 0) }; }
 function applyPlotState(s) {
   const p = PLOTS[s.id]; if (!p) return; const wasDone = p.state === 'done';
-  p.owner = s.o; p.ownerName = s.on; p.design = s.d; p.progress = s.pr; p.state = s.s; p.bank = s.b; syncPlotVisual(p);
+  p.owner = s.o; p.ownerName = s.on; p.design = s.d; p.fl = s.d ? clampFloors(s.d, s.fl) : 0; p.progress = s.pr; p.state = s.s; p.bank = s.b; syncPlotVisual(p);
   if (!wasDone && p.state === 'done' && G.started && !G.isHost) onBuildDone(p);
 }
 function savePlots() { if (!G.isHost) return; try { localStorage.setItem('sbc3d_world', JSON.stringify({ plots: PLOTS.map(plotState), time: G.time })); } catch (e) { } }
@@ -150,7 +158,7 @@ function loadPlots() {
 function hostPlotRequest(m, fromId, fromName) {
   const p = PLOTS[m.p]; if (!p) return;
   if (m.t === 'buyLand') { if (p.state !== 'empty') { notifyPlayer(fromId, { t: 'plotFail', amt: p.price, msg: '이미 팔린 땅이다' }); return; } p.owner = fromId; p.ownerName = fromName; p.state = 'owned'; p.design = null; p.progress = 0; }
-  if (m.t === 'build') { if (p.owner !== fromId || p.state !== 'owned') { notifyPlayer(fromId, { t: 'plotFail', amt: BUILD_DESIGNS[m.d]?.price || 0, msg: '건축할 수 없다' }); return; } p.design = m.d; p.state = 'building'; p.progress = 0; }
+  if (m.t === 'build') { if (p.owner !== fromId || p.state !== 'owned' || !BUILD_DESIGNS[m.d]) { notifyPlayer(fromId, { t: 'plotFail', amt: designPrice(m.d, m.fl), msg: '건축할 수 없다' }); return; } p.design = m.d; p.fl = clampFloors(m.d, m.fl); p.state = 'building'; p.progress = 0; } // 층수는 방장이 최대 15층으로 강제
   if (m.t === 'collect') { if (p.owner !== fromId) return; const a = Math.floor(p.bank || 0); p.bank = 0; notifyPlayer(fromId, { t: 'income', amt: a }); }
   syncPlotVisual(p); NET.send({ t: 'plot', p: plotState(p) }); savePlots();
 }

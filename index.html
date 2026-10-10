@@ -492,10 +492,33 @@ function landF(x, z) {
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
   let h = wW * (fbm(x * 0.0032, z * 0.0032, 5) * 0.5 + 0.55) * 48;
-  h += wW * 170 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 220 * 220));
+  h += wW * 210 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 230 * 230)); // 디산베이 북쪽 큰 산 (서부리산)
   h += wW * 70 * Math.exp(-((x + 1350) ** 2 + (z - 820) ** 2) / (2 * 170 * 170));
-  h += 34 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 100 * 100));
+  // 시모느 아일랜드: 동쪽 언덕 + 북쪽 작은 봉우리
+  h += 46 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 110 * 110));
+  h += 24 * Math.exp(-((x - 1830) ** 2 + (z - 230) ** 2) / (2 * 80 * 80));
+  // 지올르 북쪽 · 캥지베 남쪽 해안 구릉
+  const band = smooth(-760, -680, x) * smooth(300, 220, x);
+  h += band * smooth(-990, -1060, z) * (fbm(x * 0.006 + 2, z * 0.006, 3) * 0.5 + 0.7) * 30;
+  h += band * smooth(975, 1045, z) * (fbm(x * 0.006 - 4, z * 0.006 + 1, 3) * 0.5 + 0.7) * 24;
   return Math.max(0, h);
+}
+// 도로까지 함께 올라가는 완만한 기복 (디산베이 외곽 언덕길). 마을·농장·호수 주변은 평지 유지
+function gradeAt(x, z) {
+  const wW = smooth(-760, -900, x); if (wW <= 0) return 0;
+  let g = (fbm(x * 0.0019 + 5, z * 0.0019 - 3, 3) * 0.5 + 0.5) * 20;
+  g += 26 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 300 * 300));
+  g += 12 * Math.exp(-((x + 1350) ** 2 + (z - 820) ** 2) / (2 * 260 * 260));
+  for (const f of FLAT) g *= smooth(f.r + 10, f.r + 170, distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]));
+  g *= smooth(LAKE.r + 25, LAKE.r + 170, Math.hypot(x - LAKE.x, z - LAKE.z));
+  return Math.max(0, g) * wW;
+}
+// 해안까지의 대략적인 거리 (육지 안쪽 +). 모래사장 색칠용
+function coastDist(x, z) {
+  const qx = Math.abs(x + 50) - 1450 + 220, qz = Math.abs(z) - 1100 + 220;
+  const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220;
+  const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430;
+  return -Math.min(sd, sdI);
 }
 function hmIdx(i, j) { return j * HM.W + i; }
 function hmSample(arr, x, z) {
@@ -528,10 +551,11 @@ function buildHeightmap() {
   for (let j = 0; j < HM.H; j++) for (let i = 0; i < HM.W; i++) {
     const x = HM.x0 + i * HM.res, z = HM.z0 + j * HM.res, k = hmIdx(i, j);
     const land = landF(x, z);
-    let h = lerp(-9, LAND, land);
+    const l3 = land * land * land;
+    let h = lerp(-9, LAND, land) + gradeAt(x, z) * l3;
     let mask = smooth(12, 70, roadDistF[k]);
     for (const f of FLAT) { const d = distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]); mask *= smooth(f.r, f.r + 45, d); }
-    h += (hillsAt(x, z) + fbm(x * 0.02, z * 0.02, 2) * 0.8 * smooth(-650, -760, x)) * mask * land * land * land;
+    h += (hillsAt(x, z) + fbm(x * 0.02, z * 0.02, 2) * 0.8 * smooth(-650, -760, x)) * mask * l3;
     const dl = Math.hypot(x - LAKE.x, z - LAKE.z); h = lerp(h, -3.5, smooth(LAKE.r + 30, LAKE.r - 15, dl));
     hmData[k] = h;
   }
@@ -720,6 +744,7 @@ function gridInsert(c) {
   }
 }
 function removeCollider(c) {
+  const k = COLLIDERS.lastIndexOf(c); if (k >= 0) COLLIDERS.splice(k, 1);
   for (let i = Math.floor(c.x0 / COL_CELL); i <= Math.floor(c.x1 / COL_CELL); i++) for (let j = Math.floor(c.z0 / COL_CELL); j <= Math.floor(c.z1 / COL_CELL); j++) {
     const a = colGrid.get(i * 100000 + j); if (a) { const ix = a.indexOf(c); if (ix >= 0) a.splice(ix, 1); }
   }
@@ -739,7 +764,7 @@ function resolveCircle(x, z, r, y = 0, h = 1.8) {
   _res.hit = false; _res.c = null;
   const list = collidersNear(x, z, r + 2);
   for (let it = 0; it < 2; it++) for (const c of list) {
-    if (y > c.y1 || y + h < c.y0) continue;
+    if (y > c.y1 - 0.08 || y + h < c.y0) continue; // 윗면에 서 있으면 충돌 아님 (옥상·바닥 위)
     if (c.circle) {
       const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), m = r + c.r;
       if (d < m && d > 1e-4) { const k = (m - d); x += dx / d * k; z += dz / d * k; _res.hit = true; _res.nx = dx / d; _res.nz = dz / d; _res.c = c; }
@@ -827,6 +852,30 @@ function addSign(text, sub, bg, x, y, z, w, h, faceYaw, fg) {
 // face side helpers: side 'n'(-z),'s'(+z),'e'(+x),'w'(-x)
 const SIDE_YAW = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
 const SIDE_VEC = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
+// ---- 들어갈 수 있는 건물 목록 (모든 건물에 문 + 실내) ----
+const BLD_KIND = {
+  office: '오피스 빌딩', bank: '서부리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
+  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
+  food: '음식점', pcbang: 'PC방', gym: '헬스장', pool: '실내 수영장', gun: '총포사', clothes: '옷가게', casino: '카지노', guard: '교도관실', home: '내 집',
+};
+const BUILDINGS = []; const BLD_GRID = new Map(); const BLD_CELL = 64;
+function regBuilding(kind, x, z, w, d, top, side, extra = {}) {
+  const [sx, sz] = SIDE_VEC[side] || [0, 1];
+  const wx = x + sx * (w / 2), wz = z + sz * (d / 2); // 문이 붙은 벽면 중앙
+  const door = extra.door || { x: wx + sx * 1.4, z: wz + sz * 1.4 };
+  const b = Object.assign({ id: BUILDINGS.length, kind, name: BLD_KIND[kind] || '건물', x, z, w, d, top, side }, extra);
+  b.door = { x: door.x, z: door.z, wx, wz, sx, sz }; b.y0 = extra.y0 ?? groundHeight(door.x, door.z);
+  BUILDINGS.push(b); bldInsert(b);
+  if (!extra.noDoorMesh) { // 문짝 (벽에 살짝 붙인 판)
+    const m = mbAt('plain', wx, wz); const y = b.y0 - 0.05;
+    m.box(wx + sx * 0.06, y, wz + sz * 0.06, sx ? 0.14 : 1.9, 2.6, sz ? 0.14 : 1.9, C(0x2e2620));
+    m.box(wx + sx * 0.1, y + 2.6, wz + sz * 0.1, sx ? 0.2 : 2.3, 0.25, sz ? 0.2 : 2.3, C(0xd8c890));
+  }
+  return b;
+}
+function bldInsert(b) { const k = Math.floor(b.door.x / BLD_CELL) + ',' + Math.floor(b.door.z / BLD_CELL); let a = BLD_GRID.get(k); if (!a) { a = []; BLD_GRID.set(k, a); } a.push(b); }
+function buildingsNear(x, z) { const out = []; const i0 = Math.floor(x / BLD_CELL), j0 = Math.floor(z / BLD_CELL); for (let i = i0 - 1; i <= i0 + 1; i++) for (let j = j0 - 1; j <= j0 + 1; j++) { const a = BLD_GRID.get(i + ',' + j); if (a) out.push(...a); } return out; }
+const PRISONS = [];
 
 // ================= BUILD WORLD =================
 async function buildWorld(progress) {
@@ -894,11 +943,14 @@ function fillBlock(b) {
   const R = b.region;
   if (b.use === 'fac' && (b.fac === 'zoo' || b.fac === 'school')) { if (b.fac === 'zoo') buildZooBlock(b); else buildSchoolBlock(b); return; }
   if (b.use === 'park' || b.use === 'court') { buildParkBlock(b); return; }
-  if (b.use === 'factoryblock') { buildFactoryHall((b.ix0 + b.ix1) / 2, (b.iz0 + b.iz1) / 2, b.ix1 - b.ix0 - 8, b.iz1 - b.iz0 - 8, R); return; }
+  if (b.use === 'factoryblock') { buildFactoryHall((b.ix0 + b.ix1) / 2, (b.iz0 + b.iz1) / 2, b.ix1 - b.ix0 - 8, b.iz1 - b.iz0 - 8, R, false, 's'); return; }
   if (b.use === 'parking') { buildParking(b); return; }
+  const prisonBlock = b.use === 'fac' && b.fac === 'police' && b.lots.length > 1;
+  const lot0 = b.lots[0];
   b.lots.forEach((lot, li) => {
     const side = lotFront(lot);
-    if (b.use === 'fac' && li === 0) { buildFacility(b.fac, lot, side, R); return; }
+    if (b.use === 'fac' && li === 0) { const f = buildFacility(b.fac, lot, side, R); if (prisonBlock) buildPrison(b, lot0, f); return; }
+    if (prisonBlock && lot.z0 > lot0.z0 + 1) return; // 경찰서 뒤편은 교도소 부지
     if (b.use === 'fac' && b.fac === 'pool' && li === 1) { buildOutdoorPool(lot); return; }
     if (b.use === 'plotblock' && li === 0) { makePlot(lot, side, R); return; }
     buildLotBuilding(lot, side, R, b);
@@ -937,6 +989,7 @@ function roofProps(x, z, w, d, top, n = 3) {
     else m.box(px, top, pz, wr(3, 5), 2.6, wr(3, 5), C(0xd0ccc4));
   }
 }
+function seoKind(x, z) { const k = hash2(x * 7 | 0, z * 13 | 0); return k < 0.12 ? 'bank' : k < 0.27 ? 'cafe' : k < 0.4 ? 'mart' : k < 0.5 ? 'restaurant' : k < 0.55 ? 'church' : 'office'; }
 function buildLotBuilding(lot, side, R, b) {
   const lw = lot.x1 - lot.x0, ld = lot.z1 - lot.z0, cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
   if (R === 'seoburi') {
@@ -950,18 +1003,20 @@ function buildLotBuilding(lot, side, R, b) {
       const top = addBuildingBox(cx, cz, tw, td, h - podH, style, col, { y0: LAND - 0.2 + podH + 0.7 });
       if (wrng() < 0.5) { const t2 = addBuildingBox(cx, cz, tw * 0.6, td * 0.6, wr(8, 25), style, col, { y0: top }); roofProps(cx, cz, tw * 0.6, td * 0.6, t2, 2); if (wrng() < 0.5) mbAt('plain', cx, cz).box(cx, t2, cz, 0.4, wr(10, 25), 0.4, C(0x888888)); }
       else roofProps(cx, cz, tw, td, top, 4);
-    } else { const top = addBuildingBox(cx, cz, w, d, h, style, col, { shop: true }); roofProps(cx, cz, w, d, top, 4); }
+      regBuilding(seoKind(cx, cz), cx, cz, w + 0.4, d + 0.4, top, side, { roofW: tw, roofD: td });
+    } else { const top = addBuildingBox(cx, cz, w, d, h, style, col, { shop: true }); roofProps(cx, cz, w, d, top, 4); regBuilding(seoKind(cx, cz), cx, cz, w + 0.4, d + 0.4, top, side); }
   } else if (R === 'jiolle') {
     if (wrng() < 0.6) { // houses
       const n = 2; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
         const hx = lot.x0 + lw * (i + 0.5) / n, hz = lot.z0 + ld * (j + 0.5) / n; buildHouse(hx, hz, lw / n - 5, ld / n - 5, wrng() < 0.5 ? 1 : 2, R);
       }
-    } else { const h = wr(12, 24); const top = addBuildingBox(cx, cz, lw - 6, ld - 6, h, 'apt', C(wpick(PALETTE.apt))); roofProps(cx, cz, lw - 6, ld - 6, top, 2); }
+    } else { const h = wr(12, 24); const top = addBuildingBox(cx, cz, lw - 6, ld - 6, h, 'apt', C(wpick(PALETTE.apt))); roofProps(cx, cz, lw - 6, ld - 6, top, 2); regBuilding('apartment', cx, cz, lw - 6, ld - 6, top, side); }
   } else if (R === 'kaengjibe') {
     const k = wrng();
-    if (k < 0.15) { buildFactoryHall(cx, cz, lw - 6, ld - 6, R, true); return; }
+    if (k < 0.15) { buildFactoryHall(cx, cz, lw - 6, ld - 6, R, true, side); return; }
     const h = wr(9, 24); const w = lw - wr(3, 7), d = ld - wr(3, 7); const col = C(wpick(PALETTE.brick));
-    const top = addBuildingBox(cx, cz, w, d, h, 'brick', col, { shop: wrng() < 0.5 });
+    const shopF = wrng() < 0.5; const top = addBuildingBox(cx, cz, w, d, h, 'brick', col, { shop: shopF });
+    { const hk = hash2(cx * 3 | 0, cz * 5 | 0); regBuilding(hk < 0.1 ? 'church' : shopF ? (hk < 0.55 ? 'mart' : 'restaurant') : 'apartment', cx, cz, w + (shopF ? 0.4 : 0), d + (shopF ? 0.4 : 0), top, side); }
     roofProps(cx, cz, w, d, top, 2);
     // fire escape
     const fs = side; const [sx, sz] = SIDE_VEC[fs];
@@ -971,7 +1026,7 @@ function buildLotBuilding(lot, side, R, b) {
     // fence + barrels
     if (wrng() < 0.5) { const bx = cx + wr(-lw / 3, lw / 3), bz = cz + (sz || 1) * (d / 2 + 2); mbAt('metalPlain', bx, bz).cyl(bx, LAND, bz, 0.4, 1.1, C(0x6a3a1a), 8); SMOKERS.push({ x: bx, y: LAND + 1.2, z: bz, fire: true, rate: 0.12 }); }
   } else if (R === 'simone') {
-    if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); }
+    if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); regBuilding('hotel', cx, cz, lw - 10, ld - 10, top, side); }
     else buildVilla(cx, cz, lw - 6, ld - 6, side);
   }
 }
@@ -994,7 +1049,8 @@ function buildHouse(x, z, w, d, floors, R, y0 = LAND - 0.3) {
   mbAt('plain', x, z).box(x + w * 0.25, y0 + h, z - d * 0.15, 0.8, 3.2, 0.8, C(0x7a5a4a));
   // door
   mbAt('plain', x, z).box(x, y0 + 0.4, z + d / 2 + 0.02, 1.2, 2.2, 0.1, C(0x6a4026));
-  addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, y0 + h + 4, 'bld');
+  const apex = y0 + 0.4 + h + Math.min(w, d) * 0.38; addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, apex, 'bld');
+  regBuilding('house', x, z, w, d, apex, 's', { noDoorMesh: true, y0: y0 + 0.3, floors: floors });
 }
 function buildVilla(x, z, w, d, side) {
   w = Math.min(w, 30); d = Math.min(d, 26);
@@ -1006,18 +1062,20 @@ function buildVilla(x, z, w, d, side) {
   m.box(x + w * 0.05, y0 + 4.9, z - d * 0.1, w * 0.4, 3.2, d * 0.4, wall);
   mbAt('glass', x, z).box(x + w * 0.05, y0 + 5.4, z - d * 0.1, w * 0.41, 1.8, d * 0.41, C(0xbfe0f0), BAY.glass, { noTop: true, noTopx: 1 });
   addCollider(x - w * 0.45, z - d * 0.33, x + w * 0.25, z + d * 0.33, y0 + 8.5, 'bld');
+  regBuilding('villa', x - w * 0.1, z, w * 0.7, d * 0.66, y0 + 8.5, side === 'n' || side === 's' ? side : 's');
   // pool
   const px = x + w * 0.3, pz = z + d * 0.15;
   m.box(px, y0, pz, w * 0.3, 0.5, d * 0.5, C(0xdfe8ec));
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.25, d * 0.42), MAT.poolWater); pool.rotation.x = -Math.PI / 2; pool.position.set(px, y0 + 0.52, pz); scene.add(pool);
   TREES.push({ type: 'palm', x: x - w * 0.42, z: z + d * 0.42, s: wr(0.8, 1.1) });
 }
-function buildFactoryHall(x, z, w, d, R, small) {
+function buildFactoryHall(x, z, w, d, R, small, side = 's', noReg = false) {
   const y0 = LAND - 0.2; const h = small ? wr(8, 11) : wr(12, 16);
   mbAt('metal', x, z).box(x, y0, z, w, h, d, C(wpick([0xb8bec4, 0x9aa8b4, 0xc4b8a0, 0x8fa0a8])), BAY.metal, { noTop: true });
   const n = Math.max(2, Math.floor(w / 12)); const rm = mbAt('metal', x, z);
   for (let i = 0; i < n; i++) { const sx = x - w / 2 + (i + 0.5) * w / n; rm.gable(sx, y0 + h, z, w / n, d, 3, C(0x9aa0a6), 'z', 6); }
   addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, y0 + h + 3, 'bld');
+  if (!noReg) regBuilding('factory', x, z, w, d, y0 + h, side === 'n' ? 's' : side);
   const cm = mbAt('plain', x, z);
   const nch = small ? 1 : wri(1, 3);
   for (let i = 0; i < nch; i++) {
@@ -1077,15 +1135,15 @@ function addDoorRing(x, z, color = 0xffcc33) {
 function buildFacility(type, lot, side, R) {
   const F = FAC[type]; const cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
   let w = Math.min(lot.x1 - lot.x0 - 6, 44), d = Math.min(lot.z1 - lot.z0 - 6, 40);
-  const y0 = groundHeight(cx, cz) - 0.2; let h = 12; const col = C(F.col);
   const [sx, sz] = SIDE_VEC[side];
+  const y0 = Math.min(groundHeight(cx, cz), groundHeight(cx + sx * (w * 0.35 + 2.6), cz + sz * (d * 0.35 + 2.6))) - 0.2; let h = 12; const col = C(F.col); // 입구(앞쪽) 지면에 맞춘다
   const m = mbAt('plain', cx, cz);
   switch (type) {
     case 'police': h = 13; addBuildingBox(cx, cz, w, d, h, 'office', C(0xdfe6f0), { y0 }); m.box(cx, y0 + 4, cz, w + 0.3, 1.2, d + 0.3, C(0x2a4a9a)); m.box(cx + sx * (w / 2 + 4) + (sz ? w / 3 : 0), y0, cz + sz * (d / 2 + 4) + (sx ? d / 3 : 0), 0.15, 10, 0.15, C(0xcccccc)); break;
     case 'hospital': h = 26; addBuildingBox(cx, cz, w, d, h, 'office', C(0xffffff), { y0 }); { const s = addSign('✚', '', '#e52a3a', cx + sx * (w / 2 + 0.1), y0 + h - 3, cz + sz * (d / 2 + 0.1), 4, 4, SIDE_YAW[side]); } break;
     case 'dealer': h = 9; m.box(cx, y0, cz, w, 0.5, d, C(0xe6e6e6)); mbAt('glass', cx, cz).box(cx, y0 + 0.5, cz, w, h, d, C(0xd8ecf8), BAY.glass, { topCol: C(0x888888) }); addCollider(cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2, y0 + h + 1);
       for (let i = 0; i < 4; i++) PARKED.push({ x: cx + sx * (w / 2 + 6) + (sz ? -w / 3 + i * w / 4.5 : 0), z: cz + sz * (d / 2 + 6) + (sx ? -d / 3 + i * d / 4.5 : 0), yaw: SIDE_YAW[side] + Math.PI / 2, display: true, region: R }); break;
-    case 'factory': buildFactoryHall(cx, cz, w, d, R, true); h = 10; break;
+    case 'factory': buildFactoryHall(cx, cz, w, d, R, true, side, true); h = 10; break;
     case 'academy': h = 22; addBuildingBox(cx, cz, w * 0.8, d * 0.8, h, 'office', C(0xf0ece4), { y0, shop: true }); for (let i = 0; i < 3; i++) addSign(['영어', '수학', '코딩', '입시', '피아노', '태권도'][wri(0, 5)] + ' 학원', '', ['#1a6ad0', '#d02a6a', '#2aa05a'][i], cx + sx * (w * 0.4 + 0.1) + (sz ? (i - 1) * w * 0.25 : 0), y0 + 8 + i * 4, cz + sz * (d * 0.4 + 0.1) + (sx ? (i - 1) * d * 0.25 : 0), 6, 1.5, SIDE_YAW[side]); w *= 0.8; d *= 0.8; break;
     case 'food': h = 8; addBuildingBox(cx, cz, w * 0.7, d * 0.7, h, 'house', C(0xf4e0c0), { y0, shop: true }); w *= 0.7; d *= 0.7;
       for (let i = 0; i < 3; i++) { const tx = cx + sx * (w / 2 + 5) + (sz ? (i - 1) * 6 : 0), tz = cz + sz * (d / 2 + 5) + (sx ? (i - 1) * 6 : 0); m.cyl(tx, y0, tz, 0.08, 2.4, C(0x888888), 6); m.cyl(tx, y0 + 2.4, tz, 1.8, 0.6, C(i % 2 ? 0xd04030 : 0xffffff), 10, 0.05); m.cyl(tx, y0 + 0.75, tz, 0.7, 0.06, C(0xffffff), 10); } break;
@@ -1102,7 +1160,9 @@ function buildFacility(type, lot, side, R) {
   addSign(F.name, F.eng, bgCol, cx + sx * (w / 2 + 0.12), Math.max(signY, y0 + 5.2), cz + sz * (d / 2 + 0.12), Math.min(10, Math.max(w, d) * 0.6), 2.5, SIDE_YAW[side]);
   const door = { x: cx + sx * (w / 2 + 2.6), z: cz + sz * (d / 2 + 2.6) };
   const f = { id: FACILITIES.length, type, name: F.name, icon: F.icon, region: R, x: door.x, z: door.z, cx, cz, side };
-  f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f); return f;
+  f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f);
+  f.bld = regBuilding(type, cx, cz, w, d, y0 + h, side, { fac: f, door: { x: door.x, z: door.z }, y0: y0 + 0.2 });
+  return f;
 }
 function buildSchoolBlock(b) {
   const lot = { x0: b.ix0, x1: b.ix1, z0: b.iz0, z1: b.iz0 + (b.iz1 - b.iz0) * 0.42 }; lot.sides = ['n', 'e', 'w'];
@@ -1112,11 +1172,83 @@ function buildSchoolBlock(b) {
   // clock
   const door = { x: cx, z: cz + d / 2 + 3 };
   const f = { id: FACILITIES.length, type: 'school', name: '학교', icon: '🏫', region: b.region, x: door.x, z: door.z, cx, cz, side: 's' }; f.ring = addDoorRing(door.x, door.z); FACILITIES.push(f);
+  f.bld = regBuilding('school', cx, cz, w, d, LAND + 14, 's', { fac: f, door: { x: door.x, z: door.z } });
   // field
   const fz0 = lot.z1 + 4, fz1 = b.iz1 - 2; const fcx = cx, fcz = (fz0 + fz1) / 2; const fw = b.ix1 - b.ix0 - 6, fd = fz1 - fz0;
   const m = mbAt('plain', fcx, fcz); m.box(fcx, LAND - 0.2, fcz, fw, 0.41, fd, C(0xb8643a)); m.box(fcx, LAND + 0.21, fcz, fw - 8, 0.02, fd - 8, C(0x3e8a3a));
   m.box(fcx, LAND + 0.23, fcz, 0.3, 0.02, fd - 8, C(0xffffff));
   for (const s of [-1, 1]) { m.box(fcx + s * (fw / 2 - 6), LAND, fcz, 0.2, 2.4, 0.2, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND + 2.4, fcz, 0.2, 0.2, 7, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND, fcz - 3.5, 0.2, 2.4, 0.2, C(0xffffff)); m.box(fcx + s * (fw / 2 - 6), LAND, fcz + 3.5, 0.2, 2.4, 0.2, C(0xffffff)); }
+}
+// ================= 교도소 (경찰서 바로 뒤편) =================
+function buildPrison(b, lot0, pf) {
+  const x0 = b.ix0 + 1, x1 = b.ix1 - 1, z0 = lot0.z1 + 2.5, z1 = b.iz1 - 1;
+  const W = x1 - x0, D = z1 - z0; if (W < 50 || D < 40) return;
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, y = LAND - 0.2;
+  const m = mbAt('concrete', cx, cz), mp = mbAt('plain', cx, cz), mm = mbAt('metalPlain', cx, cz), gl = mbAt('glow', cx, cz);
+  markGrass(x0 - 1, z0 - 1, x1 + 1, z1 + 1, 0);
+  mp.box(cx, LAND - 0.3, cz, W, 0.47, D, C(0x6f6f6a)); // 마당 바닥
+  const WH = 7.5, T = 0.8, GW = 6; const gx = clamp((lot0.x0 + lot0.x1) / 2, x0 + 14, x1 - 14);
+  const wall = (ax, az, bx, bz) => {
+    const w = Math.max(T, Math.abs(bx - ax)), d = Math.max(T, Math.abs(bz - az)), mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    m.box(mx, y, mz, w, WH, d, C(0xbdb8ac), null, { topUV: 4 }); addCollider(mx - w / 2, mz - d / 2, mx + w / 2, mz + d / 2, y + WH + 1.5, 'bld');
+    mm.box(mx, y + WH, mz, w, 0.12, d, C(0x555555)); // 철조망 받침
+    const n = Math.ceil(Math.max(w, d) / 2.5); for (let i = 0; i <= n; i++) { const t = i / n; mm.box(lerp(ax, bx, t), y + WH, lerp(az, bz, t), 0.08, 1.1, 0.08, C(0x444444)); }
+    mm.box(mx, y + WH + 0.55, mz, w, 0.06, d, C(0x9a9a9a)); mm.box(mx, y + WH + 1.0, mz, w, 0.06, d, C(0x9a9a9a));
+  };
+  wall(x0, z1, x1, z1); wall(x0, z0, x0, z1); wall(x1, z0, x1, z1); wall(x0, z0, gx - GW / 2, z0); wall(gx + GW / 2, z0, x1, z0);
+  // 정문 (철창문) — 탈옥한 사람에게만 로컬로 열린다
+  const gmb = new MB(); for (let i = 0; i <= 20; i++) gmb.box(gx - GW / 2 + i * GW / 20, y, z0, 0.1, 5.2, 0.1, C(0x2a2c30)); gmb.box(gx, y + 5.1, z0, GW, 0.25, 0.2, C(0x2a2c30)); gmb.box(gx, y + 2.6, z0, GW, 0.15, 0.15, C(0x2a2c30));
+  const gateMesh = new THREE.Mesh(gmb.geo(), MAT.metalPlain); gateMesh.castShadow = true; scene.add(gateMesh);
+  const gateCol = addCollider(gx - GW / 2, z0 - 0.3, gx + GW / 2, z0 + 0.3, y + WH + 1.5, 'bld');
+  for (const sx of [-1, 1]) { m.box(gx + sx * (GW / 2 + 0.6), y, z0, 1.2, WH + 1.2, 1.4, C(0x8a867c)); gl.box(gx + sx * (GW / 2 + 0.6), y + WH + 1.2, z0, 0.6, 0.3, 0.6, CS(1, 0.25, 0.2)); }
+  const name = (REGIONS[b.region] ? REGIONS[b.region].name : '') + ' 교도소';
+  addSign(name, 'PRISON · 무단 출입 금지', '#2a2f3a', gx, y + WH - 1.2, z0 - T / 2 - 0.08, 10, 2.2, Math.PI);
+  // 감시탑 4개
+  for (const [tx, tz] of [[x0 + 3, z0 + 3], [x1 - 3, z0 + 3], [x0 + 3, z1 - 3], [x1 - 3, z1 - 3]]) {
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mm.box(tx + lx * 1.3, y, tz + lz * 1.3, 0.25, 9, 0.25, C(0x4a4c50));
+    mp.box(tx, y + 9, tz, 3.6, 0.3, 3.6, C(0x6a6c70)); mp.box(tx, y + 9.3, tz, 3.4, 1.0, 3.4, C(0x50545a)); mm.box(tx, y + 11.8, tz, 3.8, 0.25, 3.8, C(0x3a3c40));
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mm.box(tx + lx * 1.6, y + 10.3, tz + lz * 1.6, 0.12, 1.5, 0.12, C(0x3a3c40));
+    gl.box(tx, y + 11.6, tz + 1.95, 0.6, 0.2, 0.1, CS(1, 1, 0.8));
+    addCollider(tx - 1.8, tz - 1.8, tx + 1.8, tz + 1.8, y + 12, 'bld');
+  }
+  // 교도관실 (경비 구역) — 정문 옆
+  const gw = 10, gd = 7, ghx = clamp(gx + GW / 2 + 9, x0 + 9, x1 - 9), ghz = z0 + 6.5;
+  addBuildingBox(ghx, ghz, gw, gd, 4.2, 'office', C(0x9aa4b4), { y0: y });
+  addSign('교도관실', 'GUARD', '#20304a', ghx, y + 3, ghz + gd / 2 + 0.1, 4, 1, 0);
+  regBuilding('guard', ghx, ghz, gw, gd, y + 4.9, 's', { y0: LAND });
+  // 감방동
+  const bw = Math.min(W - 14, 58), bd = 15, bx = cx, bz1 = z1 - 2.5, bz0 = bz1 - bd, BH = 4.2;
+  mp.box(bx, y, (bz0 + bz1) / 2, bw, 0.42, bd, C(0x8d8c88));
+  const cw = (ax, az, bx2, bz2, h = BH, col = C(0xd8d4c8)) => { const w = Math.max(0.35, Math.abs(bx2 - ax)), d = Math.max(0.35, Math.abs(bz2 - az)), mx = (ax + bx2) / 2, mz = (az + bz2) / 2; mp.box(mx, y, mz, w, h, d, col); addCollider(mx - w / 2, mz - d / 2, mx + w / 2, mz + d / 2, y + h, 'bld'); };
+  cw(bx - bw / 2, bz1, bx + bw / 2, bz1); cw(bx - bw / 2, bz0, bx - bw / 2, bz1); cw(bx + bw / 2, bz0, bx + bw / 2, bz1);
+  cw(bx - bw / 2, bz0, bx - 2, bz0); cw(bx + 2, bz0, bx + bw / 2, bz0);
+  mp.box(bx, y + BH, bz0, 4, 0.6, 0.4, C(0xd8d4c8));
+  addSign('감방동', 'CELL BLOCK', '#3a3a3a', bx, y + BH - 0.55, bz0 - 0.25, 4, 0.9, Math.PI);
+  { const rmb = new MB(); rmb.box(bx, y + BH, (bz0 + bz1) / 2, bw + 0.6, 0.4, bd + 0.6, C(0x9a978e)); const roof = new THREE.Mesh(rmb.geo(), MAT.plain); roof.receiveShadow = true; roof.castShadow = false; scene.add(roof); addCollider(bx - bw / 2 - 0.3, bz0 - 0.3, bx + bw / 2 + 0.3, bz1 + 0.3, y + BH + 0.4, 'roof', null, y + BH); }
+  for (let gx2 = bx - bw / 2 + 4; gx2 < bx + bw / 2 - 2; gx2 += 6) gl.box(gx2, y + BH - 0.08, bz0 + 3, 2.4, 0.06, 0.3, CS(1, 0.97, 0.85));
+  const CW = 4.2, CD = 4.6, n = Math.floor((bw - 1) / CW); const cells = [];
+  const sx0 = bx - n * CW / 2;
+  for (let i = 0; i < n; i++) {
+    const a = sx0 + i * CW, b2 = a + CW, fz = bz1 - CD;
+    cw(a, fz, a, bz1, BH, C(0xcfcabd)); if (i === n - 1) cw(b2, fz, b2, bz1, BH, C(0xcfcabd)); // 감방 사이 벽 (양 끝 포함 — 문 말고는 빠져나갈 틈 없음)
+    // 쇠창살 (왼쪽은 고정, 오른쪽 1.4m는 감방 문)
+    for (let k = 0.2; k < CW; k += 0.3) mm.box(a + k, y + 0.2, fz, 0.06, BH - 0.2, 0.06, C(0x2a2c30));
+    mm.box((a + b2) / 2, y + BH - 0.3, fz, CW, 0.12, 0.12, C(0x2a2c30)); mm.box((a + b2) / 2, y + 1.2, fz, CW, 0.08, 0.08, C(0x2a2c30));
+    addCollider(a, fz - 0.15, b2 - 1.5, fz + 0.15, y + BH, 'bld');
+    const doorCol = addCollider(b2 - 1.5, fz - 0.15, b2, fz + 0.15, y + BH, 'bld');
+    // 침대 · 변기 · 세면대
+    mp.box(a + 0.65, y + 0.2, bz1 - CD / 2 + 0.3, 0.95, 0.5, 2.1, C(0x6a6a70)); mp.box(a + 0.65, y + 0.7, bz1 - CD / 2 + 0.3, 0.9, 0.15, 2.0, C(0xe8e4dc));
+    mp.cyl(b2 - 0.6, y + 0.2, bz1 - 0.6, 0.25, 0.45, C(0xf2f2f0), 10); mp.box(b2 - 0.5, y + 0.9, bz1 - 1.6, 0.5, 0.15, 0.4, C(0xf2f2f0));
+    cells.push({ i, x: a + CW / 2 + 0.3, z: bz1 - CD / 2, x0: a + 0.25, x1: b2 - 0.25, z0: fz + 0.25, z1: bz1 - 0.25, doorCol, dx: b2 - 0.75, dz: fz });
+  }
+  // 운동장: 농구 코트 · 벤치 · 철봉
+  const yz = (z0 + 12 + bz0) / 2; const ycx = clamp(gx - 16, x0 + 12, x1 - 30);
+  mp.box(ycx, LAND + 0.18, yz, 24, 0.03, 14, C(0x8a4a32)); mp.box(ycx, LAND + 0.2, yz, 0.15, 0.02, 14, C(0xffffff));
+  for (const s2 of [-1, 1]) { mm.box(ycx + s2 * 11.5, y, yz, 0.25, 3.6, 0.25, C(0x333333)); mp.box(ycx + s2 * 11.1, y + 3.4, yz, 0.1, 1.1, 1.8, C(0xffffff)); }
+  for (let i = 0; i < 3; i++) { BENCHES.push({ x: ycx - 8 + i * 8, z: yz + 9, yaw: Math.PI }); }
+  for (let i = 0; i < 2; i++) { const px = x1 - 14 + i * 4; mm.box(px - 1, y, yz, 0.12, 2.6, 0.12, C(0x555555)); mm.box(px + 1, y, yz, 0.12, 2.6, 0.12, C(0x555555)); mm.box(px, y + 2.5, yz, 2.1, 0.08, 0.08, C(0x555555)); }
+  const pr = { id: PRISONS.length, name, region: b.region, x0, x1, z0, z1, gx, release: { x: gx, z: z0 - 3.2 }, inside: { x: gx, z: z0 + 3 }, cells, gateMesh, gateCol, police: pf, block: { x0: bx - bw / 2, x1: bx + bw / 2, z0: bz0, z1: bz1 } };
+  PRISONS.push(pr); if (pf) pf.prison = pr.id; return pr;
 }
 function fenceRect(x0, z0, x1, z1, col = C(0x777a80), h = 2.2, gap = null) {
   const m = mbAt('metalPlain', x0, z0);
@@ -1248,6 +1380,7 @@ function buildPlaza() {
   mbAt('glow', k.x, k.z).box(k.x, LAND + 4.6, k.z + 18.3, 50.4, 0.35, 0.3, CS(1, 0.75, 0.2)); mbAt('glow', k.x, k.z).box(k.x, LAND + 15.6, k.z + 18.3, 50.4, 0.35, 0.3, CS(1, 0.3, 0.6));
   addSign('CASINO', '카지노 · 잭팟을 노려라', '#3a2000', k.x, LAND + 10, k.z + 18.25, 22, 5.5, 0, '#ffd34a');
   const fk = { id: FACILITIES.length, type: 'casino', name: '카지노', icon: '🎰', region: 'plaza', x: k.x, z: k.z + 21, cx: k.x, cz: k.z, side: 's' }; fk.ring = addDoorRing(fk.x, fk.z, 0xffd34a); FACILITIES.push(fk);
+  fk.bld = regBuilding('casino', k.x, k.z, 50, 36, LAND + 16, 's', { fac: fk, door: { x: fk.x, z: fk.z } });
   // stage south
   m.box(0, LAND - 0.2, 120, 30, 1.6, 14, C(0x333340)); addCollider(-15, 113, 15, 127, LAND + 1.4, 'prop');
   addSign('EVENT PLAZA', '이벤트광장', '#c0285a', 0, LAND + 7, 113.2, 18, 4, Math.PI);
@@ -1294,7 +1427,7 @@ function genCountryside() {
     lots.push(r); const side = c.px > 0.5 ? 'w' : c.px < -0.5 ? 'e' : c.pz > 0.5 ? 'n' : 's'; r.sides = [side]; return { lot: r, side };
   };
   for (const c of cands) {
-    if (facs.length) { const p = place(c, 34, 30); if (p) { const f = facs.shift(); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 0); mbAt('concrete', p.lot.x0, p.lot.z0).box((p.lot.x0 + p.lot.x1) / 2, LAND - 0.45, (p.lot.z0 + p.lot.z1) / 2, 34, 0.5, 30, C(0xc8c4bc), null, { topUV: 6 }); buildFacility(f, p.lot, p.side, 'disanbay'); } continue; }
+    if (facs.length) { const p = place(c, 34, 30); if (p) { const f = facs.shift(); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 0); mbAt('concrete', p.lot.x0, p.lot.z0).box((p.lot.x0 + p.lot.x1) / 2, terrainH((p.lot.x0 + p.lot.x1) / 2, (p.lot.z0 + p.lot.z1) / 2) - 0.45, (p.lot.z0 + p.lot.z1) / 2, 34, 0.5, 30, C(0xc8c4bc), null, { topUV: 6 }); buildFacility(f, p.lot, p.side, 'disanbay'); } continue; }
     if (plots < 4) { const p = place(c, 34, 34); if (p) { plots++; makePlot(p.lot, p.side, 'disanbay'); } continue; }
     if (wrng() < 0.55) { const p = place(c, 18, 16); if (p) { const cx = (p.lot.x0 + p.lot.x1) / 2, cz = (p.lot.z0 + p.lot.z1) / 2; buildHouse(cx, cz, 11, 10, wrng() < 0.4 ? 2 : 1, 'disanbay', terrainH(cx, cz) - 0.3); markGrass(p.lot.x0, p.lot.z0, p.lot.x1, p.lot.z1, 2); } }
   }
@@ -1305,6 +1438,7 @@ function genCountryside() {
   fenceRect(fx - 60, fz - 50, fx + 10, fz + 20, C(0x8a6a4a), 1.4, 's');
   const bm = mbAt('plain', fx, fz); bm.box(fx + 40, LAND - 0.3, fz - 30, 20, 9, 14, C(0xa8322a)); mbAt('roof', fx, fz).gable(fx + 40, LAND + 8.7, fz - 30, 21, 15, 5, C(0x5a5a5a), 'x'); addCollider(fx + 30, fz - 37, fx + 50, fz - 23, LAND + 14);
   bm.box(fx + 40, LAND - 0.3, fz - 22.95, 6, 5.5, 0.1, C(0xffffff));
+  regBuilding('barn', fx + 40, fz - 30, 20, 14, LAND + 14, 's', { noDoorMesh: true });
   bm.cyl(fx + 56, LAND - 0.3, fz - 30, 3.5, 16, C(0xb8bcc0), 16); bm.cyl(fx + 56, LAND + 15.7, fz - 30, 3.6, 2.5, C(0x8a8e92), 16, 0.3); addCircleCollider(fx + 56, fz - 30, 3.6, 'bld', null, LAND + 18);
   // windmill
   const wx = fx + 30, wz = fz + 60; bm.cyl(wx, LAND - 0.3, wz, 3.2, 14, C(0xe8e0d0), 12, 2.2); addCircleCollider(wx, wz, 3.2, 'bld', null, LAND + 15);
@@ -1341,6 +1475,8 @@ function buildTerrainMesh() {
     if (slope > 0.55 || h > 70) { const t = Math.max(smooth(0.55, 1.0, slope), smooth(70, 100, h)); r = lerp(r, 0.46 + n * 0.05, t); g = lerp(g, 0.44 + n * 0.05, t); b = lerp(b, 0.42, t); }
     if (h > 118) { const t = smooth(118, 135, h + n * 10); r = lerp(r, 0.95, t); g = lerp(g, 0.96, t); b = lerp(b, 0.98, t); }
     const land = landF(x, z);
+    // 모래사장: 섬 전체 해안, 서벌리 동쪽 항구 해변, 남북 해안
+    if (rd > 6 && h < LAND + 3 && !(R === 'disanbay')) { const cd = coastDist(x, z) + n * 12; const wide = R === 'simone' ? 70 : R === 'seoburi' ? 45 : 30; if (cd < wide) { const t = smooth(wide, wide * 0.5, cd) * smooth(LAND + 3, LAND + 1, h); r = lerp(r, 0.86, t); g = lerp(g, 0.79, t); b = lerp(b, 0.6, t); } }
     if (h < LAND - 0.15 || land < 0.985) { const t = smooth(LAND - 0.1, LAND - 0.9, h); r = lerp(r, 0.86, Math.max(t, land < 0.985 ? 0.9 : 0)); g = lerp(g, 0.78, Math.max(t, land < 0.985 ? 0.9 : 0)); b = lerp(b, 0.58, Math.max(t, land < 0.985 ? 0.9 : 0)); }
     if (h < -0.5) { const t = smooth(-0.5, -8, h); r = lerp(r, 0.45, t); g = lerp(g, 0.5, t); b = lerp(b, 0.42, t); }
     c.setRGB(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1), THREE.SRGBColorSpace);
@@ -1355,7 +1491,8 @@ function buildTerrainMesh() {
     if (roadDistF[k] < 2.5) { grassMask[k] = 0; continue; }
     const R = regionAt(x, z);
     const ok = h > LAND - 0.1 && h < 95 && landF(x, z) > 0.99 && roadDistF[k] > 2.5 && R !== 'sea';
-    grassMask[k] = ok && !insideAnyBlock(x, z) ? 1 : 0;
+    const beach = R !== 'disanbay' && h < LAND + 3 && coastDist(x, z) < (R === 'simone' ? 45 : R === 'seoburi' ? 28 : 18);
+    grassMask[k] = ok && !beach && !insideAnyBlock(x, z) ? 1 : 0;
   }
   const idx = new Uint32Array((W - 1) * (H - 1) * 6); let p = 0;
   for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) { const a = j * W + i, b = a + 1, c2 = a + W, d = c2 + 1; idx[p++] = a; idx[p++] = c2; idx[p++] = b; idx[p++] = b; idx[p++] = c2; idx[p++] = d; }
@@ -1642,7 +1779,7 @@ function updateEnv(dt, focus) {
   ENV.clouds.position.x = focus.x + (G.t * 6) % 2000; ENV.clouds.position.z = focus.z;
   ENV.clouds.material.color.copy(_skyCol).lerp(_c2.setRGB(1, 1, 1), day * 0.7); ENV.clouds.material.opacity = 0.75 + rain * 0.25;
   // rain
-  ENV.rain.visible = rain > 0.05; if (ENV.rain.visible) { ENV.rain.position.set(focus.x, focus.y - 10, focus.z); ENV.rain.material.opacity = rain * 0.4; const p = ENV.rain.geometry.attributes.position; const a = p.array; for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 30; a[i + 4] -= dt * 30; if (a[i + 1] < 0) { a[i + 1] += 50; a[i + 4] += 50; } } p.needsUpdate = true; }
+  ENV.rain.visible = rain > 0.05 && !INTERIOR.cur; if (ENV.rain.visible) { ENV.rain.position.set(focus.x, focus.y - 10, focus.z); ENV.rain.material.opacity = rain * 0.4; const p = ENV.rain.geometry.attributes.position; const a = p.array; for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 30; a[i + 4] -= dt * 30; if (a[i + 1] < 0) { a[i + 1] += 50; a[i + 4] += 50; } } p.needsUpdate = true; }
   // weather change (host)
   if (G.isHost) { G.weatherT -= dt; if (G.weatherT <= 0) { G.weatherT = rnd(240, 600); G.weather = Math.random() < 0.25 ? 'rain' : Math.random() < 0.3 ? 'cloudy' : 'clear'; } }
   G.rainAmt = damp(G.rainAmt, G.weather === 'rain' ? 1 : G.weather === 'cloudy' ? 0.35 : 0, 0.3, dt);
@@ -2524,11 +2661,12 @@ function edgeNearPoint(px, pz, minD, maxD, filter) {
   return null;
 }
 function playersList() { // positions of all players (host view)
-  const L = []; if (!ME.dead) L.push({ id: ME.id, x: ME.x, y: ME.y, z: ME.z, wanted: ME.wanted, grudge: ME.grudge, inVeh: !!ME.vehicle, me: true });
-  for (const [id, rp] of G.players) if (!rp.dead) L.push({ id, x: rp.x, y: rp.y, z: rp.z, wanted: rp.wanted || 0, grudge: rp.grudge || {}, inVeh: !!rp.veh });
+  // 실내에 있는 사람은 건물 문 앞 좌표로 취급(NPC가 실내 좌표로 몰려가지 않게), 수감자는 수배 0
+  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, inVeh: !!ME.vehicle, me: true, inside: ins }); }
+  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, inVeh: !!rp.veh, inside: ins }); }
   return L;
 }
-function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') d = Math.hypot(ME.x - x, ME.z - z); for (const rp of G.players.values()) d = Math.min(d, Math.hypot(rp.x - x, rp.z - z)); return d; }
+function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') { const a = anchorOf(ME); d = Math.hypot(a.x - x, a.z - z); } for (const rp of G.players.values()) { const a = anchorOf(rp); d = Math.min(d, Math.hypot(a.x - x, a.z - z)); } return d; }
 function spawnPedNear(p, px, pz) {
   const r = edgeNearPoint(px, pz, 50, 190, e => !e.bridge); if (!r) return false;
   placePedOnEdge(p, r.e, r.t, Math.random() < 0.5 ? 1 : -1, Math.random() < 0.5 ? 1 : -1);
@@ -2624,8 +2762,8 @@ function pedFlee(p, dt) {
 }
 function targetPos(tg) {
   if (!tg) return null;
-  if (tg.kind === 'me') return ME.dead ? null : { x: ME.x, y: ME.y, z: ME.z, veh: ME.vehicle };
-  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead ? { x: rp.x, y: rp.y, z: rp.z } : null; }
+  if (tg.kind === 'me') return ME.dead || INTERIOR.cur || ME.jail ? null : { x: ME.x, y: ME.y, z: ME.z, veh: ME.vehicle };
+  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead && !((rp.bi ?? -1) >= 0) && !rp.jail ? { x: rp.x, y: rp.y, z: rp.z } : null; }
   if (tg.kind === 'ped') { const q = PEDS[tg.id]; return q && q.state !== 'dead' && q.state !== 'parked' ? { x: q.x, y: q.y, z: q.z } : null; }
   return null;
 }
@@ -2933,6 +3071,7 @@ const ME = {
     $('#death').classList.remove('hidden'); $('#deathSub').textContent = '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
   },
   respawn() {
+    if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
     this.dead = false; this.hp = 100; this.armor = 0; const fee = Math.min(5000, Math.floor(this.money * 0.1)); this.money -= fee; this.wanted = 0;
     let sp = null;
     if (this.homePlot != null && PLOTS[this.homePlot] && PLOTS[this.homePlot].state === 'done' && PLOTS[this.homePlot].owner === this.id) { const p = PLOTS[this.homePlot]; sp = { x: p.x + SIDE_VEC[p.side][0] * (p.w / 2 + 2), z: p.z + SIDE_VEC[p.side][1] * (p.d / 2 + 2) }; }
@@ -2999,7 +3138,7 @@ function raycastWorld(o, d, maxD, opt = {}) {
   const near = (x, z) => { const px = x - o.x, pz = z - o.z; const along = px * d.x + pz * d.z; if (along < -3 || along > maxD + 3) return false; const lat = Math.abs(px * d.z - pz * d.x); return lat < 4; };
   for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked' || !near(p.x, p.z)) continue; test(raySphere(o, d, p.x, p.y + 1.63, p.z, 0.16), 'ped', p, true); test(raySphere(o, d, p.x, p.y + 1.18, p.z, 0.32), 'ped', p); test(raySphere(o, d, p.x, p.y + 0.55, p.z, 0.3), 'ped', p); }
   for (const a of ANIMALS) { if (a.state === 'dead' || !near(a.x, a.z)) continue; const S = a.S; const r = S.biped ? S.h * 0.4 : Math.max(S.body[1], S.body[2]) * 0.6; test(raySphere(o, d, a.x, a.y + (S.biped ? S.h * 0.5 : S.leg + S.body[1] * 0.4), a.z, r), 'animal', a); if (!S.biped) { const fx = Math.sin(a.yaw) * S.body[0] * 0.35, fz = Math.cos(a.yaw) * S.body[0] * 0.35; test(raySphere(o, d, a.x + fx, a.y + S.leg + S.body[1] * 0.4, a.z + fz, r), 'animal', a); test(raySphere(o, d, a.x - fx, a.y + S.leg + S.body[1] * 0.4, a.z - fz, r), 'animal', a); } }
-  for (const [id, rp] of G.players) { if (rp.dead || rp.veh || !near(rp.x, rp.z)) continue; test(raySphere(o, d, rp.x, rp.y + 1.63, rp.z, 0.16), 'player', rp, true); test(raySphere(o, d, rp.x, rp.y + 1.18, rp.z, 0.32), 'player', rp); test(raySphere(o, d, rp.x, rp.y + 0.55, rp.z, 0.3), 'player', rp); }
+  for (const [id, rp] of G.players) { if (id === ME.id || rp.dead || rp.veh || !sameSpace(rp) || !near(rp.x, rp.z)) continue; test(raySphere(o, d, rp.x, rp.y + 1.63, rp.z, 0.16), 'player', rp, true); test(raySphere(o, d, rp.x, rp.y + 1.18, rp.z, 0.32), 'player', rp); test(raySphere(o, d, rp.x, rp.y + 0.55, rp.z, 0.3), 'player', rp); }
   if (opt.self) { test(raySphere(o, d, ME.x, ME.y + 1.2, ME.z, 0.35), 'me', ME); }
   for (const v of vehicles.values()) { if (v === opt.ignoreVeh || !v.mesh.visible || !near(v.x, v.z)) continue; for (const [cx, cz] of v.circles()) test(raySphere(o, d, cx, v.y + (v.kind === 'car' ? 0.8 : 0.9), cz, v.radius + 0.2), 'veh', v); }
   const rc = rayColliders(o.x, o.y, o.z, d.x, d.y, d.z, best.t); if (rc.c && rc.t < best.t) best = { t: rc.t, kind: rc.c.type === 'tree' ? 'tree' : 'world', ref: rc.c };
@@ -3011,7 +3150,12 @@ function raycastWorld(o, d, maxD, opt = {}) {
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
   if (tg.kind === 'me') { if (from !== ME.id) ME.takeDamage(amt, from); return; }
-  if (tg.kind === 'player') { if (tg.id === ME.id) { ME.takeDamage(amt, from); return; } NET.send({ t: 'dmg', to: tg.id, amt, from, k: opts.kind }); return; }
+  // PvP: 피해는 오직 맞은 사람에게만 — 공격자 자신(같은 id)은 절대 피해를 받지 않는다. 맞은 쪽이 hitAck로 결과를 돌려준다.
+  if (tg.kind === 'player') {
+    if (!tg.id || tg.id === ME.id || tg.id === from) return;
+    const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
+    NET.send({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind }); return;
+  }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
   if (tg.kind === 'veh') { const v = vehicles.get(tg.id); if (v) v.damage(amt, from); }
@@ -3034,7 +3178,7 @@ function damageArea(x, y, z, r, dmg, by) {
   if (G.isHost) {
     for (const p of PEDS) { if (p.state === 'dead' || p.state === 'parked') continue; const d = Math.hypot(p.x - x, p.z - z); if (d < r) pedDamage(p, dmg * (1 - d / r), from, { kind: 'gun' }); }
     for (const a of ANIMALS) { const d = Math.hypot(a.x - x, a.z - z); if (d < r) animalDamage(a, dmg * (1 - d / r), from); }
-    for (const [id, rp] of G.players) { const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
+    for (const [id, rp] of G.players) { if (id === ME.id || from === id || !sameSpace(rp)) continue; const d = Math.hypot(rp.x - x, rp.z - z); if (d < r) NET.send({ t: 'dmg', to: id, amt: dmg * (1 - d / r), from, k: 'boom' }); }
   }
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
@@ -3092,7 +3236,7 @@ function meleeResolve() {
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
   for (const a of ANIMALS) if (a.state !== 'dead') consider(a.x, a.z, 'animal', a.id, a);
-  for (const [id, rp] of G.players) if (!rp.dead && !rp.veh) consider(rp.x, rp.z, 'player', id, rp);
+  for (const [id, rp] of G.players) if (id !== ME.id && !rp.dead && !rp.veh && sameSpace(rp) && Math.abs(rp.y - ME.y) < 2) consider(rp.x, rp.z, 'player', id, rp);
   for (const v of vehicles.values()) if (v.mesh.visible) for (const [cx, cz] of v.circles()) consider(cx, cz, 'veh', v.id, v);
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
@@ -3176,13 +3320,15 @@ function exitVehicle(force) {
 // ----- interaction -----
 let curInteract = null;
 function findInteract() {
-  if (ME.jail) return (ME.inv.card | 0) > 0 ? { label: `🪪 출소카드 사용 (보유 ${ME.inv.card}장)`, key: 'E', fn: () => { ME.inv.card--; LAW.release('🪪 출소카드로 즉시 출소했다'); } } : null;
+  if (ME.jail) return LAW.interact();
   if (ME.dead) return null;
   if (ME.vehicle && ME.vehicle.taxiCab) return { label: TAXI.phase === 'ride' ? '🚕 여기서 세워주세요 (요금 정산 후 하차)' : '🚕 택시에서 내리기', key: 'E', fn: () => TAXI.stopHere() };
   if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
   let best = null, bd = 99;
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
-  for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
+  INTERIOR.interacts(cand); if (INTERIOR.cur) { for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); } return best; }
+  for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, f.bld ? { label: `🚪 ${f.icon} ${f.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(f.bld) } : { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
+  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, { label: `🚪 ${nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
   const v = nearestVehicle(2.8);
   if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });
@@ -3191,14 +3337,29 @@ function findInteract() {
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead' || p.state === 'fight') continue; const d = Math.hypot(p.x - ME.x, p.z - ME.z); if (d < 2.2) cand(d + 0.3, { label: `💬 ${p.kind === 'police' ? '경찰' : p.kind.startsWith('gang') ? '갱단원' : '시민'}과 상호작용`, key: 'E', fn: () => UI.openPed(p) }); }
   for (const a of ANIMALS) { if (a.state === 'dead') continue; const d = Math.hypot(a.x - ME.x, a.z - ME.z); const r = a.S.biped ? 1.6 : 1.4 + a.S.body[0] * 0.5; if (d < r) cand(d, { label: `🐾 ${a.S.name}`, key: 'E', fn: () => UI.openAnimal(a) }); }
   for (const b of BENCHES) { const d = Math.hypot(b.x - ME.x, b.z - ME.z); if (d < 1.4) cand(d + 0.4, { label: '🪑 앉기', key: 'E', fn: () => { ME.sitBench = b; ME.dance = -1; } }); }
-  for (const [id, rp] of G.players) { const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2 && !rp.veh) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); }
+  for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2 && !rp.veh) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); }
   return best;
 }
 function doInteract() { if (curInteract) curInteract.fn(); }
 // ----- player update -----
 const _tmpV = new THREE.Vector3();
+// ----- 중력 · 낙하 피해 -----
+// 약 4m 이하는 무피해, 그 이상은 높이에 비례 (약 19m 이상이면 치명상). 물·차량·택시는 무피해, 관리자 면역.
+const FALL_SAFE = 4, FALL_K = 6.5;
+function fallDamageFor(h) { return h <= FALL_SAFE ? 0 : (h - FALL_SAFE) * FALL_K; }
+function landed(fv) {
+  const top = ME.fallTop; ME.fallTop = null; if (top == null) return;
+  const h = top - ME.y; const dmg = fallDamageFor(h);
+  if (dmg <= 0 || ME.vehicle) return;
+  if (ME.swim || (terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.6)) { toast(`🌊 물에 떨어졌다 — 다치지 않았다 (${h.toFixed(1)}m)`, 1800); return; }
+  if (ADMIN.on || ME.god) { toast(`🦴 낙하 ${h.toFixed(1)}m — 관리자 면역`, 1500); return; }
+  ME.takeDamage(dmg, 'fall'); sfx('hit', ME.x, ME.z); ME.lastFall = { h, dmg, t: G.t };
+  toast(ME.dead ? `💀 추락사 (${h.toFixed(1)}m)` : `🦴 낙하 피해 -${Math.round(dmg)} (${h.toFixed(1)}m)`, 2200);
+}
 function updatePlayer(dt) {
   const c = ME.char;
+  if (ME._py !== undefined && Math.abs(ME.y - ME._py) > 6) ME.fallTop = null; // 순간이동은 낙하로 치지 않는다
+  if (ME.vehicle || ME.fly || ME.sitBench) ME.fallTop = null;
   ME.fireT -= dt; ME.actionT = Math.min(1, ME.actionT + dt * (ME.action === 'axe' ? 1.4 : ME.action === 'bat' ? 1.8 : ME.action === 'shoot' ? 6 : 3));
   if (ME.reloadT > 0) { ME.reloadT -= dt; if (ME.reloadT <= 0) finishReload(); }
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
@@ -3216,7 +3377,6 @@ function updatePlayer(dt) {
   const fwdX = Math.sin(CAM.yaw), fwdZ = Math.cos(CAM.yaw), rX = -Math.cos(CAM.yaw), rZ = Math.sin(CAM.yaw);
   let dx = fwdX * mi.z + rX * mi.x, dz = fwdZ * mi.z + rZ * mi.x; const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
   ME.aiming = INP.aim && !WEAPONS[ME.weapon].melee;
-  if (ME.jail) { LAW.jailStep(dt, dx, dz, mag); placeChar(); return; }
   if (ME.fly) { ADMIN.flyStep(dt, dx, dz, mag); placeChar(); return; }
   const water = terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1);
   ME.swim = water;
@@ -3241,23 +3401,24 @@ function updatePlayer(dt) {
   for (const v of vehicles.values()) { if (!v.mesh.visible) continue; for (const [cx, cz] of v.circles()) { const ddx = ME.x - cx, ddz = ME.z - cz, d = Math.hypot(ddx, ddz), m = v.radius + 0.35; if (d < m && d > 0.01 && Math.abs(ME.y - v.y) < 1.6) { ME.x += ddx / d * (m - d); ME.z += ddz / d * (m - d); } } }
   for (const p of PEDS) { if (p.state === 'parked' || p.state === 'dead') continue; const ddx = ME.x - p.x, ddz = ME.z - p.z; if (Math.abs(ddx) > 1 || Math.abs(ddz) > 1) continue; const d = Math.hypot(ddx, ddz); if (d < 0.65 && d > 0.01) { ME.x += ddx / d * (0.65 - d) * 0.6; ME.z += ddz / d * (0.65 - d) * 0.6; } }
   // vertical
-  const gy = groundHeight(ME.x, ME.z, ME.y + 0.5);
+  const gy = floorAt(ME.x, ME.z, ME.y);
+  if (ME.swim) { ME.fallTop = null; }
   if (ME.swim) { ME.y = damp(ME.y, -0.32, 4, dt); ME.vy = 0; ME.grounded = false; if (Math.random() < dt * ME.spd * 0.5) FX.impact({ x: ME.x, y: -0.1, z: ME.z }, 'water'); }
   else {
     const jh = KEYS[' '] || INP.jump; ME.coyote = ME.grounded ? 0.12 : (ME.coyote || 0) - dt; ME.jumpBuf = jh ? 0.14 : (ME.jumpBuf || 0) - dt;
     if (ME.jumpBuf > 0 && ME.coyote > 0 && ME.knockT <= 0 && !ME.sitBench) { ME.vy = 5.8; ME.grounded = false; ME.coyote = 0; ME.jumpBuf = 0; INP.jump = false; ME.dance = -1; }
     if (!jh && ME.vy > 2.5 && !ME.grounded) ME.vy -= 28 * dt; // 짧게 누르면 낮은 점프
     ME.vy = Math.max(-38, ME.vy - (ME.vy < 0 ? 24 : 19) * dt); ME.y += ME.vy * dt;
-    if (ME.y <= gy) { const fv = ME.vy; if (fv < -16) ME.takeDamage((-fv - 16) * 9, 'fall'); if (fv < -7) { CAM.shake = Math.min(0.5, CAM.shake + (-fv - 7) / 30); sfx('step'); } ME.y = gy; ME.vy = 0; ME.grounded = true; }
+    if (ME.y <= gy) { const fv = ME.vy; const wasAir = !ME.grounded; ME.y = gy; ME.vy = 0; ME.grounded = true; if (wasAir) landed(fv); if (fv < -7) { CAM.shake = Math.min(0.5, CAM.shake + (-fv - 7) / 30); sfx('step'); } }
     else if (ME.y - gy < 0.25 && ME.vy <= 0 && ME.grounded) { ME.y = gy; ME.vy = 0; }
-    else ME.grounded = false;
-    if (ME.y < -0.25 && terrainH(ME.x, ME.z) < LAND - 1.6) ME.swim = true;
+    else { if (ME.grounded || ME.fallTop == null) ME.fallTop = Math.max(ME.y, ME.fallTop ?? -1e9); ME.grounded = false; ME.fallTop = Math.max(ME.fallTop, ME.y); }
+    if (ME.y < -0.25 && terrainH(ME.x, ME.z) < LAND - 1.6) { if (ME.fallTop != null && ME.fallTop - ME.y > 4) toast(`🌊 물에 떨어졌다 — 다치지 않았다 (${(ME.fallTop - ME.y).toFixed(1)}m)`, 1800); ME.swim = true; ME.fallTop = null; }
   }
   // footsteps
   if (ME.grounded && ME.spd > 1) { ME.stepT -= dt * ME.spd; if (ME.stepT <= 0) { ME.stepT = 1.6; sfx('step'); } }
   // pickups
   for (const [id, p] of PICKUPS) if (Math.abs(p.x - ME.x) < 1.2 && Math.abs(p.z - ME.z) < 1.2 && Math.abs(p.y - ME.y) < 2) { if (G.isHost) { removePickup(id); ME.money += p.amount; sfx('cash'); toast(`💵 +${fmtMoney(p.amount)}`); NET.send({ t: 'pickRm', id }); } else { if (!p.req) { p.req = 1; NET.send({ t: 'pick', id }); } } }
-  placeChar();
+  placeChar(); ME._py = ME.y;
 }
 function placeChar() {
   const c = ME.char; const v = ME.vehicle;
@@ -3336,6 +3497,7 @@ function removeRemote(id) { const rp = G.players.get(id); if (!rp) return; scene
 function renderRemotes(dt) {
   for (const rp of G.players.values()) {
     const c = rp.char; const v = rp.veh ? vehicles.get(rp.veh) : null;
+    const vis = sameSpace(rp); c.root.visible = vis; if (!vis) { rp.x = rp.tx; rp.y = rp.ty; rp.z = rp.tz; continue; } // 다른 실내(또는 바깥)에 있는 사람은 숨긴다
     if (v) {
       const s = rp.seat === 'p' ? (v.seatP || v.seat) : v.seat; _tmpV.copy(s); v.mesh.updateMatrixWorld(); _tmpV.applyMatrix4(v.mesh.matrixWorld);
       c.root.position.copy(_tmpV); c.root.rotation.set(-v.pitch, rp.aim ? rp.yaw : v.yaw, v.roll, 'YXZ'); rp.x = v.x; rp.z = v.z; rp.y = v.y;
@@ -3447,6 +3609,7 @@ const TAXI = {
   },
   openMenu() {
     if (ME.jail) { toast('수감 중에는 택시를 부를 수 없다'); return; }
+    if (INTERIOR.cur) { toast('🚕 건물 밖으로 나가서 택시를 불러주세요'); return; }
     const inCab = this.cab && ME.vehicle === this.cab;
     const from = this.cab ? this.cab : ME; const here = districtAt(from.x, from.z);
     const items = this.destinations().map(d => {
@@ -3562,12 +3725,14 @@ const TAXI = {
     if (this.phase === 'stopping') want = 0;
     want *= clamp(1 - Math.abs(ad) * 0.8, 0.3, 1);
     // 장애물 (차량·사람)
-    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
-    const chk = (ox, oz, r) => { const dx = ox - v.x, dz = oz - v.z; const f = dx * fx + dz * fz; if (f < 0 || f > 16) return; const l = Math.abs(dx * fz - dz * fx); if (l < 1.5 + r) want = Math.min(want, Math.max(0, (f - 5.5) * 1.3)); };
+    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw); let blocked = false;
+    const chk = (ox, oz, r) => { const dx = ox - v.x, dz = oz - v.z; const f = dx * fx + dz * fz; if (f < 0 || f > 16) return; const l = Math.abs(dx * fz - dz * fx); if (l < 1.5 + r) { const w2 = Math.max(0, (f - 5.5) * 1.3); if (w2 < want) { want = w2; blocked = true; } } };
     for (const o of vehicles.values()) if (o !== v && o.mesh.visible && Math.abs(o.x - v.x) < 18 && Math.abs(o.z - v.z) < 18) chk(o.x, o.z, 0.8);
     for (const q of PEDS) if (q.state !== 'parked' && q.state !== 'dead' && Math.abs(q.x - v.x) < 16 && Math.abs(q.z - v.z) < 16) chk(q.x, q.z, 0.3);
     for (const rp of G.players.values()) if (!rp.veh) chk(rp.x, rp.z, 0.3);
     if (ME.vehicle !== v && !ME.dead) chk(ME.x, ME.z, 0.3);
+    // 앞이 오래 막혀 있으면(멈춘 차·사람) 경로를 따라 앞으로 비켜 지나간다
+    if (blocked && Math.abs(v.speed) < 0.6 && this.phase !== 'stopping') { this.blockT = (this.blockT || 0) + dt; if (this.blockT > 6) { this.blockT = 0; const p2 = ROUTE.pointAt(P, s + 20), p3 = ROUTE.pointAt(P, s + 24); v.x = p2.x; v.z = p2.z; v.yaw = Math.atan2(p3.x - p2.x, p3.z - p2.z); v.y = groundHeight(v.x, v.z) + 0.2; v.speed = 0; v.vy = 0; } } else this.blockT = 0;
     // 끼임: 후진 → 그래도 안 되면 경로 위로 순간이동
     if (this.revT > 0) { this.revT -= dt; v.drive(dt, { throttle: -1, steer: -steer, brake: 0 }); return { remain }; }
     const thr = v.speed < want - 0.4 ? (want - v.speed > 4 ? 1 : 0.6) : 0; const brk = v.speed > want + 0.8;
@@ -3624,6 +3789,391 @@ const TAXI = {
 };
 
 
+// ================= 건물 실내 (모든 건물 입장 가능) =================
+// 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
+// 좌표가 건물 id로 정해져 있어서 두 사람이 같은 건물에 들어가면 같은 자리에서 서로 보인다.
+const PLOT_BLD = new Map();
+function getBuilding(id) {
+  if (id == null || id < 0) return null;
+  if (id >= 5000) { const p = PLOTS[id - 5000]; if (!p || p.state !== 'done') return null; let b = PLOT_BLD.get(p.id); if (!b || b.design !== p.design) { b = plotBuilding(p); PLOT_BLD.set(p.id, b); } return b; }
+  return BUILDINGS[id] || null;
+}
+function plotBuilding(p) {
+  const fp = plotFootprint(p, p.design); const [sx, sz] = SIDE_VEC[p.side]; const fl = plotFloors(p);
+  const kind = p.design === 'shop' ? 'mart' : p.design === 'tower' ? 'office' : 'home';
+  const wx = p.x + sx * fp.hw, wz = p.z + sz * fp.hd;
+  const top = p.y + ((CONSTR.get(p.id) && CONSTR.get(p.id).group) ? CONSTR.get(p.id).group.userData.H : fl * FLOOR_H);
+  return { id: 5000 + p.id, plot: p, design: p.design, kind, name: (p.ownerName || '') + '의 ' + (BUILD_DESIGNS[p.design] ? BUILD_DESIGNS[p.design].name : '건물'), x: p.x, z: p.z, w: fp.hw * 2, d: fp.hd * 2, top, side: p.side, floors: fl, y0: p.y, door: { x: wx + sx * 1.4, z: wz + sz * 1.4, wx, wz, sx, sz } };
+}
+function anchorOf(o) { // 실내에 있는 사람은 건물 문 앞에 있는 것으로 취급 (NPC·지도·미니맵용)
+  if (o === ME) { const I = INTERIOR.cur; return I ? { x: I.b.door.x, y: I.b.y0, z: I.b.door.z } : { x: ME.x, y: ME.y, z: ME.z }; }
+  if (o && o.bi >= 0) { const b = getBuilding(o.bi); if (b) return { x: b.door.x, y: b.y0, z: b.door.z }; }
+  return o;
+}
+function myBi() { return INTERIOR.cur ? INTERIOR.cur.b.id : -1; }
+function sameSpace(rp) { return (rp.bi ?? -1) === myBi(); }
+// 플레이어 발밑 높이: 지형 + 실내 바닥/계단 + 올라설 수 있는 건물 옥상·물체 윗면
+function floorAt(x, z, y) {
+  let g = groundHeight(x, z, y + 0.5);
+  const I = INTERIOR.cur;
+  if (I && Math.abs(x - I.O.x) < 70 && Math.abs(z - I.O.z) < 70) {
+    let best = -1e9;
+    for (const p of I.plats) {
+      if (x < p.x0 || x > p.x1 || z < p.z0 || z > p.z1) continue;
+      const h = p.ramp ? lerp(p.y0, p.y1, clamp((z - p.z0) / (p.z1 - p.z0), 0, 1)) : p.y;
+      if (h <= y + 0.7 && h > best) best = h;
+    }
+    g = best > -1e9 ? best : I.O.y; // 실내에서는 절대 바닥 아래로 떨어지지 않는다
+  }
+  const list = collidersNear(x, z, 0.4);
+  for (const c of list) {
+    if (c.circle || c.type === 'tree' || c.type === 'pole' || c.type === 'rock') continue;
+    if (x < c.x0 || x > c.x1 || z < c.z0 || z > c.z1) continue;
+    if (c.y1 <= y + 0.6 && c.y1 > g) g = c.y1;
+  }
+  return g;
+}
+const INTERIOR = {
+  cur: null, roof: null, cool: 0, light: null,
+  slot(b) { const i = b.id >= 5000 ? 1400 + (b.id - 5000) : b.id; return { x: 6200 + (i % 40) * 95, y: 60, z: -2200 + Math.floor(i / 40) * 95 }; },
+  tall(b) { return (b.top - b.y0) > 13 && !['barn', 'factory', 'church', 'guard'].includes(b.kind); },
+  canUse() { return !ME.dead && !ME.vehicle && !ME.jail && G.started; },
+  enter(b, opts = {}) {
+    if (!b || !this.canUse()) return;
+    if (this.cur && this.cur.b === b) return;
+    if (this.cur) this.dispose();
+    this.clearRoof();
+    const I = this.build(b); this.cur = I; this.cool = G.t + 1.2;
+    const sp = opts.fromRoof ? I.elev : I.spawn;
+    ME.x = sp.x; ME.z = sp.z; ME.y = I.O.y + 0.02; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; CAM.yaw = Math.PI; CAM.pitch = 0.12;
+    ME.dance = -1; ME.sitBench = null;
+    if (this.light) { this.light.position.set(I.O.x, I.O.y + I.H - 0.6, I.O.z); this.light.intensity = 40; this.light.distance = Math.max(I.W, I.D) * 1.6; }
+    sfx('door'); toast(`🚪 ${I.title} — 문으로 걸어 나가거나 E: 나가기`, 2600);
+    NET.send({ t: 'chat', m: `🚪 ${ME.name}님이 ${I.title}에 들어갔다`, sys: 1, quiet: 1 });
+  },
+  exit(toRoof) {
+    const I = this.cur; if (!I) return; const b = I.b;
+    this.dispose(); this.cool = G.t + 1.2;
+    if (toRoof) { this.toRoof(b); return; }
+    const d = b.door; const lat = ((Math.abs(hashStr(ME.id)) % 3) - 1) * 0.9; ME.x = d.x + d.sx * 0.6 + d.sz * lat; ME.z = d.z + d.sz * 0.6 - d.sx * lat; ME.y = groundHeight(ME.x, ME.z) + 0.05; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; // 둘이 같이 나와도 겹치지 않게 옆으로 살짝
+    const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z;
+    ME.yaw = Math.atan2(d.sx, d.sz); CAM.yaw = ME.yaw; sfx('door');
+  },
+  toRoof(b) {
+    const x = b.x, z = b.z; let y = b.top; // 실제 지붕 높이 = 건물 중심의 충돌 상자 꼭대기
+    for (const c of collidersNear(x, z, 1)) if (!c.circle && (c.type === 'bld' || c.type === 'roof') && x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && c.y1 < b.top + 60 && c.y1 > y) y = c.y1;
+    ME.x = x + 1.7; ME.z = z + 1.7; ME.y = y + 0.05; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.grounded = true;
+    const g = new THREE.Group(); const mb = new MB();
+    mb.box(x, y, z, 2.6, 2.7, 2.6, C(0x8a8e94)); mb.box(x, y + 2.7, z, 2.9, 0.2, 2.9, C(0x5a5e64)); mb.box(x, y, z + 1.31, 1.4, 2.2, 0.05, C(0x3a3e44));
+    const m = new THREE.Mesh(mb.geo(), MAT.plain); m.castShadow = true; g.add(m);
+    const s = textSprite('🛗 엘리베이터', '#9fe0ff'); s.position.set(x, y + 3.4, z); s.scale.multiplyScalar(1.3); g.add(s);
+    scene.add(g); const col = addCollider(x - 1.3, z - 1.3, x + 1.3, z + 1.3, y + 2.9, 'int', null, y - 0.2);
+    this.roof = { b, g, col, x, z, y };
+    toast(`🏙️ 옥상 (${Math.round(y - b.y0)}m) — 떨어지면 크게 다친다! 엘리베이터에서 E로 내려가기`, 3500);
+  },
+  clearRoof() { const R = this.roof; if (!R) return; scene.remove(R.g); R.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== MAT.plain) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); removeCollider(R.col); this.roof = null; },
+  dispose() {
+    const I = this.cur; if (!I) return; this.cur = null;
+    scene.remove(I.group);
+    I.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.userData.shared) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    for (const c of I.cols) removeCollider(c);
+    if (this.light) this.light.intensity = 0;
+  },
+  // 매 프레임: 문 자동 출입, 텔레포트로 실내를 벗어나면 정리
+  update(dt) {
+    if (!G.started) return;
+    if (!this.light) { this.light = new THREE.PointLight(0xfff1d8, 0, 30, 1.2); scene.add(this.light); }
+    const I = this.cur;
+    if (I) {
+      if (ME.dead || ME.jail || ME.vehicle || Math.abs(ME.x - I.O.x) > 120 || Math.abs(ME.z - I.O.z) > 120) { this.dispose(); return; }
+      // 출구 쪽으로 걸어가면 자동으로 나간다
+      if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) this.exit();
+      return;
+    }
+    if (this.roof) { const R = this.roof; if (Math.hypot(ME.x - R.x, ME.z - R.z) > 160 || ME.y < R.y - 30) this.clearRoof(); }
+    // 바깥: 문으로 걸어 들어가면 자동 입장
+    if (!this.canUse() || G.t < this.cool || ME.spd < 1.2) return;
+    for (const b of buildingsNear(ME.x, ME.z)) {
+      const d = b.door; const ex = ME.x - d.wx, ez = ME.z - d.wz; if (ex * ex + ez * ez > 2.2 * 2.2) continue;
+      const lat = Math.abs(ex * d.sz - ez * d.sx); if (lat > 1.2) continue;
+      if ((ME.vx * -d.sx + ME.vz * -d.sz) > 1 && Math.abs(ME.y - b.y0) < 1.5) { this.enter(b); return; }
+    }
+  },
+  nearDoor() {
+    if (!this.canUse()) return null; let best = null, bd = 2.6;
+    for (const b of buildingsNear(ME.x, ME.z)) { const d = Math.hypot(b.door.x - ME.x, b.door.z - ME.z); if (d < bd && Math.abs(ME.y - b.y0) < 2.5) { bd = d; best = b; } }
+    for (const p of PLOTS) if (p.state === 'done') { const b = getBuilding(5000 + p.id); if (!b) continue; const d = Math.hypot(b.door.x - ME.x, b.door.z - ME.z); if (d < bd) { bd = d; best = b; } }
+    return best ? { b: best, d: bd } : null;
+  },
+  // 상호작용 후보 (실내 물건 / 옥상 엘리베이터)
+  interacts(cand) {
+    const I = this.cur;
+    if (I) {
+      { const de = Math.hypot(ME.x - I.exit.x, ME.z - I.exit.z); if (de < 2.4) cand(de * 0.5 + 0.05, { label: '🚪 밖으로 나가기', key: 'E', fn: () => this.exit() }); }
+      for (const it of I.items) { const d = Math.hypot(ME.x - it.x, ME.z - it.z); if (d < (it.r || 1.8) && Math.abs(ME.y - (it.y ?? I.O.y)) < 1.6) cand(d * 0.5, { label: it.label, key: 'E', fn: it.fn }); }
+      return;
+    }
+    const R = this.roof; if (R && Math.hypot(ME.x - R.x, ME.z - R.z) < 3 && Math.abs(ME.y - R.y) < 1.5) cand(0.3, { label: '🛗 엘리베이터 (1층으로 내려가기)', key: 'E', fn: () => this.enter(R.b, { fromRoof: true }) });
+  },
+  // ---------- 실내 생성 ----------
+  build(b) {
+    const O = this.slot(b); const kind = b.kind; const fac = b.fac;
+    const loft = ['house', 'apartment', 'villa', 'home', 'hotel'].includes(kind);
+    const big = ['church', 'factory', 'casino', 'pool', 'gym', 'dealer', 'barn'].includes(kind);
+    const W = clamp(Math.round(b.w * 0.8), big ? 20 : 14, big ? 34 : 28), D = clamp(Math.round(b.d * 0.75), big ? 18 : 12, big ? 28 : 22);
+    const H = loft ? 6.6 : (kind === 'church' || kind === 'factory' || kind === 'barn' || kind === 'casino') ? 8 : 4.2;
+    const rnd2 = mulberry32(hashStr('int' + b.id));
+    const R = (a, c) => a + (c - a) * rnd2(); const RP = (a) => a[Math.floor(rnd2() * a.length)];
+    const mb = new MB(); const cols = []; const plats = []; const items = []; const group = new THREE.Group(); const extra = [];
+    const X = (lx) => O.x + lx, Z = (lz) => O.z + lz;
+    const box = (lx, ly, lz, w, h, d, col, solid) => { mb.box(X(lx), O.y + ly, Z(lz), w, h, d, typeof col === 'number' ? C(col) : col); if (solid) cols.push(addCollider(X(lx) - w / 2, Z(lz) - d / 2, X(lx) + w / 2, Z(lz) + d / 2, O.y + ly + h, 'int', null, O.y + ly - 0.3)); };
+    const cyl = (lx, ly, lz, r, h, col, seg = 12, r2) => mb.cyl(X(lx), O.y + ly, Z(lz), r, h, C(col), seg, r2 ?? r);
+    const item = (lx, lz, label, fn, r = 1.8, ly = 0) => items.push({ x: X(lx), z: Z(lz), y: O.y + ly, label, fn, r });
+    const T = this.theme(kind);
+    // 바닥 · 벽 · 천장
+    box(0, -0.4, 0, W + 0.6, 0.4, D + 0.6, T.floor); plats.push({ x0: X(-W / 2 - 0.3), x1: X(W / 2 + 0.3), z0: Z(-D / 2 - 0.3), z1: Z(D / 2 + 0.3), y: O.y });
+    if (T.tiles) for (let i = -W / 2 + 1; i < W / 2; i += 2) box(i, 0.005, 0, 0.04, 0.01, D, T.tiles);
+    const wallT = 0.3, WH = H + 0.2;
+    box(0, 0, -D / 2 - wallT / 2, W + wallT * 2, WH, wallT, T.wall, true);
+    box(-W / 2 - wallT / 2, 0, 0, wallT, WH, D, T.wall, true); box(W / 2 + wallT / 2, 0, 0, wallT, WH, D, T.wall, true);
+    box(-(W / 4 + 0.6), 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true); box(W / 4 + 0.6, 0, D / 2 + wallT / 2, W / 2 - 1.2, WH, wallT, T.wall, true);
+    box(0, 2.6, D / 2 + wallT / 2, 2.4, WH - 2.6, wallT, T.wall, true);
+    box(0, 0, D / 2 + wallT + 0.4, 2.4, 2.6, 0.2, 0x111111, true); // 문 밖은 막혀 있음 (출구 표시)
+    box(0, 2.62, D / 2 - 0.05, 1.4, 0.35, 0.1, 0x18c860); // 비상구 표시
+    box(0, H, 0, W + 0.6, 0.25, D + 0.6, T.ceil); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + H + 0.4, 'roof', null, O.y + H));
+    for (let i = -W / 2 + 0.05; i <= W / 2; i += W - 0.1) box(i, 0, 0, 0.06, 0.18, D, T.trim); // 걸레받이
+    box(0, 0, -D / 2 + 0.02, W, 0.18, 0.06, T.trim);
+    for (let lx = -W / 2 + 3; lx < W / 2 - 1; lx += 5) for (let lz = -D / 2 + 3; lz < D / 2 - 1; lz += 5) box(lx, H - 0.06, lz, 1.4, 0.05, 0.6, 0xfffbe8);
+    // 간판 (안쪽 벽)
+    const title = fac ? fac.name : b.name;
+    { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(title, T.sub, T.sign) })); sg.position.set(X(0), O.y + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
+    // 종류별 가구
+    const facItem = (lx, lz, label) => { if (fac) item(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, () => UI.openFacility(fac), 2.4); };
+    const desk = (lx, lz, col = 0x8a6a4a, mon = true) => { box(lx, 0, lz, 1.6, 0.76, 0.8, col, true); if (mon) { box(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); } box(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); box(lx, 0.45, lz + 0.98, 0.5, 0.55, 0.06, 0x2a2a30); };
+    const chair = (lx, lz, col = 0x6a4a2a, face = 1) => { box(lx, 0, lz, 0.45, 0.45, 0.45, col); box(lx, 0.45, lz + face * 0.2, 0.45, 0.5, 0.06, col); };
+    const table4 = (lx, lz, col = 0xa07850, round = false) => { if (round) { cyl(lx, 0, lz, 0.08, 0.72, 0x444444, 6); cyl(lx, 0.72, lz, 0.55, 0.05, col, 14); cols.push(addCollider(X(lx) - 0.5, Z(lz) - 0.5, X(lx) + 0.5, Z(lz) + 0.5, O.y + 0.77, 'int', null, O.y - 0.3)); } else box(lx, 0, lz, 1.2, 0.75, 1.2, col, true); chair(lx - 0.95, lz, 0x5a3a22, 0); chair(lx + 0.95, lz, 0x5a3a22, 0); chair(lx, lz - 0.95, 0x5a3a22, -1); chair(lx, lz + 0.95, 0x5a3a22, 1); };
+    const shelf = (lx, lz, len, ax = 'x', h = 1.9) => { const w = ax === 'x' ? len : 0.6, d = ax === 'x' ? 0.6 : len; box(lx, 0, lz, w, h, d, 0xd8d8d8, true); for (let k = 0.35; k < h; k += 0.45) { const n = Math.floor(len / 0.4); for (let i = 0; i < n; i++) { const o = -len / 2 + 0.2 + i * 0.4; box(lx + (ax === 'x' ? o : 0), k, lz + (ax === 'x' ? 0 : o), ax === 'x' ? 0.3 : 0.62, 0.32, ax === 'x' ? 0.62 : 0.3, C(RP([0xe84a3a, 0x3a8ae8, 0xf2c23a, 0x4ac86a, 0xf08a2a, 0xffffff, 0x9a5ae8]))); } } };
+    const counter = (lx, lz, len, col = 0xb89a7a) => { box(lx, 0, lz, len, 1.05, 0.8, col, true); box(lx, 1.05, lz, len + 0.1, 0.06, 0.9, 0xe8e4dc); };
+    const bed = (lx, lz, col = 0x5a7ab8, ly = 0) => { box(lx, ly, lz, 1.5, 0.45, 2.1, 0x6a4a2a, true); box(lx, ly + 0.45, lz, 1.45, 0.18, 2.0, 0xf4f0e8); box(lx, ly + 0.5, lz + 0.35, 1.47, 0.16, 1.3, col); box(lx, ly + 0.6, lz - 0.75, 1.2, 0.14, 0.4, 0xffffff); };
+    const sofa = (lx, lz, col = 0x6a7a8a, ly = 0, len = 2.4) => { box(lx, ly, lz, len, 0.45, 0.9, col, true); box(lx, ly + 0.45, lz - 0.35, len, 0.5, 0.2, col); box(lx - len / 2 + 0.1, ly + 0.45, lz, 0.2, 0.25, 0.9, col); box(lx + len / 2 - 0.1, ly + 0.45, lz, 0.2, 0.25, 0.9, col); };
+    const plant = (lx, lz) => { cyl(lx, 0, lz, 0.25, 0.45, 0x8a5a3a, 8, 0.2); box(lx, 0.45, lz, 0.6, 0.9, 0.6, 0x3a8a3a); };
+    const bars = (x0, z0, x1, z1, h = 3) => { const len = Math.hypot(x1 - x0, z1 - z0); const n = Math.floor(len / 0.3); for (let i = 0; i <= n; i++) { const t = i / n; box(lerp(x0, x1, t), 0, lerp(z0, z1, t), 0.06, h, 0.06, 0x2a2c30); } cols.push(addCollider(X(Math.min(x0, x1)) - 0.12, Z(Math.min(z0, z1)) - 0.12, X(Math.max(x0, x1)) + 0.12, Z(Math.max(z0, z1)) + 0.12, O.y + h, 'int', null, O.y - 0.3)); };
+    const hw = W / 2, hd = D / 2;
+    switch (kind) {
+      case 'police': case 'guard': {
+        counter(0, -hd + 3.2, Math.min(8, W - 6), 0x30508f); facItem(0, -hd + 4.6, fac ? '🚓 민원실 (출소카드·수배 해제)' : undefined);
+        for (let i = 0; i < 4; i++) desk(-hw + 3 + (i % 2) * 3.2, -1 + Math.floor(i / 2) * 3.4, 0x5a6270);
+        box(-hw + 0.4, 0, hd - 4, 0.5, 2.0, 5, 0x6a7480, true); // 사물함
+        bars(hw - 5, -hd + 0.2, hw - 5, -hd + 5); bars(hw - 5, -hd + 5, hw - 0.2, -hd + 5); bed(hw - 2.5, -hd + 1.6, 0x6a6a6a);
+        box(0, 1.4, -hd + 0.18, 3, 1.4, 0.05, 0xf2efe6); for (let i = 0; i < 6; i++) box(-1.2 + (i % 3) * 1.2, 1.55 + Math.floor(i / 3) * 0.65, -hd + 0.21, 0.7, 0.5, 0.02, 0xd8c8a0);
+        if (kind === 'guard') { for (let i = 0; i < 6; i++) box(-2 + (i % 3) * 1.3, 1.2 + Math.floor(i / 3) * 0.8, -hd + 0.22, 1.1, 0.65, 0.04, 0x2a6a4a); }
+        box(-hw + 1.2, 0, -hd + 0.6, 0.06, 2.4, 0.06, 0xcccccc); box(-hw + 1.6, 1.7, -hd + 0.6, 0.8, 0.5, 0.02, 0x2a4a9a);
+        break;
+      }
+      case 'hospital': {
+        counter(-hw + 5, -hd + 2.6, 6, 0xf0f2f6); facItem(-hw + 5, -hd + 4, '🏥 원무과 (치료·구급상자)');
+        box(0, 1.6, -hd + 0.2, 1.4, 0.4, 0.04, 0xe52a3a); box(0, 1.1, -hd + 0.2, 0.4, 1.4, 0.04, 0xe52a3a);
+        const nb = Math.max(3, Math.floor((D - 4) / 2.8));
+        for (let i = 0; i < nb; i++) { const z = -hd + 2 + i * 2.8; bed(hw - 1.4, z, 0x9ad0f0); box(hw - 2.9, 0, z + 1.35, 0.05, 2.2, 0.05, 0xcccccc); box(hw - 1.4, 2.1, z + 1.35, 2.6, 0.04, 0.04, 0xcccccc); box(hw - 1.4, 0.3, z + 1.38, 2.4, 1.8, 0.02, 0xbfe0f0); cyl(hw - 3.1, 0, z - 0.5, 0.03, 1.8, 0xbbbbbb, 6); box(hw - 3.1, 1.6, z - 0.5, 0.2, 0.3, 0.1, 0xddeeff); }
+        for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x3a8ad8, 1);
+        break;
+      }
+      case 'dealer': {
+        box(0, 0, 0, W - 2, 0.02, D - 2, 0xf4f4f4);
+        for (const [lx, col] of [[-hw / 2, 0xd02a2a], [hw / 2, 0x2a5ad0]]) { cyl(lx, 0, -1, 3, 0.25, 0x333333, 24); box(lx, 0.6, -1, 1.9, 0.7, 4.2, col, true); box(lx, 1.3, -1.3, 1.7, 0.6, 2.2, 0x223344); for (const [wx, wz] of [[-0.95, 0.5], [0.95, 0.5], [-0.95, -2.5], [0.95, -2.5]]) cyl(lx + wx, 0.25, -1 + wz + 1, 0.36, 0.3, 0x111111, 10); }
+        desk(0, hd - 5, 0xeeeeee); facItem(0, hd - 3.6, '🚗 차량 구매 상담');
+        break;
+      }
+      case 'factory': {
+        box(0, 0.006, 0, W - 4, 0.01, 0.25, 0xf2c23a); box(0, 0.006, 3, W - 4, 0.01, 0.25, 0xf2c23a);
+        box(0, 0, -2, W - 6, 1.0, 1.2, 0x3a3e44, true); for (let i = -hw + 4; i < hw - 3; i += 0.8) cyl(i, 1.0, -2, 0.12, 0.05, 0x888888, 6);
+        for (let i = 0; i < 4; i++) { const x = -hw + 4 + i * (W - 8) / 3; box(x, 0, -hd + 3, 3, 2.8, 2.6, RP([0x4a7aa8, 0x8a9aa8, 0xc8a040]), true); box(x, 2.8, -hd + 3, 0.6, 1.2, 0.6, 0x555555); }
+        for (let i = 0; i < 8; i++) box(-hw + 2 + (i % 4) * 1.3, Math.floor(i / 4) * 1.1, hd - 3, 1.1, 1.05, 1.1, 0xb08a5a, true);
+        if (fac) facItem(hw - 3, hd - 3, '🏭 공장 사무실 (일하기)');
+        break;
+      }
+      case 'school': case 'academy': {
+        box(0, 1.0, -hd + 0.2, Math.min(8, W - 4), 1.6, 0.06, 0x2a5a3a); box(0, 0.95, -hd + 0.3, Math.min(8, W - 4), 0.06, 0.2, 0xb08a5a);
+        desk(0, -hd + 2.4, 0x8a6a4a, false);
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { const x = -hw + 2.5 + c * (W - 5) / 3, z = -hd + 5 + r * 2.4; box(x, 0, z, 1.1, 0.72, 0.6, 0xd8b88a, true); chair(x, z + 0.6, 0x3a5a8a, 1); }
+        facItem(0, -hd + 4, kind === 'school' ? '🏫 교무실 (수업 듣기)' : '📚 학원 상담실 (수업 듣기)');
+        break;
+      }
+      case 'food': case 'restaurant': case 'cafe': {
+        const cafe = kind === 'cafe';
+        counter(0, -hd + 2.2, Math.min(9, W - 4), cafe ? 0x5a3a2a : 0xc4552e); box(0, 1.1, -hd + 2.2, 0.6, 0.5, 0.4, 0x888888);
+        box(0, 0, -hd + 0.6, W - 1, 0.9, 0.8, 0xc0c0c0, true); box(-2, 0.9, -hd + 0.6, 1.2, 0.05, 0.6, 0x222222);
+        box(0, 1.9, -hd + 0.18, 3.6, 1.0, 0.04, 0x1a1a1a);
+        for (let r = 0; r < Math.floor((D - 6) / 3); r++) for (let c = 0; c < Math.floor((W - 3) / 3.4); c++) table4(-hw + 2.4 + c * 3.4, -hd + 6 + r * 3, cafe ? 0xe8e0d0 : 0xa07850, cafe);
+        if (cafe) { sofa(-hw + 1.6, hd - 2, 0x8a5a3a); plant(hw - 1, hd - 1.2); plant(-hw + 1, -hd + 4); }
+        if (fac) facItem(0, -hd + 3.4);
+        else item(0, -hd + 3.4, cafe ? '☕ 커피 주문 (₩4,500 · 스태미나 회복)' : '🍜 식사 주문 (₩9,000 · 체력 회복)', () => this.buy(cafe ? 4500 : 9000, cafe ? 'stamina' : 'hp'), 2.4);
+        break;
+      }
+      case 'mart': {
+        counter(-hw + 3, hd - 4, 3.2, 0xe8e8e8); box(-hw + 3, 1.1, hd - 4, 0.5, 0.35, 0.4, 0x222222);
+        for (let i = 0; i < Math.floor((W - 6) / 2.6); i++) shelf(-hw + 6 + i * 2.6, -1, D - 9, 'z');
+        box(0, 0, -hd + 0.5, W - 2, 2.1, 0.8, 0xdde8f0, true); for (let i = -hw + 1.5; i < hw - 1; i += 1.2) box(i, 0.2, -hd + 0.92, 1.0, 1.7, 0.02, 0x9fd8ff);
+        item(-hw + 3, hd - 2.8, '🛒 계산대 (음료 ₩2,000 · 구급상자 ₩8,000)', () => this.martMenu(), 2.2);
+        break;
+      }
+      case 'pcbang': {
+        for (let r = 0; r < Math.floor((D - 4) / 2.6); r++) for (let c = 0; c < Math.floor((W - 2) / 1.8); c++) { const x = -hw + 1.6 + c * 1.8, z = -hd + 2 + r * 2.6; box(x, 0, z, 1.6, 0.74, 0.7, 0x1a1a22, true); box(x, 0.74, z - 0.15, 0.7, 0.45, 0.05, 0x111111); box(x, 0.78, z - 0.12, 0.64, 0.38, 0.02, RP([0x3a6aff, 0xff3a8a, 0x3aff9a])); box(x, 0, z + 0.7, 0.6, 0.5, 0.6, 0xc8202a); box(x, 0.5, z + 0.95, 0.6, 0.8, 0.1, 0xc8202a); }
+        counter(hw - 3, hd - 2.5, 3, 0x3a2e5c); facItem(hw - 3, hd - 1.3, fac ? '🖥️ PC방 카운터' : undefined);
+        break;
+      }
+      case 'gym': {
+        box(0, 0.6, -hd + 0.18, W - 2, 2.2, 0.04, 0xcfe8f4);
+        for (let i = 0; i < Math.floor((W - 4) / 2); i++) { const x = -hw + 2 + i * 2; box(x, 0, -hd + 2.2, 0.9, 0.25, 2, 0x222222, true); box(x, 0.25, -hd + 3.0, 0.8, 1.2, 0.08, 0x444444); box(x, 1.4, -hd + 3.0, 0.6, 0.3, 0.2, 0x111111); }
+        for (let i = 0; i < 3; i++) { const x = -hw + 3 + i * 4; box(x, 0, 1.5, 0.5, 0.45, 1.4, 0x111111, true); box(x, 1.2, 1.5, 2.2, 0.05, 0.05, 0x999999); cyl(x - 1.0, 1.0, 1.5, 0.3, 0.12, 0x222222); cyl(x + 1.0, 1.0, 1.5, 0.3, 0.12, 0x222222); box(x - 0.5, 0, 1.5, 0.06, 1.3, 0.06, 0x999999); box(x + 0.5, 0, 1.5, 0.06, 1.3, 0.06, 0x999999); }
+        box(hw - 1, 0, 0, 0.8, 1.2, 4, 0x333333, true); for (let i = 0; i < 6; i++) cyl(hw - 1, 1.2, -1.6 + i * 0.6, 0.12, 0.25, 0x888888, 8);
+        facItem(0, hd - 3, fac ? '💪 헬스장 카운터 (운동하기)' : undefined);
+        break;
+      }
+      case 'pool': {
+        box(0, 0.003, -1, W - 6, 0.02, D - 9, 0x9ad8f0);
+        { const p = new THREE.Mesh(new THREE.PlaneGeometry(W - 7, D - 10), MAT.poolWater); MAT.poolWater.userData.shared = true; p.rotation.x = -Math.PI / 2; p.position.set(X(0), O.y + 0.06, Z(-1)); group.add(p); }
+        for (let i = 0; i < 5; i++) { box(-hw + 2 + i * 2.2, 0, hd - 2.2, 0.8, 0.35, 1.8, 0xffffff); box(-hw + 2 + i * 2.2, 0.35, hd - 1.5, 0.8, 0.4, 0.3, 0xffffff); }
+        facItem(hw - 2.5, hd - 2.5, fac ? '🏊 수영장 카운터' : undefined);
+        break;
+      }
+      case 'gun': {
+        counter(0, -hd + 3.4, Math.min(7, W - 4), 0x3a2a1e); box(0, 1.1, -hd + 3.4, Math.min(7, W - 4), 0.4, 0.7, 0xbfe0f0);
+        box(0, 0.8, -hd + 0.2, W - 2, 2.0, 0.06, 0x6a4a2e); for (let i = 0; i < Math.floor(W / 1.2) - 2; i++) { box(-hw + 1.6 + i * 1.2, 1.1 + (i % 3) * 0.5, -hd + 0.28, 0.9, 0.12, 0.06, 0x1a1a1a); }
+        for (let i = 0; i < 3; i++) { box(-hw + 2 + i * 2.5, 0, hd - 6, 0.08, 1.1, 1.6, 0x555555, true); box(-hw + 2 + i * 2.5, 1.2, hd - 1, 0.6, 0.8, 0.04, 0xffffff); }
+        facItem(0, -hd + 4.8, fac ? '🔫 총포사 카운터' : undefined);
+        break;
+      }
+      case 'clothes': {
+        for (let r = 0; r < 3; r++) { const z = -hd + 3 + r * (D - 6) / 2.5; box(-hw / 2, 1.5, z, W / 2.4, 0.05, 0.05, 0xaaaaaa); box(-hw / 2 - W / 4.8, 0, z, 0.06, 1.55, 0.06, 0xaaaaaa); box(-hw / 2 + W / 4.8, 0, z, 0.06, 1.55, 0.06, 0xaaaaaa); for (let i = 0; i < 9; i++) box(-hw / 2 - W / 5.5 + i * W / 22, 0.75, z, 0.08, 0.75, 0.55, C(RP([0xe84a7a, 0x4a8ae8, 0xf2f2f2, 0x222222, 0xf2c23a, 0x8a5ae8]))); }
+        for (let i = 0; i < 3; i++) { const x = hw - 2 - i * 2; cyl(x, 0, -hd + 2, 0.25, 0.1, 0x222222); cyl(x, 0.1, -hd + 2, 0.05, 0.9, 0xcccccc, 6); box(x, 1.0, -hd + 2, 0.45, 0.65, 0.25, C(RP([0xe84a7a, 0x4a8ae8, 0xf2c23a]))); cyl(x, 1.65, -hd + 2, 0.12, 0.25, 0xf0d8c0, 8); }
+        box(hw - 0.2, 0.3, 2, 0.06, 2, 1.2, 0xdff0ff); counter(hw - 3, hd - 3, 2.6, 0xf6e8f6);
+        facItem(hw - 3, hd - 1.8, fac ? '👕 옷가게 계산대 (옷 갈아입기)' : undefined);
+        break;
+      }
+      case 'casino': {
+        box(0, 0.003, 0, W - 1, 0.01, D - 1, 0x8a1a2a);
+        for (let i = 0; i < Math.floor((W - 4) / 1.3); i++) for (const z of [-hd + 1.2, -hd + 4.5]) { const x = -hw + 2 + i * 1.3; box(x, 0, z, 1.0, 1.6, 0.8, 0x2a1a08, true); box(x, 1.0, z + 0.41, 0.8, 0.5, 0.02, RP([0xffd34a, 0xff4a8a, 0x4affd3])); }
+        for (let i = 0; i < 3; i++) { const x = -hw + 4 + i * (W - 8) / 2; cyl(x, 0, 2.5, 1.6, 0.85, 0x1a5a2a, 20); cyl(x, 0.85, 2.5, 0.5, 0.05, 0x8a5a2a, 16); cols.push(addCollider(X(x) - 1.5, Z(2.5) - 1.5, X(x) + 1.5, Z(2.5) + 1.5, O.y + 0.9, 'int', null, O.y - 0.3)); }
+        facItem(0, hd - 3, fac ? '🎰 카지노 칩 교환소 (게임하기)' : undefined);
+        break;
+      }
+      case 'bank': {
+        box(0, 0.004, 0, W - 1, 0.01, D - 1, 0xe8e4dc);
+        counter(0, -hd + 4, W - 4, 0x6a5a4a); for (let i = -hw + 2.5; i < hw - 2; i += 2.5) box(i, 1.1, -hd + 4, 0.05, 1.2, 0.8, 0xcfe8f4);
+        { const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.4, 28), new THREE.MeshBasicMaterial({ color: 0x8a8e94 })); vd.rotation.x = Math.PI / 2; vd.position.set(X(0), O.y + 1.7, Z(-hd + 0.3)); group.add(vd); box(0, 1.6, -hd + 0.55, 1.6, 0.2, 0.2, 0xd8c070); }
+        for (let i = 0; i < 2; i++) { box(hw - 1, 0, hd - 4 - i * 1.6, 0.8, 1.7, 1.0, 0x2a4a6a, true); box(hw - 1.42, 1.0, hd - 4 - i * 1.6, 0.02, 0.4, 0.5, 0x6ad8ff); }
+        for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x2a3a5a, 1);
+        item(0, -hd + 5.2, '🏦 은행 창구 (잔액 확인)', () => toast(`🏦 잔액: ${fmtMoney(ME.money)} — 늘 감사합니다`), 2.4);
+        item(hw - 1.8, hd - 4.8, '🏧 ATM (₩10,000 출금 연출)', () => { sfx('cash'); toast('🏧 지갑에 이미 돈이 있습니다 — 잔액 ' + fmtMoney(ME.money)); }, 1.6);
+        break;
+      }
+      case 'church': {
+        box(0, 0.004, 1, 2, 0.01, D - 4, 0xa8202a);
+        for (let r = 0; r < Math.floor((D - 7) / 1.6); r++) for (const s of [-1, 1]) { const z = -hd + 6 + r * 1.6; box(s * (hw / 2 + 0.6), 0, z, hw - 2.4, 0.45, 0.5, 0x6a4026, true); box(s * (hw / 2 + 0.6), 0.45, z + 0.22, hw - 2.4, 0.5, 0.08, 0x6a4026); }
+        box(0, 0, -hd + 3, 3, 0.4, 2, 0xd8d0c0, true); box(0, 0.4, -hd + 3, 1.8, 0.9, 0.7, 0xf2ecd8, true);
+        box(0, 2.4, -hd + 0.25, 0.3, 3.4, 0.1, 0xd8c070); box(0, 3.4, -hd + 0.25, 1.6, 0.3, 0.1, 0xd8c070);
+        for (const s of [-1, 1]) for (let i = 0; i < 3; i++) box(s * (hw - 0.05), 2.5, -hd + 4 + i * 4, 0.04, 3, 1.4, C(RP([0xd84a4a, 0x4a7ad8, 0xf2c23a, 0x4ac86a])));
+        item(0, -hd + 5, '🙏 기도하기 (체력 회복)', () => { ME.hp = Math.min(100, ME.hp + 30); toast('🙏 마음이 편안해졌다 (+체력)'); }, 2);
+        break;
+      }
+      case 'barn': {
+        box(0, 0.004, 0, W - 1, 0.01, D - 1, 0x8a6a3a);
+        for (let i = 0; i < 8; i++) box(-hw + 2 + (i % 4) * 1.6, Math.floor(i / 4) * 0.9, -hd + 2, 1.4, 0.88, 0.9, 0xd8b84a, true);
+        for (let i = 0; i < 3; i++) { const x = -hw + 4 + i * 4; box(x, 0, hd - 4, 0.12, 1.3, 4, 0x6a4a2a, true); }
+        box(hw - 4, 0, 0, 2.2, 1.6, 3.4, 0xc0302a, true); cyl(hw - 4, 0, 1.2, 0.8, 0.5, 0x111111);
+        break;
+      }
+      case 'office': default: if (!loft) {
+        if (kind === 'office' || kind === 'hotel') {
+          counter(0, hd - 4.5, 4, 0x8a8a8a); plant(-2.8, hd - 4.5); plant(2.8, hd - 4.5);
+          for (let r = 0; r < Math.floor((D - 8) / 3); r++) for (let c = 0; c < Math.floor((W - 4) / 3.2); c++) { const x = -hw + 2.4 + c * 3.2, z = -hd + 2 + r * 3; desk(x, z, 0xd8d4cc); box(x - 1.5, 0, z + 0.3, 0.06, 1.4, 2.2, 0x9aa4b0); }
+          box(hw - 1.2, 0, hd - 2, 0.4, 1.2, 0.4, 0xcfe8f4);
+        } else { sofa(0, 0); table4(0, -3); }
+      }
+    }
+    if (loft) { // 집/아파트: 1층 거실·부엌 + 계단 + 2층 침실(다락)
+      const LY = 3.2, lz0 = -hd, lz1 = -hd + D * 0.45;
+      box(0, LY - 0.25, (lz0 + lz1) / 2, W, 0.25, lz1 - lz0, T.ceil); plats.push({ x0: X(-hw), x1: X(hw), z0: Z(lz0), z1: Z(lz1), y: O.y + LY });
+      cols.push(addCollider(X(-hw), Z(lz1) - 0.06, X(hw - 1.4), Z(lz1) + 0.06, O.y + LY + 1.05, 'int', null, O.y + LY - 0.1)); // 난간
+      for (let i = -hw + 0.2; i < hw - 1.4; i += 0.5) box(i, LY, lz1, 0.05, 1.0, 0.05, 0x8a6a4a); box((-hw + hw - 1.4) / 2, LY + 1.0, lz1, W - 1.4, 0.06, 0.08, 0x8a6a4a);
+      // 계단 (오른쪽 벽을 따라 올라감)
+      const sz0 = lz1, sz1 = lz1 + 4.8, sx = hw - 0.7; const n = 12;
+      for (let i = 0; i < n; i++) { const z = sz1 - (i + 0.5) * (sz1 - sz0) / n; box(sx, 0, z, 1.3, (i + 1) * LY / n, (sz1 - sz0) / n + 0.01, 0xa07850); }
+      plats.push({ ramp: true, x0: X(sx - 0.65), x1: X(sx + 0.65), z0: Z(sz0), z1: Z(sz1), y0: O.y + LY, y1: O.y });
+      cols.push(addCollider(X(sx - 0.72), Z(sz0), X(sx - 0.62), Z(sz1), O.y + LY + 1, 'int', null, O.y + 1.2));
+      // 1층 거실
+      sofa(-hw / 3, hd - 3.2, C(RP([0x6a7a8a, 0x8a5a4a, 0x4a6a5a]))); box(-hw / 3, 0, hd - 5, 1.4, 0.4, 0.8, 0x6a4a2a, true);
+      box(-hw / 3, 0.6, lz1 + 0.6, 2.4, 1.3, 0.1, 0x111111); box(-hw / 3, 0, lz1 + 0.6, 2.6, 0.55, 0.5, 0x3a2a1e, true);
+      box(-hw / 3, 0.003, hd - 4.2, 3.2, 0.01, 2.6, C(RP([0xc8a07a, 0x8aa0c8, 0xc87a8a])));
+      box(-hw + 0.5, 0, 1, 0.8, 0.9, 3.2, 0xe8e4dc, true); box(-hw + 0.5, 0.9, 1, 0.85, 0.05, 3.25, 0x333333); box(-hw + 0.5, 0, 3.2, 0.8, 1.9, 0.8, 0xf2f2f2, true);
+      table4(0, 1.5, 0xc8a07a);
+      plant(hw - 1.2, hd - 1.2);
+      // 2층
+      bed(-hw + 1.6, lz0 + 1.6, C(RP([0x5a7ab8, 0xb85a7a, 0x5ab88a])), LY); bed(-hw + 4, lz0 + 1.6, 0xd8c070, LY);
+      box(hw - 3, LY, lz0 + 0.5, 1.6, 2.0, 0.6, 0x6a4a2a, true); box(0, LY, lz0 + 0.5, 2, 1.0, 0.6, 0x8a6a4a, true);
+      item(-hw + 1.6, lz0 + 3.2, '🛏️ 침대에서 쉬기 (체력·스태미나 회복)', () => { ME.hp = 100; ME.stamina = 100; ME.drunk = 0; toast('😴 푹 쉬었다'); }, 1.8, LY);
+      if (b.plot && b.plot.owner === ME.id) item(0, hd - 5, '📍 내 집을 스폰 지점으로', () => { ME.homePlot = b.plot.id; toast('📍 집이 스폰 지점이 되었다'); saveGame(); }, 1.6);
+      if (fac) facItem(0, hd - 6);
+    }
+    // 엘리베이터 (높은 건물 → 옥상)
+    let elev = null;
+    if (this.tall(b)) {
+      const ex = -hw + 1.6, ez = -hd + 0.4; box(ex, 0, ez, 2.2, 2.6, 0.1, 0xb8bcc4); box(ex - 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 0.53, 0, ez + 0.06, 1.04, 2.4, 0.02, 0x8a8e96); box(ex + 1.3, 1.1, ez + 0.08, 0.15, 0.3, 0.04, 0xffd34a);
+      elev = { x: X(ex), z: Z(ez + 1.4) };
+      const floors = b.floors || Math.max(2, Math.round((b.top - b.y0) / FLOOR_H));
+      item(ex, ez + 1.4, `🛗 엘리베이터 — 옥상 (${floors}층 · ${Math.round(b.top - b.y0)}m)`, () => this.exit(true), 1.6);
+    }
+    // 메쉬 (조명은 굽기: 위쪽 면은 밝고 옆·아래는 어둡게 → 라이트 없이도 실내 느낌, 저사양 폰도 가볍게)
+    const g = mb.geo(); const nor = g.attributes.normal, col = g.attributes.color;
+    for (let i = 0; i < col.count; i++) { const ny = nor.getY(i), nx = nor.getX(i), nz = nor.getZ(i); const f = ny > 0.5 ? 1.0 : ny < -0.5 ? 0.78 : 0.84 + nx * 0.06 + nz * 0.04; col.setXYZ(i, col.getX(i) * f * T.bright, col.getY(i) * f * T.bright, col.getZ(i) * f * T.bright); }
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true })); group.add(mesh);
+    scene.add(group);
+    const I = { b, O, W, D, H, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: elev || { x: X(0), z: Z(hd - 1.6) } };
+    return I;
+  },
+  theme(kind) {
+    const T = { floor: 0xb8b0a4, wall: 0xeae6de, ceil: 0xf4f2ee, trim: 0x6a5a4a, sign: '#2a3a5a', sub: '', tiles: null, bright: 1 };
+    const set = (o) => Object.assign(T, o);
+    switch (kind) {
+      case 'police': case 'guard': set({ floor: 0x8a9098, wall: 0xc8d2e0, sign: '#1a2f6a', sub: 'POLICE', tiles: 0x7a8088 }); break;
+      case 'hospital': set({ floor: 0xdfe6ea, wall: 0xf6f8fa, sign: '#c8202a', sub: 'HOSPITAL', tiles: 0xcfd6da, bright: 1.05 }); break;
+      case 'dealer': set({ floor: 0xe8e8ec, wall: 0xf2f2f2, sign: '#1a1a1a', sub: 'MOTORS' }); break;
+      case 'factory': set({ floor: 0x8a8a86, wall: 0xa8aeb4, ceil: 0x7a8088, sign: '#3a3e44', sub: 'FACTORY', bright: 0.95 }); break;
+      case 'school': case 'academy': set({ floor: 0xc8a878, wall: 0xf2ecd8, sign: '#2a5a3a', sub: kind === 'school' ? 'SCHOOL' : 'ACADEMY', tiles: 0xb89868 }); break;
+      case 'food': case 'restaurant': set({ floor: 0x9a6a4a, wall: 0xf4e0c0, sign: '#c4552e', sub: 'RESTAURANT', tiles: 0x8a5a3a }); break;
+      case 'cafe': set({ floor: 0x8a6a4a, wall: 0xe8dcc8, sign: '#4a2a1a', sub: 'CAFE', tiles: 0x7a5a3a }); break;
+      case 'mart': set({ floor: 0xe8e8e8, wall: 0xf8f8f8, sign: '#1a8a4a', sub: '24H MART', tiles: 0xd8d8d8, bright: 1.05 }); break;
+      case 'pcbang': set({ floor: 0x2a2a34, wall: 0x3a3048, ceil: 0x222230, sign: '#5a2aa0', sub: 'PC ROOM', bright: 0.9 }); break;
+      case 'gym': set({ floor: 0x2a2e34, wall: 0x6a7480, sign: '#2b2f38', sub: 'GYM', bright: 0.95 }); break;
+      case 'pool': set({ floor: 0xe7f4fa, wall: 0xd0f0ff, sign: '#1a6a9a', sub: 'POOL', tiles: 0xc8e8f4 }); break;
+      case 'gun': set({ floor: 0x5a4a3a, wall: 0x8a6a5a, sign: '#5a3a2a', sub: 'GUNS', bright: 0.95 }); break;
+      case 'clothes': set({ floor: 0xf0eaf2, wall: 0xfaf4fa, sign: '#8a3a8a', sub: 'FASHION', bright: 1.05 }); break;
+      case 'casino': set({ floor: 0x4a1a1a, wall: 0x3a2008, ceil: 0x2a1808, sign: '#3a2000', sub: 'CASINO', bright: 1.0 }); break;
+      case 'bank': set({ floor: 0xd8d0c4, wall: 0xf0e8d8, sign: '#1a3a2a', sub: 'BANK', tiles: 0xc8c0b4 }); break;
+      case 'church': set({ floor: 0xb8a890, wall: 0xf2ecdc, ceil: 0xe8e0cc, sign: '#5a3a1a', sub: 'CHURCH' }); break;
+      case 'barn': set({ floor: 0x8a6a3a, wall: 0xa8322a, ceil: 0x6a4a2a, sign: '#5a2a1a', sub: 'FARM', bright: 0.95 }); break;
+      case 'hotel': set({ floor: 0xc8b8a0, wall: 0xf6efe0, sign: '#8a6a2a', sub: 'HOTEL' }); break;
+      case 'house': case 'villa': case 'home': case 'apartment': set({ floor: 0xb08a62, wall: 0xf6efe4, sign: '#6a4a2a', sub: 'HOME', tiles: 0x9a7a52 }); break;
+      case 'office': set({ floor: 0x8a929a, wall: 0xeef0f2, sign: '#2a3a5a', sub: 'OFFICE' }); break;
+    }
+    return T;
+  },
+  buy(price, what) {
+    if (ME.money < price) { toast('돈이 부족하다'); sfx('error'); return; }
+    ME.money -= price; sfx('cash');
+    if (what === 'hp') { ME.hp = Math.min(100, ME.hp + 40); toast('🍜 맛있게 먹었다 (+체력)'); } else { ME.stamina = 100; ME.drunk = Math.max(0, ME.drunk - 0.3); toast('☕ 커피 한 잔 (스태미나 회복)'); }
+  },
+  martMenu() {
+    UI.openMenu('🛒 편의점', '24시간 영업', [
+      { ic: '🥤', t: '음료', p: 2000, fn: () => { ME.inv.drink = (ME.inv.drink | 0) + 1; ME.stamina = 100; toast('🥤 음료 +1'); UI.updateInv && UI.updateInv(); } },
+      { ic: '🍙', t: '삼각김밥', p: 1500, fn: () => { ME.inv.food = (ME.inv.food | 0) + 1; toast('🍙 음식 +1'); UI.updateInv && UI.updateInv(); } },
+      { ic: '🩹', t: '구급상자', p: 8000, fn: () => { ME.inv.medkit = (ME.inv.medkit | 0) + 1; toast('🩹 구급상자 +1'); UI.updateInv && UI.updateInv(); } },
+    ]);
+  },
+};
+
+
 // ================= CONSTRUCTION (건축 의뢰) =================
 const BUILD_DESIGNS = {
   container: { name: '컨테이너 하우스', price: 8000, time: 40, desc: '싸고 빠르게. 휴식/스폰 가능', icon: '📦' },
@@ -3631,10 +4181,18 @@ const BUILD_DESIGNS = {
   modern: { name: '2층 모던하우스', price: 60000, time: 100, desc: '통유리 2층 주택', icon: '🏠' },
   villa: { name: '수영장 빌라', price: 120000, time: 140, desc: '야외 수영장 포함 고급 빌라', icon: '🏖️' },
   shop: { name: '상가 건물', price: 150000, time: 160, desc: '임대 수익 분당 ₩500', icon: '🏪', income: 500 },
-  tower: { name: '펜트하우스 타워', price: 450000, time: 240, desc: '18층 유리 타워 · 분당 ₩1,500', icon: '🏙️', income: 1500 },
+  tower: { name: '펜트하우스 타워', price: 450000, time: 240, desc: '최대 15층 유리 타워 · 분당 ₩1,500(15층 기준)', icon: '🏙️', income: 1500 },
 };
+// ---- 층수 제한: 최대 15층 ----
+const MAX_FLOORS = 15, FLOOR_H = 3.5;
+const DESIGN_FLOORS = { container: [2, 2, 2], cottage: [1, 1, 1], modern: [2, 2, 2], villa: [2, 2, 2], shop: [2, 15, 4], tower: [5, 15, 15] }; // [최소, 최대, 기본]
+function clampFloors(design, fl) { const r = DESIGN_FLOORS[design] || [1, 1, 1]; return clamp(Math.round(+fl || r[2]), r[0], Math.min(r[1], MAX_FLOORS)); }
+function plotFloors(p) { return clampFloors(p.design, p.fl); }
+function designPrice(design, fl) { const D = BUILD_DESIGNS[design]; if (!D) return 0; const r = DESIGN_FLOORS[design]; return r && r[0] !== r[1] ? Math.round(D.price * clampFloors(design, fl) / r[2] / 1000) * 1000 : D.price; }
+function designIncome(p) { const D = BUILD_DESIGNS[p.design]; if (!D || !D.income) return 0; const r = DESIGN_FLOORS[p.design]; return D.income * plotFloors(p) / r[2]; }
 const CONSTR = new Map(); // plot id -> visual state
 function designGroup(p, design, ownerName) {
+  const FL = plotFloors(p);
   const g = new THREE.Group(); const w = p.w - 4, d = p.d - 4; const y0 = p.y - 0.1; const mbs = {};
   const mb = (k) => mbs[k] || (mbs[k] = new MB());
   const [sx, sz] = SIDE_VEC[p.side]; let H = 6;
@@ -3668,16 +4226,16 @@ function designGroup(p, design, ownerName) {
     }
     case 'shop': {
       const hw = Math.min(30, w * 0.85), hd = Math.min(22, d * 0.75); mb('shop').box(p.x, y0, p.z, hw + 0.4, 4.4, hd + 0.4, C(0xffffff), BAY.shop, { noTop: true });
-      mb('office').box(p.x, y0 + 4.4, p.z, hw, 8, hd, C(0xe8dcc8), BAY.office, { topCol: C(0x777777) }); mb('plain').box(p.x, y0 + 12.4, p.z, hw + 0.6, 0.6, hd + 0.6, C(0x8a8070));
+      const oh = (FL - 1) * FLOOR_H; mb('office').box(p.x, y0 + 4.4, p.z, hw, oh, hd, C(0xe8dcc8), BAY.office, { topCol: C(0x777777) }); mb('plain').box(p.x, y0 + 4.4 + oh, p.z, hw + 0.6, 0.6, hd + 0.6, C(0x8a8070));
       const s = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(14, hw * 0.7), 2.4), new THREE.MeshBasicMaterial({ map: makeSignTex((ownerName || '') + ' 상가', 'SHOPPING', '#9a2a2a') }));
-      s.position.set(p.x + sx * (hw / 2 + 0.25), y0 + 5.6, p.z + sz * (hd / 2 + 0.25)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 13; break;
+      s.position.set(p.x + sx * (hw / 2 + 0.25), y0 + 5.6, p.z + sz * (hd / 2 + 0.25)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 4.4 + (FL - 1) * FLOOR_H + 0.6; break;
     }
     case 'tower': {
       const hw = Math.min(24, w * 0.7), hd = Math.min(24, d * 0.7); mb('office').box(p.x, y0, p.z, hw + 4, 8, hd + 4, C(0xd8d4cc), BAY.office);
-      mb('glass').box(p.x, y0 + 8, p.z, hw, 58, hd, C(0x9fc0e0), BAY.glass, { topCol: C(0x444444) }); mb('plain').box(p.x, y0 + 66, p.z, hw * 0.7, 4, hd * 0.7, C(0x333a44));
-      mb('plain').box(p.x, y0 + 70, p.z, hw * 0.55, 0.3, hd * 0.55, C(0x222222)); mb('plain').box(p.x, y0 + 70.3, p.z, 0.4, 8, 0.4, C(0xcccccc));
+      const gh = (FL - 2) * FLOOR_H; mb('glass').box(p.x, y0 + 8, p.z, hw, gh, hd, C(0x9fc0e0), BAY.glass, { topCol: C(0x444444) }); mb('plain').box(p.x, y0 + 8 + gh, p.z, hw * 0.7, 4, hd * 0.7, C(0x333a44));
+      mb('plain').box(p.x, y0 + 12 + gh, p.z, hw * 0.55, 0.3, hd * 0.55, C(0x222222)); mb('plain').box(p.x, y0 + 12.3 + gh, p.z, 0.4, 8, 0.4, C(0xcccccc));
       const s = new THREE.Mesh(new THREE.PlaneGeometry(10, 2.5), new THREE.MeshBasicMaterial({ map: makeSignTex((ownerName || '') + ' TOWER', 'PENTHOUSE', '#1a2a4a') }));
-      s.position.set(p.x + sx * (hw / 2 + 2.3), y0 + 6, p.z + sz * (hd / 2 + 2.3)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 78; break;
+      s.position.set(p.x + sx * (hw / 2 + 2.3), y0 + 6, p.z + sz * (hd / 2 + 2.3)); s.rotation.y = SIDE_YAW[p.side]; g.add(s); H = 12.3 + (FL - 2) * FLOOR_H; break;
     }
   }
   if (!MAT.wood) MAT.wood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
@@ -3694,10 +4252,10 @@ function plotFootprint(p, design) {
 function syncPlotVisual(p) {
   let V = CONSTR.get(p.id); if (!V) { V = { id: p.id }; CONSTR.set(p.id, V); }
   // sign
-  const signText = p.state === 'empty' ? ['매물', fmtMoney(p.price) + ' · ' + REGIONS[p.region].name, '#0f6a3a'] : p.state === 'owned' ? [p.ownerName + '의 땅', '건축 의뢰 가능', '#2a4a8a'] : p.state === 'building' ? ['공사중', (BUILD_DESIGNS[p.design]?.name || '') + ' · ' + p.ownerName, '#c87a10'] : [p.ownerName, BUILD_DESIGNS[p.design]?.name || '', '#3a3a3a'];
+  const flT = p.design && DESIGN_FLOORS[p.design] ? ` ${plotFloors(p)}층` : ''; const signText = p.state === 'empty' ? ['매물', fmtMoney(p.price) + ' · ' + REGIONS[p.region].name, '#0f6a3a'] : p.state === 'owned' ? [p.ownerName + '의 땅', '건축 의뢰 가능 · 최대 15층', '#2a4a8a'] : p.state === 'building' ? ['공사중', (BUILD_DESIGNS[p.design]?.name || '') + flT + ' · ' + p.ownerName, '#c87a10'] : [p.ownerName, (BUILD_DESIGNS[p.design]?.name || '') + flT, '#3a3a3a'];
   const key = signText.join('|'); if (V.signKey !== key) { V.signKey = key; p.sign.material.map.dispose(); p.sign.material.map = makeSignTex(signText[0], signText[1], signText[2]); p.sign.material.needsUpdate = true; }
-  if ((p.state === 'building' || p.state === 'done') && (!V.group || V.design !== p.design)) {
-    if (V.group) scene.remove(V.group); V.group = designGroup(p, p.design, p.ownerName); V.design = p.design; scene.add(V.group);
+  if ((p.state === 'building' || p.state === 'done') && (!V.group || V.design !== p.design || V.fl !== plotFloors(p))) {
+    if (V.group) scene.remove(V.group); if (V.collider) { removeCollider(V.collider); V.collider = null; } V.group = designGroup(p, p.design, p.ownerName); V.design = p.design; V.fl = plotFloors(p); scene.add(V.group); PLOT_BLD.delete(p.id);
     V.clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); for (const m of V.group.userData.mats) { m.clippingPlanes = [V.clip]; m.clipShadows = true; }
   }
   if (p.state === 'building' && !V.site) {
@@ -3735,7 +4293,7 @@ function updateConstruction(dt, cam) {
   if (G.isHost) {
     for (const p of PLOTS) {
       if (p.state === 'building') { p.progress = Math.min(1, p.progress + dt / (BUILD_DESIGNS[p.design].time)); if (p.progress >= 1) { p.state = 'done'; syncPlotVisual(p); onBuildDone(p); NET.send({ t: 'plot', p: plotState(p) }); savePlots(); } }
-      if (p.state === 'done' && BUILD_DESIGNS[p.design].income) p.bank = (p.bank || 0) + BUILD_DESIGNS[p.design].income * dt / 60;
+      if (p.state === 'done' && BUILD_DESIGNS[p.design].income) p.bank = (p.bank || 0) + designIncome(p) * dt / 60;
     }
     if ((G._plotSync = (G._plotSync || 0) - dt) <= 0) { G._plotSync = 2; const act = PLOTS.filter(p => p.state === 'building'); if (act.length) NET.send({ t: 'plots', ps: act.map(plotState) }); }
   }
@@ -3758,13 +4316,13 @@ function updateConstruction(dt, cam) {
 }
 function onBuildDone(p) {
   FX.confetti(p.x, p.y + 8, p.z); sfx('levelup');
-  if (p.owner === ME.id) { announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} — ${REGIONS[p.region].name}`); }
+  if (p.owner === ME.id) { announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} ${plotFloors(p)}층 — ${REGIONS[p.region].name} · 문으로 들어가 볼 수 있다`); }
   else toast(`🏗️ ${p.ownerName}의 ${BUILD_DESIGNS[p.design].name} 완공`);
 }
-function plotState(p) { return { id: p.id, o: p.owner, on: p.ownerName, d: p.design, pr: +p.progress.toFixed(4), s: p.state, b: Math.floor(p.bank || 0) }; }
+function plotState(p) { return { id: p.id, o: p.owner, on: p.ownerName, d: p.design, fl: p.fl || 0, pr: +p.progress.toFixed(4), s: p.state, b: Math.floor(p.bank || 0) }; }
 function applyPlotState(s) {
   const p = PLOTS[s.id]; if (!p) return; const wasDone = p.state === 'done';
-  p.owner = s.o; p.ownerName = s.on; p.design = s.d; p.progress = s.pr; p.state = s.s; p.bank = s.b; syncPlotVisual(p);
+  p.owner = s.o; p.ownerName = s.on; p.design = s.d; p.fl = s.d ? clampFloors(s.d, s.fl) : 0; p.progress = s.pr; p.state = s.s; p.bank = s.b; syncPlotVisual(p);
   if (!wasDone && p.state === 'done' && G.started && !G.isHost) onBuildDone(p);
 }
 function savePlots() { if (!G.isHost) return; try { localStorage.setItem('sbc3d_world', JSON.stringify({ plots: PLOTS.map(plotState), time: G.time })); } catch (e) { } }
@@ -3775,7 +4333,7 @@ function loadPlots() {
 function hostPlotRequest(m, fromId, fromName) {
   const p = PLOTS[m.p]; if (!p) return;
   if (m.t === 'buyLand') { if (p.state !== 'empty') { notifyPlayer(fromId, { t: 'plotFail', amt: p.price, msg: '이미 팔린 땅이다' }); return; } p.owner = fromId; p.ownerName = fromName; p.state = 'owned'; p.design = null; p.progress = 0; }
-  if (m.t === 'build') { if (p.owner !== fromId || p.state !== 'owned') { notifyPlayer(fromId, { t: 'plotFail', amt: BUILD_DESIGNS[m.d]?.price || 0, msg: '건축할 수 없다' }); return; } p.design = m.d; p.state = 'building'; p.progress = 0; }
+  if (m.t === 'build') { if (p.owner !== fromId || p.state !== 'owned' || !BUILD_DESIGNS[m.d]) { notifyPlayer(fromId, { t: 'plotFail', amt: designPrice(m.d, m.fl), msg: '건축할 수 없다' }); return; } p.design = m.d; p.fl = clampFloors(m.d, m.fl); p.state = 'building'; p.progress = 0; } // 층수는 방장이 최대 15층으로 강제
   if (m.t === 'collect') { if (p.owner !== fromId) return; const a = Math.floor(p.bank || 0); p.bank = 0; notifyPlayer(fromId, { t: 'income', amt: a }); }
   syncPlotVisual(p); NET.send({ t: 'plot', p: plotState(p) }); savePlots();
 }
@@ -3980,14 +4538,14 @@ const NET = {
   playerMsg() {
     const m = { t: 'p', n: ME.name, x: +ME.x.toFixed(2), y: +ME.y.toFixed(2), z: +ME.z.toFixed(2), yaw: +ME.yaw.toFixed(3), spd: +ME.spd.toFixed(2), gr: ME.grounded ? 1 : 0,
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
-      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
+      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
   },
   worldMsg() {
     const peds = []; const guestPos = [...G.players.values()];
-    const nearG = (x, z) => guestPos.some(rp => Math.abs(rp.x - x) < 260 && Math.abs(rp.z - z) < 260);
+    const nearG = (x, z) => guestPos.some(rp => { const a = anchorOf(rp); return Math.abs(a.x - x) < 260 && Math.abs(a.z - z) < 260; });
     for (const p of PEDS) { if (p.state === 'parked' || !nearG(p.x, p.z)) { peds.push([p.id, 0]); continue; } peds.push([p.id, 1, p.kind, p.seed, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +p.yaw.toFixed(2), +p.spd.toFixed(1), p.state, p.weapon, p.act || '', +p.actT.toFixed(2), p.dance, p.aiming ? 1 : 0]); }
     const vs = []; for (const v of vehicles.values()) { if (v.ctrl !== 'local' || v.driver === ME.id) continue; if (!nearG(v.x, v.z) && !v.isTraffic) continue; const moving = Math.abs(v.speed) > 0.05 || v.vy !== 0 || v.burnT > 0 || v._ls === undefined || Math.abs(v._ls - v.x - v.z) > 0.01; if (!moving && !v.isTraffic) continue; v._ls = v.x + v.z; const s = v.state(); s.push(v.ai ? 1 : 0, v.mesh.visible ? 1 : 0); vs.push(s); }
     const an = []; for (const a of ANIMALS) { if (!nearG(a.x, a.z)) continue; an.push([a.id, +a.x.toFixed(2), +a.y.toFixed(2), +a.z.toFixed(2), +a.yaw.toFixed(2), +a.spd.toFixed(1), a.state, a.owner || 0]); }
@@ -3999,6 +4557,7 @@ const NET = {
   onData(m, conn) {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
+    if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
     if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
@@ -4007,6 +4566,8 @@ const NET = {
       case 'full': toast('방이 가득 찼다 (최대 2명)'); break;
       case 'hello': {
         if (!G.isHost || !conn) break;
+        if (!m.id || m.id === ME.id || [...this.conns].some(c => c !== conn && c.pid === m.id)) { conn.pid = null; try { conn.send({ t: 'reid', f: ME.id }); } catch (e) { } break; } // 같은 브라우저 탭 등 id 충돌 → 새 id 요청
+        if (conn.helloId && conn.helloId !== m.id) removeRemote(conn.helloId); conn.helloId = m.id; conn.pid = m.id; // 같은 연결이 id를 바꿔 다시 인사하면 예전 캐릭터 정리
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
         const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
@@ -4038,11 +4599,13 @@ const NET = {
         for (const s of m.seats) { const v = vehicles.get(s[0]); if (v) { v.driver = s[1]; v.passenger = s[2]; } }
         toast(`✅ ${m.n}의 서부리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
       }
+      case 'reid': { if (G.isHost) break; const nid = newTabId(); toast('🔁 같은 기기의 다른 탭과 겹쳐서 새 플레이어 ID로 접속'); ME.id = nid; G.myId = nid; this.hello(); break; }
       case 'bye': removeRemote(m.f); break;
       case 'p': {
-        const rp = getRemote(f); if (rp.first) { rp.first = false; rp.x = m.x; rp.y = m.y; rp.z = m.z; }
+        if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) { rp.name = m.n; rp.char.setName(m.n, '#9fe0ff'); }
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
+        if (rp._jn !== rp.jail) { rp._jn = rp.jail; rp.char.setName(rp.name + (rp.jail ? ' 🔒수감 중' : ''), rp.jail ? '#ff9a6a' : '#9fe0ff'); }
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -4065,7 +4628,13 @@ const NET = {
       case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? rp.name : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
       case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; } break; }
-      case 'dmg': if (m.to === ME.id) ME.takeDamage(m.amt, m.f); break;
+      case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
+        if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
+        const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
+        break;
+      }
+      case 'hitAck': { if (m.to !== ME.id) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
       case 'wanted': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
@@ -4131,10 +4700,10 @@ const UI = {
   updateHud() {
     $('#money').textContent = fmtMoney(ME.money);
     $('#hpBar i').style.width = clamp(ME.hp, 0, 100) + '%'; $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
-    const R = ME.vehicle ? regionAt(ME.vehicle.x, ME.vehicle.z) : regionAt(ME.x, ME.z); const RG = REGIONS[R];
+    const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
     const regionChanged = R !== this.lastRegion;
     if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
-    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const dId = districtAt(px, pz);
+    const px = AP.x, pz = AP.z; const dId = districtAt(px, pz);
     if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
@@ -4280,7 +4849,10 @@ const UI = {
     if (p.state === 'empty') { this.openMenu('🪧 매물 — ' + R, `${Math.round(p.w)}m × ${Math.round(p.d)}m 부지. 구매 후 시공사에 건축을 맡길 수 있다.`, [{ ic: '📝', t: '땅 구매', p: p.price, fn: () => { plotRequest({ t: 'buyLand', p: p.id }); toast('📝 계약 진행 중…'); } }]); return; }
     if (p.state === 'owned') {
       if (!mine) { this.openMenu(`🏗️ ${p.ownerName}의 땅`, '아직 건물이 없다', []); return; }
-      this.openMenu('🏗️ 건축 의뢰 — ' + R, '시공사(서부리 건설)에 맡기면 인부들이 직접 지어준다', Object.entries(BUILD_DESIGNS).map(([k, D]) => ({ ic: D.icon, t: D.name, p: D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { plotRequest({ t: 'build', p: p.id, d: k }); announce('🏗️ 착공!', `${D.name} — 서부리 건설`); } })));
+      const order = (k, fl) => { const D = BUILD_DESIGNS[k]; fl = clampFloors(k, fl); plotRequest({ t: 'build', p: p.id, d: k, fl }); announce('🏗️ 착공!', `${D.name} ${fl}층 — 서부리 건설`); };
+      const pickFloors = (k) => { const D = BUILD_DESIGNS[k], r = DESIGN_FLOORS[k]; const opts = [r[0], 3, 4, 5, 6, 8, 10, 12, MAX_FLOORS].filter((v, i, a) => v >= r[0] && v <= Math.min(r[1], MAX_FLOORS) && a.indexOf(v) === i);
+        this.openMenu(`${D.icon} ${D.name} — 층수 선택`, `건물은 <b>최대 ${MAX_FLOORS}층</b>까지 지을 수 있다 (1층 ≈ ${FLOOR_H}m)`, opts.map(fl => ({ ic: '🏢', t: `${fl}층${fl === MAX_FLOORS ? ' (최대)' : ''}`, p: designPrice(k, fl), d: `높이 약 ${Math.round(fl * FLOOR_H)}m${D.income ? ` · 분당 ₩${Math.round(D.income * fl / r[2]).toLocaleString()}` : ''}`, fn: () => order(k, fl) }))); };
+      this.openMenu('🏗️ 건축 의뢰 — ' + R, `시공사(서부리 건설)에 맡기면 인부들이 직접 지어준다 · <b>최대 ${MAX_FLOORS}층</b>`, Object.entries(BUILD_DESIGNS).map(([k, D]) => { const r = DESIGN_FLOORS[k]; const multi = r[0] !== r[1]; return { ic: D.icon, t: D.name + (multi ? ` (${r[0]}~${Math.min(r[1], MAX_FLOORS)}층)` : ` (${r[0]}층)`), p: multi ? `${fmtMoney(designPrice(k, r[0]))}~` : D.price, d: `${D.desc} · 공사 ${D.time}초`, fn: () => { if (multi) { setTimeout(() => pickFloors(k), 30); return; } order(k, r[0]); } }; }));
       return;
     }
     if (p.state === 'building') { this.openMenu('🏗️ 공사 현장', `${BUILD_DESIGNS[p.design].name} · 진행률 ${Math.floor(p.progress * 100)}% · 건축주 ${p.ownerName}`, []); return; }
@@ -4320,7 +4892,7 @@ const UI = {
   openPhone() {
     if (this.menuOpen) { this.closeMenu(); return; }
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
-    const dz = DISTRICTS[districtAt(ME.x, ME.z) - 1];
+    const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
@@ -4369,7 +4941,7 @@ const UI = {
   },
   drawMini() {
     const cv = $('#mini'); const x = cv.getContext('2d'); const S = cv.width; const cx = S / 2; const scale = (ME.vehicle ? 0.65 : 1.0) * S / 340;
-    const px = ME.vehicle ? ME.vehicle.x : ME.x, pz = ME.vehicle ? ME.vehicle.z : ME.z; const cy = Math.cos(CAM.yaw), sy = Math.sin(CAM.yaw);
+    const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const px = AP.x, pz = AP.z; const cy = Math.cos(CAM.yaw), sy = Math.sin(CAM.yaw);
     const a = -cy * scale, c = sy * scale, b = -sy * scale, d = -cy * scale;
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, S, S); x.save(); x.beginPath(); x.arc(cx, cx, cx, 0, TAU); x.clip(); x.fillStyle = '#1c3c5c'; x.fillRect(0, 0, S, S);
     x.setTransform(a, b, c, d, cx - (a * px + c * pz), cx - (b * px + d * pz));
@@ -4387,7 +4959,7 @@ const UI = {
     TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
     if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
     if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
-    for (const rp of G.players.values()) { const s = clampS(toS(rp.x, rp.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
+    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = clampS(toS(ra.x, ra.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
     // player arrow
     const ang = -(ME.vehicle ? ME.vehicle.yaw : ME.yaw) + CAM.yaw; x.save(); x.translate(cx, cx); x.rotate(ang); x.fillStyle = '#fff'; x.strokeStyle = '#000'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -S / 22); x.lineTo(S / 32, S / 30); x.lineTo(0, S / 60); x.lineTo(-S / 32, S / 30); x.closePath(); x.stroke(); x.fill(); x.restore();
     // north
@@ -4405,15 +4977,15 @@ const UI = {
     if (this.zoneImg) x.drawImage(this.zoneImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     x.textAlign = 'center'; x.textBaseline = 'middle';
     for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 24px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.globalAlpha = 0.85; x.strokeText(R.name, p[0], p[1] - 40); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 40); x.globalAlpha = 1; }
-    const myD = districtAt(ME.x, ME.z);
+    const myD = districtAt(anchorOf(ME).x, anchorOf(ME).z);
     for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
     x.font = '15px sans-serif'; for (const f of FACILITIES) { const p = P(f.x, f.z); x.fillText(f.icon, p[0], p[1]); }
     x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
     TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
-    for (const rp of G.players.values()) { const s = P(rp.x, rp.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
-    const me = P(ME.x, ME.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
+    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
+    const MA = anchorOf(ME); const me = P(MA.x, MA.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
     x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 숫자 = 16개 구역 (택시 목적지) · 🚕 내 택시 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
   },
   // ---------- touch ----------
@@ -4467,7 +5039,7 @@ function spawnOwned(g, nx, nz) {
   UI.waypoint = { x, z };
 }
 function fastTravel(r) {
-  const R = REGIONS[r]; if (ME.vehicle) exitVehicle(true);
+  const R = REGIONS[r]; if (ME.jail) { toast('수감 중에는 이동할 수 없다'); return; } INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true);
   const tgt = edgeNearPoint(R.cx, R.cz, 0, 120) || { e: 0, t: 0 }; const E = EDGES[tgt.e]; const a = NODES[E.a], b = NODES[E.b]; const dx = (b.x - a.x) / E.len, dz = (b.z - a.z) / E.len;
   ME.x = a.x + dx * tgt.t + (-dz) * (E.w / 2 + 2.5); ME.z = a.z + dz * tgt.t + dx * (E.w / 2 + 2.5); ME.y = groundHeight(ME.x, ME.z) + 0.2; ME.vx = ME.vz = ME.vy = 0;
   const res = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = res.x; ME.z = res.z;
@@ -4601,7 +5173,7 @@ const ADMIN = {
   },
   onNet(m, conn) { if (!G.isHost) return; if (conn && conn.admin) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
   tp(x, z) {
-    if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
+    INTERIOR.dispose(); INTERIOR.clearRoof(); ME.fallTop = null; if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
     const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z; toast('📍 이동');
   },
   flyStep(dt, dx, dz, mag) {
@@ -4648,7 +5220,7 @@ const ADMIN = {
   tpMenu() {
     const items = DISTRICTS.map(d => ({ ic: '📍', t: `${d.id}구역 ${d.name}`, p: '', fn: () => { const n = ROUTE.nearestOnRoad(d.cx, d.cz); const E = EDGES[n.e]; this.tp(n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2.5), n.z + (E.axis === 'x' ? E.w / 2 + 2.5 : 0)); } }));
     items.push({ ic: '🚩', t: '웨이포인트로', p: '', dis: !UI.waypoint, disMsg: '지도(M)에서 웨이포인트를 먼저 찍어줘', fn: () => this.tp(UI.waypoint.x, UI.waypoint.z) });
-    const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => this.tp(o.x + 1.5, o.z + 1.5) });
+    const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => { const a = anchorOf(o); this.tp(a.x + 1.5, a.z + 1.5); } });
     UI.openMenu('📍 텔레포트', '', items);
   },
 };
@@ -4662,8 +5234,9 @@ UI.openHelp = function () {
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
     + sec('멀티') + row('P', '휴대폰 ▶ 친구 초대 링크 (복사/공유)')
+    + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
     + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
-    + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
+    + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
   UI.openMenu('🎮 조작법', IS_TOUCH ? tc : pc, []);
 };
@@ -4752,46 +5325,74 @@ Object.assign(ADMIN, {
 });
 
 const LAW = {
-  JX: -60, JZ: -60, JY: 420, built: false, arrestT: 0, hud: null,
+  arrestT: 0, hud: null, built: false, esc: null,
   build() {
-    this.built = true; const g = new THREE.Group(); const conc = new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.9 }), bar = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.4, metalness: 0.8 });
-    const fl = new THREE.Mesh(new THREE.BoxGeometry(13, 1, 13), conc); fl.position.set(0, -0.5, 0); fl.receiveShadow = true; g.add(fl);
-    for (let s = 0; s < 4; s++) for (let i = -6; i <= 6; i += 0.8) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.4, 6), bar); const a = s < 2 ? 6.2 : i, c = s < 2 ? i : 6.2; b.position.set(s === 0 ? -6.2 : s === 1 ? 6.2 : i, 1.7, s === 2 ? -6.2 : s === 3 ? 6.2 : i); g.add(b); }
-    for (let s = 0; s < 4; s++) { const r = new THREE.Mesh(new THREE.BoxGeometry(s < 2 ? 0.2 : 12.6, 0.2, s < 2 ? 12.6 : 0.2), bar); r.position.set(s === 0 ? -6.2 : s === 1 ? 6.2 : 0, 3.4, s === 2 ? -6.2 : s === 3 ? 6.2 : 0); g.add(r); }
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1), new THREE.MeshStandardMaterial({ color: 0x5a5448 })); bed.position.set(4.5, 0.25, -5); g.add(bed);
-    const lamp = new THREE.PointLight(0xfff0d0, 25, 25); lamp.position.set(0, 3, 0); g.add(lamp);
-    g.position.set(this.JX, this.JY, this.JZ); scene.add(g);
+    this.built = true;
     const h = document.createElement('div'); h.id = 'jailHud'; h.className = 'panel'; h.style.cssText = 'position:fixed;top:92px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:12px;font-size:15px;z-index:20;display:none;text-align:center;pointer-events:none'; document.body.appendChild(h); this.hud = h;
   },
+  nearestPrison(x, z) { let best = null, bd = 1e9; for (const pr of PRISONS) { const d = Math.hypot(pr.gx - x, pr.z0 - z); if (d < bd) { bd = d; best = pr; } } return best; },
   nearestPolice() { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'police') { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < bd) { bd = d; best = f; } } return best; },
+  cellOf(j) { const pr = j && PRISONS[j.pr]; return pr ? pr.cells[j.cell] : null; },
+  putInCell(c) { ME.x = c.x; ME.z = c.z; ME.y = groundHeight(c.x, c.z) + 0.05; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.yaw = Math.PI; },
   arrest() {
-    const stars = ME.wanted; const f = this.nearestPolice(); const s = Math.max(40, stars * 40);
-    if (ME.vehicle) exitVehicle(true); ME.jail = { t: s, total: s, ret: f ? { x: f.x, z: f.z } : { x: 30, z: 30 } }; ME.wanted = 0; ME.wantedCool = 0; UI.updateStars();
-    ME.x = this.JX; ME.z = this.JZ; ME.y = this.JY; ME.vx = ME.vz = ME.vy = 0; ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
-    announce('🚔 체포!', `범죄 ★${stars} · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포됨 (형량 ${s}초)`, sys: 1 }); sfx('error');
+    if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
+    const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
+    INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
+    const stars = ME.wanted; const s = Math.max(40, stars * 40);
+    ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
+    if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
+    const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
+    ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
+    this.putInCell(pr.cells[ci]);
+    announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
   },
   release(msg) {
-    if (!ME.jail) return; const r = ME.jail.ret; ME.jail = null; ME.x = r.x + 1.5; ME.z = r.z + 3; ME.y = groundHeight(ME.x, ME.z) + 0.3; ME.vx = ME.vz = ME.vy = 0; ME.wanted = 0; UI.updateStars();
-    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', ''); sfx('levelup');
+    if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;
+    const r = pr ? pr.release : { x: 30, z: 30 }; ME.x = r.x + rnd(-1.2, 1.2); ME.z = r.z; ME.y = groundHeight(ME.x, ME.z) + 0.1; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.wanted = 0; UI.updateStars(); ME.yaw = Math.PI; CAM.yaw = Math.PI;
+    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', pr ? pr.name + ' 정문' : ''); sfx('levelup');
     NET.send({ t: 'chat', m: `🔓 ${ME.name} 출소`, sys: 1 });
   },
-  jailStep(dt, dx, dz, mag) {
-    const sp = 3.2; ME.vx = damp(ME.vx, dx * sp * mag, 12, dt); ME.vz = damp(ME.vz, dz * sp * mag, 12, dt);
-    ME.x = clamp(ME.x + ME.vx * dt, this.JX - 5.5, this.JX + 5.5); ME.z = clamp(ME.z + ME.vz * dt, this.JZ - 5.5, this.JZ + 5.5); ME.y = this.JY; ME.vy = 0; ME.grounded = true; ME.swim = false;
-    ME.spd = Math.hypot(ME.vx, ME.vz); if (ME.spd > 0.3) ME.yaw = dampAng(ME.yaw, Math.atan2(ME.vx, ME.vz), 12, dt);
+  // 감방 문 앞에서 E: 탈옥 시도 (3초, 약 35% 성공) — 성공하면 내 화면에서만 감방 문·정문이 열리고 수배 ★3
+  interact() {
+    const j = ME.jail; const c = this.cellOf(j); const card = ME.inv.card | 0;
+    if (card > 0) return { label: `🪪 출소카드 사용 (보유 ${card}장)`, key: 'E', fn: () => { ME.inv.card--; this.release('🪪 출소카드로 즉시 출소했다'); } };
+    if (c && Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) < 1.7) {
+      if (j.escT) return { label: '⛓️ 자물쇠 따는 중…', key: 'E', fn: () => { } };
+      if (G.t < j.escCool) return { label: `⛓️ 탈옥 시도 (교도관 경계 중 ${Math.ceil(j.escCool - G.t)}초)`, key: 'E', fn: () => toast('🚨 교도관이 지켜보고 있다') };
+      return { label: '⛓️ 탈옥 시도 (성공하면 수배 ★3 · 실패하면 형량 +30초)', key: 'E', fn: () => { j.escT = G.t + 3; toast('⛓️ 자물쇠를 따는 중… (3초간 문 앞에 있어야 한다)', 2500); sfx('ui'); } };
+    }
+    return null;
+  },
+  escapeResolve() {
+    const j = ME.jail; const pr = PRISONS[j.pr]; const c = this.cellOf(j); j.escT = 0;
+    if (Math.random() < 0.35 || ME.forceEscape) {
+      ME.jail = null; removeCollider(c.doorCol); removeCollider(pr.gateCol); pr.gateMesh.visible = false;
+      this.esc = { pr, c, until: G.t + 75 };
+      addWanted(3); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
+    } else { j.t += 30; j.escCool = G.t + 20; toast('❌ 탈옥 실패 — 교도관에게 들켰다! 형량 +30초', 2600); sfx('error'); CAM.shake = 0.3; }
+  },
+  restoreDoors() {
+    const E = this.esc; if (!E) return; this.esc = null;
+    const re = (col) => { const n = addCollider(col.x0, col.z0, col.x1, col.z1, col.y1, col.type, col.ref, col.y0); return n; };
+    E.c.doorCol = re(E.c.doorCol); E.pr.gateCol = re(E.pr.gateCol); E.pr.gateMesh.visible = true;
   },
   tick(dt) {
     if (!G.started || !ME.char) return; if (!this.built) this.build();
     if (ADMIN.on) ADMIN.adminTick(dt);
+    if (this.esc) { const E = this.esc, pr = E.pr; const inside = ME.x > pr.x0 && ME.x < pr.x1 && ME.z > pr.z0 && ME.z < pr.z1; if ((G.t > E.until && !inside) || G.t > E.until + 60 || ME.jail) this.restoreDoors(); }
     if (ME.jail) {
-      ME.hp = 100; ME.dead = false; if (ADMIN.on) { this.release('👑 관리자는 수감되지 않는다'); return; }
-      ME.jail.t -= dt; const t = Math.max(0, Math.ceil(ME.jail.t)); const card = ME.inv.card | 0;
-      this.hud.style.display = ''; this.hud.innerHTML = `🔒 수감 중 · 남은 형량 <b style="color:#ffd34a">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b><br><small style="opacity:.8">${card > 0 ? `🪪 출소카드 ${card}장 보유 — E 로 사용` : '출소카드 없음 (경찰서에서 구입)'}</small>`;
-      if (ME.jail.t <= 0) this.release('🔓 형기를 마치고 출소했다');
+      const j = ME.jail; ME.hp = Math.max(ME.hp, 100); ME.dead = false; if (ADMIN.on) { this.release('👑 관리자는 수감되지 않는다'); return; }
+      const c = this.cellOf(j); if (!c) { this.release(); return; }
+      // 감방 밖으로 나가면(벽 끼임·순간이동 등) 감방으로 되돌린다
+      if (ME.x < c.x0 - 0.6 || ME.x > c.x1 + 0.6 || ME.z < c.z0 - 0.7 || ME.z > c.z1 + 0.6 || Math.abs(ME.y - groundHeight(c.x, c.z)) > 3) this.putInCell(c);
+      if (j.escT) { if (Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) > 2) { j.escT = 0; toast('⛓️ 탈옥 시도 중단'); } else if (G.t >= j.escT) { this.escapeResolve(); if (!ME.jail) { this.hud.style.display = 'none'; return; } } }
+      j.t -= dt; const t = Math.max(0, Math.ceil(j.t)); const card = ME.inv.card | 0; const pr = PRISONS[j.pr];
+      this.hud.style.display = ''; this.hud.innerHTML = `🔒 ${pr.name} ${j.cell + 1}번 감방 · 남은 형량 <b style="color:#ffd34a">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b><br><small style="opacity:.8">${j.escT ? `⛓️ 자물쇠 따는 중… ${Math.max(0, j.escT - G.t).toFixed(1)}초` : card > 0 ? `🪪 출소카드 ${card}장 보유 — E 로 사용` : '감방 문 앞에서 E: 탈옥 시도 · 출소카드는 경찰서에서 구입'}</small>`;
+      if (j.t <= 0) this.release('🔓 형기를 마치고 정문으로 출소했다');
       return;
     }
     this.hud.style.display = 'none';
-    if (ME.wanted > 0 && !ME.dead && !ADMIN.on) {
+    if (ME.wanted > 0 && !ME.dead && !ADMIN.on && !INTERIOR.cur) {
       const slow = !ME.vehicle || Math.abs(ME.vehicle.speed) < 4; let near = false;
       if (slow) for (const p of PEDS) { if (p.kind !== 'police' || p.state === 'dead' || p.state === 'parked') continue; if (Math.abs(p.x - ME.x) < 2.3 && Math.abs(p.z - ME.z) < 2.3 && Math.abs(p.y - ME.y) < 2) { near = true; break; } }
       if (near) { this.arrestT += dt; if (this._w !== 1) { this._w = 1; toast('🚔 경찰에게 붙잡혔다! 뿌리쳐라!'); } if (this.arrestT > 1.8) this.arrest(); } else { this.arrestT = Math.max(0, this.arrestT - dt * 2); this._w = 0; }
@@ -4873,10 +5474,22 @@ UI.openEasy = function () {
 
 
 // ================= MAIN =================
+// 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
+// 상대를 때릴 때 내가 맞는 버그가 생긴다 → 탭마다 고유 id(잠금 + 탭 전용 id)를 쓴다.
+const TAB_NONCE = Math.random().toString(36).slice(2, 10);
+const UID_LOCKS = 'sbc3d_uid_locks';
+function uidLocks() { try { return JSON.parse(localStorage.getItem(UID_LOCKS) || '{}') || {}; } catch (e) { return {}; } }
+function uidTaken(id) { const e = uidLocks()[id]; return !!(e && e.n !== TAB_NONCE && Date.now() - e.t < 75000); }
+function uidBeat(release) { try { const L = uidLocks(), now = Date.now(); for (const k in L) if (now - L[k].t > 120000 || L[k].n === TAB_NONCE) delete L[k]; if (!release && ME.id && ME.id !== 'me') L[ME.id] = { n: TAB_NONCE, t: now }; localStorage.setItem(UID_LOCKS, JSON.stringify(L)); } catch (e) { } }
+function newTabId() { const base = (ME.id || 'u').replace(/t[a-z0-9]{4}$/, ''); let id; do { id = base + 't' + Math.random().toString(36).slice(2, 6); } while (uidTaken(id)); try { sessionStorage.setItem('sbc3d_tab_uid', id); } catch (e) { } ME.id = id; uidBeat(); return id; }
 function uid() {
   const K = 'sbc3d_uid'; let id = null;
   try { id = URLP.get('local') ? sessionStorage.getItem(K) : localStorage.getItem(K); } catch (e) { }
   if (!id) { id = 'u' + Math.random().toString(36).slice(2, 10); try { (URLP.get('local') ? sessionStorage : localStorage).setItem(K, id); } catch (e) { } }
+  try { const t = sessionStorage.getItem('sbc3d_tab_uid'); if (t) id = t; } catch (e) { }
+  if (uidTaken(id)) { ME.id = id; id = newTabId(); }
+  try { sessionStorage.setItem('sbc3d_tab_uid', id); } catch (e) { }
+  ME.id = id; uidBeat(); if (!uid._iv) { uid._iv = setInterval(() => uidBeat(), 2000); addEventListener('pagehide', () => uidBeat(true)); }
   return id;
 }
 function loadSave() { try { return JSON.parse(localStorage.getItem('sbc3d_save') || 'null'); } catch (e) { return null; } }
@@ -5019,7 +5632,7 @@ function loop() {
 function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t += dt; frame(dt, true); } }
 function frame(dt, noRender) {
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const view2 = 520 * 520;
@@ -5048,7 +5661,7 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS };
+if (URLP.get("debug")) window.__SBC = { TAXI, ROUTE, DISTRICTS, districtAt, SHARE, ACRYPTO, COMFORT, LAW, ADMIN, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
 
 </script>
 </body>

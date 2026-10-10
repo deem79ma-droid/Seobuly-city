@@ -94,6 +94,7 @@ const TAXI = {
   },
   openMenu() {
     if (ME.jail) { toast('수감 중에는 택시를 부를 수 없다'); return; }
+    if (INTERIOR.cur) { toast('🚕 건물 밖으로 나가서 택시를 불러주세요'); return; }
     const inCab = this.cab && ME.vehicle === this.cab;
     const from = this.cab ? this.cab : ME; const here = districtAt(from.x, from.z);
     const items = this.destinations().map(d => {
@@ -209,12 +210,14 @@ const TAXI = {
     if (this.phase === 'stopping') want = 0;
     want *= clamp(1 - Math.abs(ad) * 0.8, 0.3, 1);
     // 장애물 (차량·사람)
-    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
-    const chk = (ox, oz, r) => { const dx = ox - v.x, dz = oz - v.z; const f = dx * fx + dz * fz; if (f < 0 || f > 16) return; const l = Math.abs(dx * fz - dz * fx); if (l < 1.5 + r) want = Math.min(want, Math.max(0, (f - 5.5) * 1.3)); };
+    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw); let blocked = false;
+    const chk = (ox, oz, r) => { const dx = ox - v.x, dz = oz - v.z; const f = dx * fx + dz * fz; if (f < 0 || f > 16) return; const l = Math.abs(dx * fz - dz * fx); if (l < 1.5 + r) { const w2 = Math.max(0, (f - 5.5) * 1.3); if (w2 < want) { want = w2; blocked = true; } } };
     for (const o of vehicles.values()) if (o !== v && o.mesh.visible && Math.abs(o.x - v.x) < 18 && Math.abs(o.z - v.z) < 18) chk(o.x, o.z, 0.8);
     for (const q of PEDS) if (q.state !== 'parked' && q.state !== 'dead' && Math.abs(q.x - v.x) < 16 && Math.abs(q.z - v.z) < 16) chk(q.x, q.z, 0.3);
     for (const rp of G.players.values()) if (!rp.veh) chk(rp.x, rp.z, 0.3);
     if (ME.vehicle !== v && !ME.dead) chk(ME.x, ME.z, 0.3);
+    // 앞이 오래 막혀 있으면(멈춘 차·사람) 경로를 따라 앞으로 비켜 지나간다
+    if (blocked && Math.abs(v.speed) < 0.6 && this.phase !== 'stopping') { this.blockT = (this.blockT || 0) + dt; if (this.blockT > 6) { this.blockT = 0; const p2 = ROUTE.pointAt(P, s + 20), p3 = ROUTE.pointAt(P, s + 24); v.x = p2.x; v.z = p2.z; v.yaw = Math.atan2(p3.x - p2.x, p3.z - p2.z); v.y = groundHeight(v.x, v.z) + 0.2; v.speed = 0; v.vy = 0; } } else this.blockT = 0;
     // 끼임: 후진 → 그래도 안 되면 경로 위로 순간이동
     if (this.revT > 0) { this.revT -= dt; v.drive(dt, { throttle: -1, steer: -steer, brake: 0 }); return { remain }; }
     const thr = v.speed < want - 0.4 ? (want - v.speed > 4 ? 1 : 0.6) : 0; const brk = v.speed > want + 0.8;

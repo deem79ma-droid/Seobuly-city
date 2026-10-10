@@ -75,7 +75,7 @@ const ADMIN = {
   },
   onNet(m, conn) { if (!G.isHost) return; if (conn && conn.admin) this.apply(m.a, m.v, m.f); else NET.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1, to: m.f }); },
   tp(x, z) {
-    if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
+    INTERIOR.dispose(); INTERIOR.clearRoof(); ME.fallTop = null; if (ME.vehicle) exitVehicle(true); ME.x = x; ME.z = z; ME.y = groundHeight(x, z) + 0.3; ME.vx = ME.vz = ME.vy = 0;
     const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z; toast('📍 이동');
   },
   flyStep(dt, dx, dz, mag) {
@@ -122,7 +122,7 @@ const ADMIN = {
   tpMenu() {
     const items = DISTRICTS.map(d => ({ ic: '📍', t: `${d.id}구역 ${d.name}`, p: '', fn: () => { const n = ROUTE.nearestOnRoad(d.cx, d.cz); const E = EDGES[n.e]; this.tp(n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2.5), n.z + (E.axis === 'x' ? E.w / 2 + 2.5 : 0)); } }));
     items.push({ ic: '🚩', t: '웨이포인트로', p: '', dis: !UI.waypoint, disMsg: '지도(M)에서 웨이포인트를 먼저 찍어줘', fn: () => this.tp(UI.waypoint.x, UI.waypoint.z) });
-    const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => this.tp(o.x + 1.5, o.z + 1.5) });
+    const o = [...G.players.values()][0]; items.push({ ic: '🤝', t: '상대 플레이어에게', p: '', dis: !o, disMsg: '다른 플레이어가 없다', fn: () => { const a = anchorOf(o); this.tp(a.x + 1.5, a.z + 1.5); } });
     UI.openMenu('📍 텔레포트', '', items);
   },
 };
@@ -136,8 +136,9 @@ UI.openHelp = function () {
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
     + sec('멀티') + row('P', '휴대폰 ▶ 친구 초대 링크 (복사/공유)')
+    + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
     + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
-    + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
+    + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
   const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
   UI.openMenu('🎮 조작법', IS_TOUCH ? tc : pc, []);
 };

@@ -87,7 +87,7 @@ function updateEnv(dt, focus) {
   ENV.clouds.position.x = focus.x + (G.t * 6) % 2000; ENV.clouds.position.z = focus.z;
   ENV.clouds.material.color.copy(_skyCol).lerp(_c2.setRGB(1, 1, 1), day * 0.7); ENV.clouds.material.opacity = 0.75 + rain * 0.25;
   // rain
-  ENV.rain.visible = rain > 0.05; if (ENV.rain.visible) { ENV.rain.position.set(focus.x, focus.y - 10, focus.z); ENV.rain.material.opacity = rain * 0.4; const p = ENV.rain.geometry.attributes.position; const a = p.array; for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 30; a[i + 4] -= dt * 30; if (a[i + 1] < 0) { a[i + 1] += 50; a[i + 4] += 50; } } p.needsUpdate = true; }
+  ENV.rain.visible = rain > 0.05 && !INTERIOR.cur; if (ENV.rain.visible) { ENV.rain.position.set(focus.x, focus.y - 10, focus.z); ENV.rain.material.opacity = rain * 0.4; const p = ENV.rain.geometry.attributes.position; const a = p.array; for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 30; a[i + 4] -= dt * 30; if (a[i + 1] < 0) { a[i + 1] += 50; a[i + 4] += 50; } } p.needsUpdate = true; }
   // weather change (host)
   if (G.isHost) { G.weatherT -= dt; if (G.weatherT <= 0) { G.weatherT = rnd(240, 600); G.weather = Math.random() < 0.25 ? 'rain' : Math.random() < 0.3 ? 'cloudy' : 'clear'; } }
   G.rainAmt = damp(G.rainAmt, G.weather === 'rain' ? 1 : G.weather === 'cloudy' ? 0.35 : 0, 0.3, dt);

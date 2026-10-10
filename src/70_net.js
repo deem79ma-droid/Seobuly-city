@@ -197,14 +197,14 @@ const NET = {
   playerMsg() {
     const m = { t: 'p', n: ME.name, x: +ME.x.toFixed(2), y: +ME.y.toFixed(2), z: +ME.z.toFixed(2), yaw: +ME.yaw.toFixed(3), spd: +ME.spd.toFixed(2), gr: ME.grounded ? 1 : 0,
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
-      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
+      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
   },
   worldMsg() {
     const peds = []; const guestPos = [...G.players.values()];
-    const nearG = (x, z) => guestPos.some(rp => Math.abs(rp.x - x) < 260 && Math.abs(rp.z - z) < 260);
+    const nearG = (x, z) => guestPos.some(rp => { const a = anchorOf(rp); return Math.abs(a.x - x) < 260 && Math.abs(a.z - z) < 260; });
     for (const p of PEDS) { if (p.state === 'parked' || !nearG(p.x, p.z)) { peds.push([p.id, 0]); continue; } peds.push([p.id, 1, p.kind, p.seed, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +p.yaw.toFixed(2), +p.spd.toFixed(1), p.state, p.weapon, p.act || '', +p.actT.toFixed(2), p.dance, p.aiming ? 1 : 0]); }
     const vs = []; for (const v of vehicles.values()) { if (v.ctrl !== 'local' || v.driver === ME.id) continue; if (!nearG(v.x, v.z) && !v.isTraffic) continue; const moving = Math.abs(v.speed) > 0.05 || v.vy !== 0 || v.burnT > 0 || v._ls === undefined || Math.abs(v._ls - v.x - v.z) > 0.01; if (!moving && !v.isTraffic) continue; v._ls = v.x + v.z; const s = v.state(); s.push(v.ai ? 1 : 0, v.mesh.visible ? 1 : 0); vs.push(s); }
     const an = []; for (const a of ANIMALS) { if (!nearG(a.x, a.z)) continue; an.push([a.id, +a.x.toFixed(2), +a.y.toFixed(2), +a.z.toFixed(2), +a.yaw.toFixed(2), +a.spd.toFixed(1), a.state, a.owner || 0]); }
@@ -216,6 +216,7 @@ const NET = {
   onData(m, conn) {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
     if (!m || !m.t) return; const f = m.f;
+    if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
     if (G.isHost && conn && !conn.pid && m.t === 'hello') conn.pid = m.id;
     if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
@@ -224,6 +225,8 @@ const NET = {
       case 'full': toast('방이 가득 찼다 (최대 2명)'); break;
       case 'hello': {
         if (!G.isHost || !conn) break;
+        if (!m.id || m.id === ME.id || [...this.conns].some(c => c !== conn && c.pid === m.id)) { conn.pid = null; try { conn.send({ t: 'reid', f: ME.id }); } catch (e) { } break; } // 같은 브라우저 탭 등 id 충돌 → 새 id 요청
+        if (conn.helloId && conn.helloId !== m.id) removeRemote(conn.helloId); conn.helloId = m.id; conn.pid = m.id; // 같은 연결이 id를 바꿔 다시 인사하면 예전 캐릭터 정리
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
         const rp = getRemote(m.id); rp.name = m.n; rp.char.setOutfit(m.o); rp.char.setName(m.n, '#9fe0ff');
@@ -255,11 +258,13 @@ const NET = {
         for (const s of m.seats) { const v = vehicles.get(s[0]); if (v) { v.driver = s[1]; v.passenger = s[2]; } }
         toast(`✅ ${m.n}의 서부리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
       }
+      case 'reid': { if (G.isHost) break; const nid = newTabId(); toast('🔁 같은 기기의 다른 탭과 겹쳐서 새 플레이어 ID로 접속'); ME.id = nid; G.myId = nid; this.hello(); break; }
       case 'bye': removeRemote(m.f); break;
       case 'p': {
-        const rp = getRemote(f); if (rp.first) { rp.first = false; rp.x = m.x; rp.y = m.y; rp.z = m.z; }
+        if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) { rp.name = m.n; rp.char.setName(m.n, '#9fe0ff'); }
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
+        if (rp._jn !== rp.jail) { rp._jn = rp.jail; rp.char.setName(rp.name + (rp.jail ? ' 🔒수감 중' : ''), rp.jail ? '#ff9a6a' : '#9fe0ff'); }
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
         if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
@@ -282,7 +287,13 @@ const NET = {
       case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? rp.name : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
       case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; } break; }
-      case 'dmg': if (m.to === ME.id) ME.takeDamage(m.amt, m.f); break;
+      case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
+        if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
+        const before = ME.hp; ME.takeDamage(+m.amt || 0, m.from || f); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
+        break;
+      }
+      case 'hitAck': { if (m.to !== ME.id) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
       case 'wanted': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
