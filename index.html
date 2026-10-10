@@ -144,7 +144,7 @@ body.touch #taxiHud{top:auto;bottom:150px;font-size:12.5px}
 #death small{font-family:'Noto Sans KR';font-size:15px;color:#ddd}
 /* menus */
 #menu{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:14px}
-#menu .box{width:min(560px,100%);max-height:86vh;overflow:auto;padding:18px;border-radius:20px;background:rgba(14,16,26,.95);border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#menu .box{width:min(420px,88vw);max-height:72vh;overflow:auto;padding:14px;border-radius:16px;background:rgba(14,16,26,.95);border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6)}
 #menu h2{margin:0 0 4px;font-family:'Black Han Sans';font-weight:400;font-size:26px}
 #menu .desc{color:var(--dim);font-size:13px;margin-bottom:12px}
 .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -204,7 +204,7 @@ body.touch #prompt{bottom:auto;top:58%}
    <div class="row" style="margin-bottom:12px"><button class="btn b2" id="quickBtn">공개서버 참가</button><button class="btn" id="soloBtn">혼자 플레이</button></div>
    <div class="row"><input id="codeIn" class="inp" maxlength="6" placeholder="방 코드 (5자리)" style="text-transform:uppercase"><button class="btn b3" id="joinBtn">코드로 참가</button></div>
    <div id="lobbyMsg" class="tip" style="color:#ffcf5a"></div>
-   <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴(🚕 택시 · 🔗 초대) · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
+   <div class="tip"><b>PC</b> WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 공격 · 우클릭 조준 · <b>E 상호작용/탑승</b> · 1~8 무기 · G 춤 · T 채팅 · M 지도 · P 메뉴(🚕 택시) · <b>F1 조작법</b><br><b>모바일</b> 왼쪽 조이스틱 · 오른쪽 드래그 시점 · 버튼</div>
   </div>
   <div>
    <canvas id="preview"></canvas>
@@ -5130,7 +5130,12 @@ const UI = {
     joy.addEventListener('touchstart', e => {
   const menu = document.getElementById('menu');
   const bigmap = document.getElementById('bigmap');
-  if (UI.menuOpen || (menu && !menu.classList.contains('hidden')) || (bigmap && !bigmap.classList.contains('hidden'))) return;
+  const share = document.getElementById('share');
+  const anyOpen = UI.menuOpen || 
+    (menu && !menu.classList.contains('hidden')) || 
+    (bigmap && !bigmap.classList.contains('hidden')) ||
+    (share && share.style.display !== 'none' && share.style.display !== '');
+  if (anyOpen) return;
   e.preventDefault(); AU.init();
   const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
   base.style.display = knob.style.display = 'block';
