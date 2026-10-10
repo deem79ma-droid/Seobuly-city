@@ -29,6 +29,7 @@ const UI = {
     this.updateStars(); this.updateInv();
     const v = ME.vehicle; $('#speedo').classList.toggle('hidden', !v); if (v) $('#speedo').innerHTML = `${Math.round(Math.abs(v.speed) * 3.6)}<small>km/h · ${v.M.name}${v.hp < v.M.hp * 0.3 ? ' · ⚠ 파손' : ''}</small>`;
     $('#cross').classList.toggle('hidden', !(ME.aiming || (!WEAPONS[ME.weapon].melee && !ME.vehicle)) || ME.dead);
+    if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
   updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`🪵${i.wood}`); if (i.meat) parts.push(`🥩${i.meat}`); if (i.food) parts.push(`🍱${i.food}`); if (i.medkit) parts.push(`🩹${i.medkit}`); if (i.drink) parts.push(`🍺${i.drink}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
@@ -55,7 +56,7 @@ const UI = {
     else if (c === '습격' || c === 'raid') { G.raidT = 0; }
     else toast('명령어: /시간 20, /날씨 비|맑음|흐림, /습격, /admin');
   },
-  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > 7) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
+  chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
   // ---------- menu ----------
   openMenu(title, desc, items, opts = {}) {
     this.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
@@ -236,7 +237,7 @@ const UI = {
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
-      { ic: '🔢', t: '방 코드 보기', p: G.room || '-', d: G.online ? `채팅에 방 코드가 표시됨` : '방을 먼저 만드세요', fn: () => { if (G.room) { UI.chatLine(null, `//: 방코드 ${G.room}`); toast('방 코드: ' + G.room); } } },
+      { ic: '🔗', t: '친구 초대 (방 코드 · 링크)', p: 0, d: G.online ? `방 ${PUBLIC_ROOMS.includes(G.room) ? '공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1) : G.room} · ${G.players.size + 1}/${MAX_PLAYERS}명` : '누르면 비공개방을 만들고 코드·링크가 나와요', fn: () => { setTimeout(() => SHARE.open(), 30); } },
       { ic: '🩹', t: '구급상자 사용', p: 0, d: `보유 ${ME.inv.medkit}`, dis: !ME.inv.medkit, disMsg: '구급상자 없음', fn: () => { ME.inv.medkit--; ME.hp = Math.min(100, ME.hp + 60); toast('🩹 +60 HP'); } },
       { ic: '🍱', t: '도시락 먹기', p: 0, d: `보유 ${ME.inv.food}`, dis: !ME.inv.food, disMsg: '음식 없음', fn: () => { ME.inv.food--; ME.hp = Math.min(100, ME.hp + 35); } },
       { ic: '🐶', t: '반려동물 부르기', p: 0, dis: ME.petId === null, disMsg: '반려동물이 없다 (길강아지/고양이 입양)', fn: () => { const a = ANIMALS[ME.petId]; if (a && G.isHost) { a.x = ME.x + 1.5; a.z = ME.z + 1.5; } toast('🐶 이리 와!'); } },
@@ -362,7 +363,7 @@ const UI = {
   const anyOpen = UI.menuOpen || 
     (menu && !menu.classList.contains('hidden')) || 
     (bigmap && !bigmap.classList.contains('hidden')) ||
-    (share && share.style.display !== 'none' && share.style.display !== '');
+    (share && !share.classList.contains('hidden'));
   if (anyOpen) return;
   e.preventDefault(); AU.init();
   const t = e.changedTouches[0]; jid = t.identifier; jx = t.clientX; jy = t.clientY;
@@ -426,10 +427,50 @@ function applyQualityLive() {
 
 // ---------- 원클릭 초대: 링크 만들기 / 복사 / 공유 ----------
 
-window.closeShare = function() {
-  const el = document.getElementById('share');
-  if (el) {
-    el.classList.add('hidden');
-    el.style.display = 'none'; if (window.closeShare) {}
-  }
+// 친구 초대 창: 방 코드 + 링크 복사/공유. 모바일 가로 화면에서도 작게, 터치 버튼보다 위(z-index)에 뜬다.
+const SHARE = {
+  async open() {
+    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 비공개방을 연다
+      toast('🌐 비공개방 만드는 중…');
+      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on && ADMIN.ready) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
+      if (!G.online) return;
+    }
+    this.show();
+  },
+  isOpen() { const el = $('#share'); return !!(el && !el.classList.contains('hidden')); },
+  show() {
+    const el = $('#share'); if (!el || !G.room) return; const link = inviteLink(G.room); const pub = PUBLIC_ROOMS.includes(G.room);
+    $('#shareLink').value = link; $('#shareCode').textContent = pub ? ('공개방 ' + (PUBLIC_ROOMS.indexOf(G.room) + 1)) : G.room;
+    $('#shareSub').textContent = G.players.size ? '친구가 이미 들어와 있어요' : pub ? '공개방이에요 — 로비의 공개방 목록에서도 들어올 수 있어요' : '친구에게 방 코드를 알려주거나 링크를 보내세요 (로비 → 코드 입력 → 참가하기)';
+    el.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock();
+  },
+  hide() { const el = $('#share'); if (el) el.classList.add('hidden'); },
+  fallbackCopy(text) {
+    const i = $('#shareLink'); let ok = false;
+    try { i.value = text; i.focus({ preventScroll: true }); i.select(); i.setSelectionRange(0, text.length); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    try { i.blur(); window.getSelection && window.getSelection().removeAllRanges(); } catch (e) { }
+    return ok;
+  },
+  copy() {
+    const link = inviteLink(G.room); sfx('coin');
+    const done = ok => toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '복사가 막혀 있어요 — 링크 칸을 길게 눌러 복사해 주세요', 3500);
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(link).then(() => done(true), () => done(this.fallbackCopy(link)));
+    else done(this.fallbackCopy(link));
+  },
+  share() {
+    const link = inviteLink(G.room);
+    if (navigator.share) { // 버튼을 누른 그 순간(사용자 제스처)에 바로 호출해야 안드로이드/아이폰 공유 창이 뜬다
+      navigator.share({ title: '서불리 시티 3D', text: `서불리 시티 같이 하자! 방 코드 ${G.room} · 링크 누르면 바로 들어와`, url: link }).then(() => toast('📤 공유 완료')).catch(e => { if (!e || e.name !== 'AbortError') this.copy(); });
+      return;
+    }
+    this.copy();
+  },
+  init() {
+    const el = $('#share'); if (!el) return;
+    const on = (id, fn) => { const b = $('#' + id); if (b) b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); AU.init(); fn(); }); };
+    on('shareCopy', () => this.copy()); on('shareShare', () => this.share()); on('shareClose', () => this.hide()); on('shareX', () => this.hide());
+    el.addEventListener('click', e => { if (e.target === el) this.hide(); }); // 바깥(어두운 곳) 누르면 닫기
+    $('#shareLink').addEventListener('click', e => { try { e.target.select(); } catch (er) { } });
+  },
 };
+window.closeShare = () => SHARE.hide();

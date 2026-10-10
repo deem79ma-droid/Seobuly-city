@@ -44,6 +44,7 @@ function initInput() {
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
     if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
     if (UI.menuOpen) { if (k === 'escape' || k === 'e' || k === 'tab') UI.closeMenu(); return; }
+    if (SHARE.isOpen()) { if (k === 'escape' || k === 'e' || k === 'tab' || k === 'p') { e.preventDefault(); SHARE.hide(); } return; }
     if (k === 't' || k === 'enter') { e.preventDefault(); if (k === 'enter' && performance.now() - (UI._chatSentT || 0) < 250) return; UI.openChat(); return; } // 한글 조합 중 Enter로 보낸 직후 따라오는 Enter에 채팅창이 다시 열리지 않게
     if (e.repeat) return;
     if (k === 'e') doInteract(); if (k === 'f') toggleVehicle(); if (k === 'r') startReload();
@@ -68,7 +69,7 @@ function initInput() {
   addEventListener('mousemove', e => { if (!pointerLocked || UI.menuOpen) return; const s = (INP.aim ? 0.0011 : 0.0022) * (G.sens || 1); CAM.yaw -= e.movementX * s; CAM.pitch = clamp(CAM.pitch + e.movementY * s, -1.25, 1.3); CAM.lookT = G.t; });
   addEventListener('wheel', e => { if (!G.started) return; if (ME.vehicle) return; cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 }
-function winOpen() { const sh = document.getElementById('share'); return !!(UI.menuOpen || UI.mapOpen || (sh && !sh.classList.contains('hidden') && sh.style.display !== 'none' && sh.offsetParent)); }
+function winOpen() { return !!(UI.menuOpen || UI.mapOpen || SHARE.isOpen()); }
 function readMoveInput() {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return { x: 0, z: 0 };
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; if (UI.joyReset) UI.joyReset(); return { x: 0, z: 0 }; }

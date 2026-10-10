@@ -67,11 +67,12 @@ function initLobby() {
   const loopP = () => { if (G.started) { pr.dispose(); return; } requestAnimationFrame(loopP); const w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== Math.floor(w * pr.getPixelRatio())) { pr.setSize(w, h, false); pc.aspect = w / h; pc.updateProjectionMatrix(); } preview.t += 0.016; ch.root.rotation.y = Math.sin(preview.t * 0.5) * 0.8; ch.update(0.016, { speed: 0, grounded: true, state: 'normal', dance: Math.floor(preview.t / 6) % 3 === 2 ? Math.floor(preview.t / 18) % 8 : -1, idleLook: 0.6 }); pr.render(ps, pc); };
   loopP();
   $('#soloBtn').onclick = () => startGame('solo'); $('#hostBtn').onclick = () => startGame('host'); $('#quickBtn').onclick = () => startGame('quick');
+  initPubList();
   $('#joinBtn').onclick = () => { const c = $('#codeIn').value.trim().toUpperCase(); if (c.length < 4) { $('#lobbyMsg').textContent = '방 코드를 입력하세요'; return; } startGame('join', c); };
   $('#codeIn').onkeydown = e => { if (e.key === 'Enter') $('#joinBtn').click(); };
   // 초대 링크(?room=CODE)로 들어오면: 큰 "바로 참가" 버튼 + 5초 뒤 자동 참가
   if (rc) {
-    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); // $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = code;
+    const code = rc.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); $('#inviteBox').classList.remove('hidden'); $('#invCode').textContent = PUBLIC_ROOMS.includes(code) ? '공개방 ' + (PUBLIC_ROOMS.indexOf(code) + 1) : code;
     let left = 5; const cnt = $('#invCount');
     const stop = () => { clearInterval(LOBBY.cd); LOBBY.cd = 0; cnt.textContent = '닉네임/외형을 바꾼 뒤 버튼을 눌러 참가하세요'; };
     const tickCd = () => { if (left <= 0) { stop(); startGame('join', code); return; } cnt.innerHTML = `${left}초 뒤 자동으로 참가해요 · <a id="invCancel">잠깐, 외형부터 꾸밀래요</a>`; $('#invCancel').onclick = stop; left--; };
@@ -80,14 +81,34 @@ function initLobby() {
     for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#admBtn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
   } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
 }
-const LOBBY = { cd: 0, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin'], lock(on) { for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } } };
+const LOBBY = { cd: 0, busy: false, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin', 'pubRefresh'], lock(on) { this.busy = on; for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } for (const b of document.querySelectorAll('#pubList .pr')) b.disabled = on; } };
+// ---------- 로비: 공개방 20개 목록 (인원 표시 · 누르면 참가, 비어 있으면 내가 방장) ----------
+// 서버가 없는 P2P라서 각 공개방 방장(Peer id 고정)에게 잠깐 연결해 인원을 묻는다. 응답 없음 = 0명.
+const PUBLIST = { counts: {}, t: 0, running: false };
+function initPubList() {
+  const box = $('#pubList'); if (!box) return; box.innerHTML = '';
+  PUBLIC_ROOMS.forEach((code, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'pr'; b.id = 'pr-' + code; b.innerHTML = `<b></b><small>…</small>`; b.querySelector('b').textContent = '공개방 ' + (i + 1); b.onclick = () => { if (!LOBBY.busy) startGame('pub', code); }; box.appendChild(b); });
+  const rb = $('#pubRefresh'); if (rb) rb.onclick = () => refreshPubList(true);
+  refreshPubList(); PUBLIST.t = setInterval(() => { if (!G.started && !LOBBY.busy && !document.hidden) refreshPubList(); }, 20000);
+}
+function setPubCount(code, n) {
+  PUBLIST.counts[code] = n; const b = $('#pr-' + code); if (!b) return; const s = b.querySelector('small');
+  b.classList.toggle('has', n > 0); b.classList.toggle('full', n >= MAX_PLAYERS);
+  s.textContent = n === null ? '확인 실패' : n >= MAX_PLAYERS ? `${n}/${MAX_PLAYERS}명 · 가득` : `${n}/${MAX_PLAYERS}명`;
+}
+async function refreshPubList(manual) {
+  if (PUBLIST.running || G.started) return; PUBLIST.running = true; const msg = $('#pubMsg'); if (msg) msg.textContent = '인원 확인 중…';
+  for (const c of PUBLIC_ROOMS) { const b = $('#pr-' + c); if (b && PUBLIST.counts[c] === undefined) b.querySelector('small').textContent = '…'; }
+  await NET.probeRooms(PUBLIC_ROOMS, setPubCount);
+  PUBLIST.running = false; if (msg) { const tot = PUBLIC_ROOMS.reduce((a, c) => a + (PUBLIST.counts[c] || 0), 0); msg.textContent = `접속 중 ${tot}명 · 20초마다 자동 새로고침`; }
+}
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
-  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd);
+  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
   const msg = t => { $('#lobbyMsg').textContent = t; };
   if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
-  msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : '');
+  msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 비공개방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : mode === 'pub' ? `🌐 공개방 ${PUBLIC_ROOMS.indexOf(code) + 1} 접속 중…` : '');
   G.isHost = mode !== 'join';
   try {
     if (mode === 'host') {
@@ -97,14 +118,15 @@ async function startGame(mode, code) {
     }
     if (mode === 'join') {
       let err = null;
-      for (let k = 0; k < 2; k++) { try { await NET.join(code); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
+      for (let k = 0; k < 3; k++) { try { await NET.join(code, k ? 20000 : 15000); err = null; break; } catch (e) { err = e; if (e.code === 'full' || e.code === 'nopeer' || e.code === 'browser-incompatible') break; msg(`🔁 다시 시도 중… (${e.message})`); await sleep(1200); } }
       if (err) throw err; G.online = true; G.isHost = false; G.room = code;
     }
+    if (mode === 'pub') { const r = await NET.joinOrHost(code); G.online = true; G.isHost = r.mode === 'host'; G.room = r.room; }
     if (mode === 'quick') { const r = await NET.quickMatch(msg); G.online = true; G.isHost = r.mode === 'host'; G.room = r.room; }
   } catch (e) {
-    if (mode === 'join' || mode === 'quick') {
-      msg('❌ ' + (e.message || e)); LOBBY.lock(false); G.online = false; G.isHost = true;
-      if (mode === 'join') { $('#invJoin').innerHTML = '🔁 다시 시도'; $('#invCount').textContent = '친구 화면이 게임 안에 있는지 확인해 주세요 · 안 되면 "친구랑 같이하기"로 내가 방을 만들어 링크를 보내도 돼요'; }
+    if (mode === 'join' || mode === 'quick' || mode === 'pub') {
+      msg('❌ ' + (e.message || e)); LOBBY.lock(false); G.online = false; G.isHost = true; refreshPubList(); PUBLIST.t = setInterval(() => { if (!G.started && !LOBBY.busy && !document.hidden) refreshPubList(); }, 20000);
+      if (mode === 'join') { $('#invJoin').innerHTML = '🔁 다시 시도'; $('#invCount').textContent = '친구 화면이 게임 안에 있는지 확인해 주세요 · 안 되면 "비공개방 만들기"로 내가 방을 만들어 코드를 알려줘도 돼요'; }
       return;
     }
     G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ')');
@@ -132,14 +154,14 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
   _later.forEach(m => toast(m, 5000)); _later = [];
   if (G.online && G.isHost) {
     UI.chatLine(null, `//: 방코드 ${G.room}`);
-    // invite panel disabled on start
+    if (!PUBLIC_ROOMS.includes(G.room)) setTimeout(() => { if (!G.players.size) SHARE.show(); }, 700); // 비공개방: 방 코드·링크 창을 한 번 띄운다 (P ▶ 친구 초대로 다시 열기)
     if (PUBLIC_ROOMS.includes(G.room)) toast(`⚡ 공개방 ${G.room}을 열었다 — 다른 사람이 빠른 참가를 누르면 들어온다`, 5000);
   }
   if (IS_TOUCH) toast('🕹️ 왼쪽 조이스틱 이동 · 오른쪽 드래그로 시점', 4000); else toast('🖱️ 화면 클릭 → 마우스 시점 · WASD 이동 · F1 조작법', 5000);
