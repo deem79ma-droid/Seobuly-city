@@ -4669,7 +4669,7 @@ const NET = {
         conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
         else if (ADMIN.on && G.adminId === ME.id) conn.send({ t: 'admin', aid: ME.id });
-        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); SHARE.hide(); this.updateRoomInfo(); break;
+        toast(`🎉 ${m.n} 입장!`); UI.chatLine(null, `${m.n}님이 들어왔습니다`); sfx('levelup'); this.updateRoomInfo(); break;
       }
       case 'admClaim': if (G.isHost && conn && conn.pid) ADMIN.challenge(conn, false); break;
       case 'admChal': ADMIN.prove(m, conn); break;
@@ -5204,73 +5204,6 @@ window.closeShare = function() {
   }
 };
 
-const SHARE = {
-  async open() {
-    if (!G.online) { // 혼자 하다가 초대 → 그 자리에서 방을 연다
-      toast('🌐 방 만드는 중…');
-      for (let k = 0; k < 3; k++) { const c = NET.code(); try { await NET.listen(c); G.online = true; G.isHost = true; G.room = c; G.hostId = ME.id; if (ADMIN.on) G.adminId = ME.id; NET.updateRoomInfo(); break; } catch (e) { if (e.code !== 'unavailable-id') { toast('❌ ' + e.message, 5000); return; } } }
-      if (!G.online) return;
-    }
-    this.show();
-  },
-  show() {
-    const el = document.getElementById('share'); if (!el) return;
-    const link = inviteLink(G.room);
-    const codeEl = document.getElementById('shareCode');
-    const linkEl = document.getElementById('shareLink');
-    const subEl = document.getElementById('shareSub');
-    if (codeEl) codeEl.textContent = G.room;
-    if (linkEl) linkEl.value = link;
-    if (subEl) subEl.textContent = G.players.size ? '친구가 이미 들어와 있어요' : (G.isHost ? '이 링크를 카톡/문자로 보내면 친구가 누르자마자 들어와요' : '이 링크로 다른 사람도 이 방을 찾을 수 있어요');
-    el.style.display = 'flex';
-    if (document.pointerLockElement) document.exitPointerLock();
-  },
-  hide() {
-    const el = $('#share');
-    if (!el) return;
-    el.classList.add('hidden');
-    el.style.display = 'none'; if (window.closeShare) {}
-    setTimeout(() => { el.style.display = ''; }, 50);
-  },
-  async copy() {
-    const link = inviteLink(G.room); let ok = false;
-    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { const i = $('#shareLink'); i.focus(); i.select(); try { ok = document.execCommand('copy'); } catch (e2) { } }
-    toast(ok ? '📋 초대 링크 복사 완료! 친구에게 붙여넣기 하세요' : '링크를 길게 눌러 복사해 주세요'); sfx('coin');
-  },
-  async share() {
-    const link = inviteLink(G.room);
-    // 모바일에서 navigator.share가 잘 안 되는 경우가 많아서 카카오 우선 + 확실한 복사 폴백
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: '서부리 시티 3D', text: `서부리 시티 같이 하자! 링크 누르면 바로 들어와 (방 ${G.room})`, url: link });
-        return;
-      } catch (e) {
-        if (e && e.name === 'AbortError') return;
-      }
-    }
-    // 폴백: 링크 복사 + 카카오톡 열기 시도
-    await this.copy();
-    try {
-      const kakao = `kakaotalk://msg?text=${encodeURIComponent('서부리 시티 같이 하자! ' + link)}`;
-      window.location.href = kakao;
-      setTimeout(() => toast('카카오톡이 안 열리면 복사된 링크를 직접 붙여넣기 하세요', 4000), 800);
-    } catch (e) {
-      toast('링크가 복사됐어요. 카톡에 붙여넣기 하세요');
-    }
-  },
-  init() {
-    const closeBtn = document.getElementById('shareClose');
-    if (closeBtn) closeBtn.onclick = () => this.hide();
-    const copyBtn = document.getElementById('shareCopy');
-    if (copyBtn) copyBtn.onclick = () => this.copy();
-    const shareBtn = document.getElementById('shareShare');
-    if (shareBtn) shareBtn.onclick = () => this.share();
-    const linkEl = document.getElementById('shareLink');
-    if (linkEl) linkEl.onclick = e => e.target.select();
-  },
-};
-
-
 // ================= ADMIN MODE + HELP + SETTINGS =================
 // 관리자 비밀번호는 코드/저장소 어디에도 없다.
 // 빌드할 때 ADMIN_PW(시크릿)로부터 "공개키"만 계산해서 넣는다:
@@ -5444,7 +5377,7 @@ UI.openHelp = function () {
     + sec('전투') + row('좌클릭', '공격') + row('우클릭', '조준') + row('1~8|휠|Q', '무기 선택 · 이전 무기') + row('R', '재장전')
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
-    + sec('멀티') + row('P', '휴대폰 ▶ 친구 초대 링크 (복사/공유)')
+    
     + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
     + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
@@ -5864,7 +5797,7 @@ async function startGame(mode, code) {
       if (mode === 'join') { $('#invJoin').innerHTML = '🔁 다시 시도'; $('#invCount').textContent = '친구 화면이 게임 안에 있는지 확인해 주세요 · 안 되면 "친구랑 같이하기"로 내가 방을 만들어 링크를 보내도 돼요'; }
       return;
     }
-    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ') · P ▶ 친구 초대 링크로 다시 시도 가능');
+    G.online = false; G.isHost = true; toastLater('⚠ 온라인 서버 연결 실패 — 혼자 모드로 시작 (' + (e.message || e) + ')');
   }
   G.hostId = G.isHost ? ME.id : null;
   $('#lobby').classList.add('hidden'); $('#loading').classList.remove('hidden');
@@ -5889,13 +5822,13 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서부리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
   _later.forEach(m => toast(m, 5000)); _later = [];
   if (G.online && G.isHost) {
-    UI.chatLine(null, `방 ${G.room} — 초대 링크를 친구에게 보내면 누르자마자 들어옵니다 (P ▶ 친구 초대 링크)`);
+    UI.chatLine(null, `//: 방코드 ${G.room}`);
     // invite panel disabled on start
     if (PUBLIC_ROOMS.includes(G.room)) toast(`⚡ 공개방 ${G.room}을 열었다 — 다른 사람이 빠른 참가를 누르면 들어온다`, 5000);
   }
@@ -5958,19 +5891,7 @@ if (URLP.get("debug")) window.__SBC = { FX, TAXI, ROUTE, DISTRICTS, districtAt, 
 
 </script>
 
-<div id="share" style="display:none !important;position:fixed;left:0;top:0;right:0;bottom:0;z-index:999999;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
-  <div style="background:#0e101a;border-radius:18px;padding:20px;width:min(420px,90vw);text-align:center;box-shadow:0 10px 40px #000">
-    <h3 style="margin:0 0 6px;font-family:'Black Han Sans'">👫 친구 초대</h3>
-    <div class="code" id="shareCode" style="font-size:28px;font-weight:900;letter-spacing:4px;color:#ffcc33;margin:8px 0"></div>
-    <div id="shareSub" style="color:#9aa3b8;font-size:13px;margin-bottom:10px"></div>
-    <input id="shareLink" class="inp" readonly style="width:100%;margin-bottom:10px">
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="btn" id="shareCopy" style="flex:1">📋 복사</button>
-      <button class="btn b2" id="shareShare" style="flex:1">📤 공유</button>
-    </div>
-    <button id="shareClose" style="width:100%;padding:16px;font-size:16px;background:#2a2f45;color:#fff;border:0;border-radius:12px;font-weight:900">✕ 닫기</button>
-  </div>
-</div>
+
 
 </body>
 </html>
