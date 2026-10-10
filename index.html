@@ -226,7 +226,7 @@ body.touch #prompt{bottom:auto;top:58%}
  <div id="bars"><canvas id="mini" width="340" height="340"></canvas><div class="hbar" id="hpBar"><i></i></div><div class="hbar" id="arBar"><i></i></div><div class="hbar" id="stBar"><i></i></div></div>
  <div id="weapon" class="panel"><div id="wName">주먹</div><div id="wAmmo"></div><div id="hotbar"></div></div>
  <div id="taxiHud" class="panel hidden"></div>
- <div id="share" class="panel hidden"><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button class="btn" id="shareCopy">📋 링크 복사</button><button class="btn b2" id="shareShare">📤 카톡으로 보내기</button></div><button class="btn b3" id="shareClose" style="width:100%;margin-top:10px">닫기 (P ▶ 친구 초대 링크로 다시 열기)</button></div>
+ <div id="share" class="panel hidden" style="pointer-events:auto;z-index:40"><h3>👫 친구 초대</h3><div class="code" id="shareCode"></div><div id="shareSub"></div><input id="shareLink" class="inp" readonly><div class="row"><button class="btn" id="shareCopy">📋 링크 복사</button><button class="btn b2" id="shareShare">📤 카톡으로 보내기</button></div><button class="btn b3" id="shareClose" style="width:100%;margin-top:10px">닫기 (P ▶ 친구 초대 링크로 다시 열기)</button></div>
  <div id="dmgFlash"></div><div id="drunk"></div>
 </div>
 
@@ -5224,8 +5224,19 @@ const SHARE = {
     }
   },
   init() {
-    $('#shareCopy').onclick = () => this.copy(); $('#shareShare').onclick = () => this.share(); $('#shareClose').onclick = () => this.hide();
+    const closeBtn = $('#shareClose');
+    if (closeBtn) {
+      const close = (e) => { e.preventDefault(); e.stopPropagation(); this.hide(); };
+      closeBtn.onclick = close;
+      closeBtn.ontouchend = close;
+      closeBtn.style.pointerEvents = 'auto';
+      closeBtn.style.zIndex = '30';
+    }
+    $('#shareCopy').onclick = () => this.copy();
+    $('#shareShare').onclick = () => this.share();
     $('#shareLink').onclick = e => e.target.select();
+    // ESC로도 닫기
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#share').classList.contains('hidden')) this.hide(); });
   },
 };
 
