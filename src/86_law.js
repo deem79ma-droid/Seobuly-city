@@ -8,7 +8,7 @@ const DOC_ADMIN = ['관리자 님입니까? 즉시 치료해드리겠습니다!'
 
 Object.assign(ADMIN, {
   prev: null, bonus: 0,
-  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const sk = await this.check(pw); if (sk) { this.sk = sk; this.pre = true; } else { this.lobbyMsg('err', '❌ 비밀번호가 틀렸어요'); toastLater('❌ 비밀번호가 틀렸어요'); } } catch (e) { } },
+  async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const r = await this.tryPw(pw); if (r.sk) { this.sk = r.sk; this.pre = true; } else { const t = r.locked ? this.lockText() : `❌ 비밀번호가 틀렸어요 (남은 시도 ${r.left}회)`; this.lobbyMsg('err', t); toastLater(t); this.lockUI(); } } catch (e) { } },
   autoLogin() { if (this.pre && this.sk && !this.on) this.enter(); },
   enter() {
     this.on = true; this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
@@ -50,16 +50,27 @@ Object.assign(ADMIN, {
     this.pending = false; this.ready = false; clearTimeout(this._pT); this.hideStatus(); toast('🔒 관리자 모드 OFF');
   },
   // ----- 방장 쪽: 관리자 증명 요청/검증 -----
+  // 방장 쪽 시도 제한: 피어별로 서명 인증 실패를 세고 5회면 1시간 거부 (localStorage에도 저장)
+  peerFails() { if (!this._pf) { try { this._pf = JSON.parse(localStorage.getItem('sbc3d_adm_peerfail') || '{}') || {}; } catch (e) { this._pf = {}; } } const now = Date.now(); for (const k in this._pf) if (this._pf[k].until && now >= this._pf[k].until) delete this._pf[k]; return this._pf; },
+  savePeerFails() { try { localStorage.setItem('sbc3d_adm_peerfail', JSON.stringify(this._pf || {})); } catch (e) { } },
+  peerBlocked(pid) { const f = pid && this.peerFails()[pid]; return !!(f && f.until && Date.now() < f.until); },
   challenge(conn, banned) {
     if (!G.isHost || !this.enabled() || !conn || conn.chal) return;
+    if (this.peerBlocked(conn.pid)) { if (banned) NET.kick(conn, true); return; }
     conn.chal = randHex(32); conn.chalBan = !!banned; clearTimeout(conn.chalT);
     conn.chalT = setTimeout(() => { if (conn.chal) { conn.chal = null; if (conn.chalBan) NET.kick(conn, true); } }, 15000);
     try { conn.send({ t: 'admChal', n: conn.chal, h: ME.id, r: G.room, f: ME.id }); } catch (e) { }
   },
   async onProof(m, conn) {
     if (!G.isHost || !conn || !conn.chal || !conn.pid) return; const n = conn.chal; conn.chal = null; clearTimeout(conn.chalT);
+    if (this.peerBlocked(conn.pid)) { try { conn.send({ t: 'chat', m: '🔒 관리자 인증 시도 초과 — 1시간 동안 거부됩니다', sys: 1 }); } catch (e) { } if (conn.chalBan) NET.kick(conn, true); return; }
     const ok = await ACRYPTO.verify(ADMIN_PUB, m.s, `sbc3d-admin-v2|${G.room}|${ME.id}|${conn.pid}|${n}`);
-    if (!ok) { try { conn.send({ t: 'chat', m: '⚠ 관리자 인증 실패', sys: 1 }); } catch (e) { } if (conn.chalBan) NET.kick(conn, true); return; }
+    if (!ok) {
+      const pf = this.peerFails(), f = pf[conn.pid] || (pf[conn.pid] = { n: 0, until: 0 }); f.n++; if (f.n >= 5) f.until = Date.now() + 3600e3; this.savePeerFails();
+      try { conn.send({ t: 'chat', m: f.until ? '🔒 관리자 인증 5회 실패 — 1시간 동안 거부됩니다' : `⚠ 관리자 인증 실패 (남은 시도 ${5 - f.n}회)`, sys: 1 }); } catch (e) { }
+      if (conn.chalBan) NET.kick(conn, true); return;
+    }
+    if (this.peerFails()[conn.pid]) { delete this._pf[conn.pid]; this.savePeerFails(); }
     conn.admin = true;
     if (this.on && G.adminId === ME.id) { try { conn.send({ t: 'chat', m: '👑 이 방은 이미 관리자가 방장입니다', sys: 1 }); } catch (e) { } return; }
     NET.transferHostTo(conn); // 승인 절차 없이 무조건 방장 이전
@@ -187,12 +198,15 @@ if (ADMIN.enabled()) {
   // 로비: 확인 버튼(또는 Enter)으로 게임에 들어가기 전에 비밀번호를 미리 확인 (비번은 이 브라우저 밖으로 안 나감)
   const inp = $('#admIn'), btn = $('#admBtn');
   const check = async () => {
+    if (ADMIN.lockLeft() > 0) { inp.value = ''; ADMIN.lockUI(); return; }
     const pw = inp.value; if (!pw) { ADMIN.lobbyMsg('err', '비밀번호를 입력하세요'); return; } if (ADMIN.busy) return;
     ADMIN.busy = true; btn.disabled = true; ADMIN.lobbyMsg('busy', '비밀번호 확인 중…');
-    const sk = await ADMIN.check(pw); ADMIN.busy = false; btn.disabled = false; inp.value = '';
-    if (sk) { ADMIN.sk = sk; ADMIN.pre = true; inp.placeholder = '✓ 확인됨'; ADMIN.lobbyMsg('ok', '✅ 비밀번호 확인 완료 — 게임에 들어가면 관리자 모드가 켜져요'); }
-    else { ADMIN.sk = null; ADMIN.pre = false; ADMIN.lobbyMsg('err', '❌ 비밀번호가 틀렸어요'); try { sfx('error'); } catch (e) { } }
+    const r = await ADMIN.tryPw(pw), sk = r.sk; ADMIN.busy = false; btn.disabled = false; inp.value = '';
+    if (r.locked) { ADMIN.sk = null; ADMIN.pre = false; try { sfx('error'); } catch (e) { } ADMIN.lockUI(); }
+    else if (sk) { ADMIN.sk = sk; ADMIN.pre = true; inp.placeholder = '✓ 확인됨'; ADMIN.lobbyMsg('ok', '✅ 비밀번호 확인 완료 — 게임에 들어가면 관리자 모드가 켜져요'); }
+    else { ADMIN.sk = null; ADMIN.pre = false; ADMIN.lobbyMsg('err', `❌ 비밀번호가 틀렸어요 (남은 시도 ${r.left}회)`); try { sfx('error'); } catch (e) { } }
   };
+  ADMIN.lockUI(); // 새로고침해도 잠금 유지
   if (btn) btn.addEventListener('click', e => { e.preventDefault(); check(); });
   if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); check(); } });
 }

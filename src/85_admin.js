@@ -42,7 +42,7 @@ const ACRYPTO = {
 try { G.sens = parseFloat(localStorage.getItem('sbc3d_sens')) || 1; } catch (e) { G.sens = 1; }
 
 const ADMIN = {
-  on: false, sk: null, fails: 0, lockT: 0, busy: false,
+  on: false, sk: null, busy: false,
   enabled() { return /^[0-9a-f]{64}$/.test(ADMIN_PUB); },
   // 비번이 맞으면 개인키 seed(메모리 전용)를 돌려준다. 비번 자체는 저장하지 않는다.
   async check(pw) { if (!this.enabled() || !pw) return null; try { const seed = await ACRYPTO.seedFromPw(pw); return (await ACRYPTO.pubFromSeed(seed)) === ADMIN_PUB ? seed : null; } catch (e) { console.warn(e); return null; } },
@@ -54,15 +54,52 @@ const ADMIN = {
     UI.openMenu('🔐 관리자 로그인', '비밀번호를 입력하세요', [], { extra: '<input id="admPw" type="password" autocomplete="off" placeholder="비밀번호" style="width:100%;margin:10px 0;padding:11px 12px;border-radius:10px;border:1px solid #fff3;background:#0007;color:#fff;font-size:15px"><button class="btn" id="admGo" type="button" style="width:100%;margin-bottom:10px">확인</button>' });
     const inp = $('#admPw'); setTimeout(() => inp && inp.focus(), 50);
     const go = async () => {
-      if (performance.now() < this.lockT) { toast('⏳ 잠시 후 다시 시도'); return; }
+      if (this.lockLeft() > 0) { this.lockUI(); return; }
       if (this.busy) return; if (!inp.value) { this.status('err', '비밀번호를 입력하세요'); return; } this.busy = true; this.status('busy', '비밀번호 확인 중…');
-      const sk = await this.check(inp.value); this.busy = false; inp.value = '';
-      if (sk) { this.sk = sk; this.fails = 0; UI.closeMenu(); this.enter(); }
-      else { this.fails++; this.lockT = performance.now() + Math.min(30000, this.fails * 1500); sfx('error'); this.status('err', '비밀번호가 틀렸어요', '다시 입력해 주세요'); }
+      const r = await this.tryPw(inp.value); this.busy = false; inp.value = '';
+      if (r.sk) { this.sk = r.sk; UI.closeMenu(); this.enter(); }
+      else if (r.locked) { sfx('error'); this.status('err', '🔒 관리자 로그인 잠김', '5회 틀려서 1시간 동안 잠겼어요'); this.lockUI(); }
+      else { sfx('error'); this.status('err', `비밀번호가 틀렸어요 (남은 시도 ${r.left}회)`, '다시 입력해 주세요'); }
     };
+    this.lockUI();
     inp.onkeydown = e => { if (e.key === 'Enter') go(); }; const gb = $('#admGo'); if (gb) gb.onclick = () => go();
   },
   logout() { this.exit(); },
+  // ----- 비번 시도 제한: 로비·F2·/admin 공용, 5회 틀리면 1시간 잠금 (localStorage + 메모리 둘 다) -----
+  LK_KEY: 'sbc3d_adm_lock', LK_MAX: 5, LK_MS: 3600e3, mem: { n: 0, until: 0 },
+  lkGet() {
+    let s = { n: 0, until: 0 }; try { const j = JSON.parse(localStorage.getItem(this.LK_KEY) || 'null'); if (j) s = { n: +j.n || 0, until: +j.until || 0 }; } catch (e) { }
+    const r = { n: Math.max(s.n, this.mem.n), until: Math.max(s.until, this.mem.until) };
+    if (r.until && Date.now() >= r.until) { r.n = 0; r.until = 0; this.lkSet(r); } // 잠금 만료 → 초기화
+    else this.mem = { n: r.n, until: r.until }; // 메모리에도 보관 (저장소를 지워도 이 세션에선 유지)
+    return r;
+  },
+  lkSet(s) { this.mem = { n: s.n, until: s.until }; try { if (s.n || s.until) localStorage.setItem(this.LK_KEY, JSON.stringify(s)); else localStorage.removeItem(this.LK_KEY); } catch (e) { } },
+  lockLeft() { const s = this.lkGet(); return s.until ? Math.max(0, s.until - Date.now()) : 0; },
+  async tryPw(pw) {
+    if (this.lockLeft() > 0) return { locked: true };
+    const sk = await this.check(pw);
+    if (sk) { this.lkSet({ n: 0, until: 0 }); return { sk }; }
+    const s = this.lkGet(); s.n++; if (s.n >= this.LK_MAX) s.until = Date.now() + this.LK_MS; this.lkSet(s);
+    return s.until ? { locked: true } : { left: this.LK_MAX - s.n };
+  },
+  lockText() { const ms = this.lockLeft(), t = Math.ceil(ms / 1000), mm = Math.floor(t / 60), ss = t % 60; return `🔒 관리자 로그인 잠김 · 남은 시간 ${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`; },
+  // 잠금 중엔 로비/F2의 입력칸·확인 버튼을 끄고 카운트다운을 보여준다. 풀리면 다시 켠다.
+  lockUI() {
+    const els = ['#admIn', '#admBtn', '#admPw', '#admGo'].map(q => $(q)).filter(Boolean);
+    const left = this.lockLeft();
+    for (const e of els) e.disabled = left > 0;
+    const lm = $('#admMsg'), dm = $('#admLockMsg');
+    if (left > 0) {
+      const txt = this.lockText(); if (lm) this.lobbyMsg('err', txt);
+      if ($('#admPw') && !dm) { const d = document.createElement('div'); d.id = 'admLockMsg'; d.style.cssText = 'color:#ff8a8a;font-weight:700;margin:-4px 0 10px;text-align:center'; $('#admPw').insertAdjacentElement('afterend', d); }
+      if ($('#admLockMsg')) $('#admLockMsg').textContent = txt;
+      if (!this._lkT) this._lkT = setInterval(() => this.lockUI(), 1000);
+    } else {
+      if (this._lkT) { clearInterval(this._lkT); this._lkT = null; if (lm && /잠김/.test(lm.textContent)) this.lobbyMsg('ok', '🔓 잠금이 풀렸어요 — 다시 시도할 수 있어요'); }
+      if (dm) dm.remove();
+    }
+  },
   // 방장 권한이 필요한 동작: 관리자는 곧바로 방장이 되므로 보통 로컬에서 실행. (이전 중이면 서명 인증된 연결로만 요청)
   remote(a, v) { if (G.isHost || !G.online) this.apply(a, v); else NET.send({ t: 'adm', a, v }); },
   apply(a, v) {
