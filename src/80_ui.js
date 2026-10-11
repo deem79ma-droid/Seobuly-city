@@ -81,6 +81,7 @@ const UI = {
     const heal = (n) => { ME.hp = Math.min(100, ME.hp + n); };
     switch (f.type) {
       case 'police': this.openMenu('🚓 경찰서', `${REGIONS[f.region].name} 경찰서. 현재 수배 ★${ME.wanted}`, [
+        { ic: '🙇', t: '자수하기 (감옥에서 형량 복역)', p: 0, d: JOBS.criminal() ? `남은 형량 ${Math.ceil(JOBS.record)}초 · 복역하면 범죄자 신분 해제` : '범죄 기록이 없다', dis: !JOBS.criminal() && !ME.wanted, disMsg: '범죄 기록도 수배도 없다', fn: () => { LAW.arrest(); } },
         { ic: '💸', t: '벌금 내고 수배 해제', p: ME.wanted * 2500 || 0, d: '★당 ₩2,500', dis: !ME.wanted, disMsg: '수배 중이 아니다', fn: () => { ME.wanted = 0; toast('✅ 수배 해제'); } },
         { ic: '🪪', t: `출소카드 구입 (보유 ${ME.inv.card | 0})`, p: 25000, d: '수감 중 E 로 즉시 출소', stay: true, fn: () => { ME.inv.card = (ME.inv.card | 0) + 1; toast('🪪 출소카드 +1'); } },
         { ic: '📞', t: '갱단 원한 해제 상담', p: 5000, d: '레드/블루 갱이 더 이상 노리지 않음', fn: () => { ME.grudge = {}; toast('🤝 갱단 원한이 풀렸다'); } },
@@ -209,7 +210,7 @@ const UI = {
   // ---------- peds / animals / players ----------
   openPed(p) {
     const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { if (p.char) p.char.say(pick(PED_LINES[p.kind] || PED_LINES.civ), 4); pedAction(p, 'talk'); } }, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { const d = Math.floor(Math.random() * 8); ME.dance = d; pedAction(p, 'dance', d); } }];
-    if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { const a = Math.floor(rnd(30, 400)); ME.money += a; toast(`💵 뺏은 돈 ${fmtMoney(a)}`); if (p.char) p.char.say('살려주세요!!', 3); pedAction(p, 'rob'); if (Math.random() < 0.5) addWanted(1); } });
+    if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { const a = Math.floor(rnd(30, 400)) * JOBS.robMul(); ME.money += a; toast(`💵 뺏은 돈 ${fmtMoney(a)}`); if (p.char) p.char.say('살려주세요!!', 3); pedAction(p, 'rob'); if (Math.random() < 0.5) addWanted(1); } });
     if (p.kind === 'police' && ME.wanted) items.push({ ic: '🙇', t: '자수하기', p: ME.wanted * 1500, d: '벌금 내고 수배 해제', fn: () => { ME.wanted = 0; toast('🙇 자수했다'); } });
     if (p.kind === 'police' && ADMIN.on) items.push({ ic: '🔓', t: '수감자 무료 석방 (관리자)', p: 0, fn: () => ADMIN.freeOther() });
     if (p.kind === 'medic') items.push({ ic: '💉', t: '응급치료', p: 500, fn: () => { ME.hp = 100; } });
@@ -237,6 +238,7 @@ const UI = {
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
+      { ic: '💼', t: '직업', p: 0, d: `${JOBS.cur.icon} ${JOBS.cur.name}${JOBS.criminal() ? ' · 🦹 범죄자' : ''}`, fn: () => setTimeout(() => JOBS.openMenu(), 30) },
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },
       { ic: '🚕', t: TAXI.cab ? '택시 (이용 중)' : '택시 호출', p: 0, d: TAXI.cab ? '목적지 변경 · 취소' : '16개 구역 · AI 기사 최단경로 운전', fn: () => { setTimeout(() => TAXI.openMenu(), 30); } },
@@ -309,6 +311,7 @@ const UI = {
     TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
     if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
     if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
+    JOBS.drawMini(x, toS, clampS);
     for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = clampS(toS(ra.x, ra.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
     // player arrow
     const ang = -(ME.vehicle ? ME.vehicle.yaw : ME.yaw) + CAM.yaw; x.save(); x.translate(cx, cx); x.rotate(ang); x.fillStyle = '#fff'; x.strokeStyle = '#000'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -S / 22); x.lineTo(S / 32, S / 30); x.lineTo(0, S / 60); x.lineTo(-S / 32, S / 30); x.closePath(); x.stroke(); x.fill(); x.restore();
@@ -333,6 +336,7 @@ const UI = {
     x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
+    x.font = '20px sans-serif'; JOBS.drawBig(x, P);
     TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
     for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
     const MA = anchorOf(ME); const me = P(MA.x, MA.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);

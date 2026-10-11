@@ -517,7 +517,7 @@ async function buildWorld(progress) {
   await tick(); progress(0.24, '블록과 건물 배치 중…'); genBlocks();
   await tick(); progress(0.38, '도로 포장 중…'); buildRoads();
   await tick(); progress(0.46, '이벤트광장 조성 중…'); buildPlaza(); buildBridge();
-  await tick(); progress(0.52, '디산베이 마을 조성 중…'); genCountryside();
+  await tick(); progress(0.52, '디산베이 마을 조성 중…'); genCountryside(); buildJobWorld();
   await tick(); progress(0.58, '지형 메쉬 생성 중…'); buildTerrainMesh(); buildWater();
   await tick(); progress(0.68, '나무 심는 중…'); genTrees(); buildStreetProps();
   flushMB();

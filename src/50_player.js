@@ -134,7 +134,7 @@ function notifyPlayer(id, msg) { if (id === ME.id) handlePersonal(msg); else { m
 function handlePersonal(m) {
   if (m.t === 'wanted') addWanted(m.add);
   if (m.t === 'grudge') { ME.grudge[m.g] = G.t + 90; if (!ME._gT || G.t - ME._gT > 10) { toast(m.g === 'gangA' ? '🔴 레드 크루가 너를 노린다!' : '🔵 블루 독스가 너를 노린다!'); ME._gT = G.t; } }
-  if (m.t === 'kill') { ME.kills++; }
+  if (m.t === 'kill') { ME.kills++; JOBS.onKill(m.k); }
   if (m.t === 'meat') { ME.inv.meat++; toast('🥩 고기 +1'); }
   if (m.t === 'petDead') { ME.petId = null; toast('🐾 반려동물이 죽었다…'); }
   if (m.t === 'adopted') { ME.petId = m.a; toast('🐶 입양 완료! 이제 따라다닌다'); }
@@ -235,7 +235,7 @@ function chopTree(t, power) {
   if (!t || !t.alive) return;
   if (t.type === 'rock') { sfx('hit', t.x, t.z); FX.impact({ x: t.x, y: t.y + 1, z: t.z }, 'spark'); return; }
   t.hp -= power; sfx('chop', t.x, t.z); FX.impact({ x: t.x, y: t.y + 1.2, z: t.z }, 'wood'); CAM.shake = 0.15;
-  if (t.hp <= 0) { fellTree(t, ME.yaw); const n = t.type === 'pine' || t.type === 'oak' ? 4 : 2; ME.inv.wood += n; toast(`🪵 목재 +${n} (총 ${ME.inv.wood})`); NET.send({ t: 'tree', i: t.idx, y: ME.yaw }); UI.updateInv(); }
+  if (t.hp <= 0) { fellTree(t, ME.yaw); const n = t.type === 'pine' || t.type === 'oak' ? 4 : 2; ME.inv.wood += n; toast(`🪵 목재 +${n} (총 ${ME.inv.wood})`); JOBS.onTree(n); NET.send({ t: 'tree', i: t.idx, y: ME.yaw }); UI.updateInv(); }
 }
 function fellTree(t, dir) {
   if (!t.alive) return; setTreeVisible(t, false); sfx('tree', t.x, t.z); t.cutAt = G.t;
@@ -273,8 +273,8 @@ function enterVehicle(v) {
     const cop = v.model === 'police'; if (G.isHost) ejectNpcDriver(v); else NET.send({ t: 'jack', v: v.id });
     v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false;
     if (cop) addWanted(2); else if (PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 40)) addWanted(1);
-    toast(cop ? '🚓 경찰차 탈취!' : '🔑 차량 탈취!');
-  }
+    toast(cop ? '🚓 경찰차 탈취!' : '🔑 차량 탈취!'); JOBS.crime('car');
+  } else if (v.owner && v.owner !== ME.id && !v.driver) { toast('🔑 남의 차를 훔쳤다!'); JOBS.crime('car'); } // 다른 사람 소유 차
   v.driver = ME.id; v.ctrl = 'local'; ME.vehicle = v; ME.seat = 'd'; ME.dance = -1; ME.sitBench = null; NET.send({ t: 'seat', v: v.id, s: 'd' }); sfx('door');
   if (v.kind === 'horse') sfx('neigh', v.x, v.z);
 }
@@ -310,7 +310,8 @@ function findInteract() {
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
   INTERIOR.interacts(cand); if (INTERIOR.cur) { for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); } return best; }
   for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, f.bld ? { label: `🚪 ${f.icon} ${f.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(f.bld) } : { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
-  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, { label: `🚪 ${nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
+  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, { label: `🚪 ${nd.b.name} 들어가기${JOBS.isTrespass(nd.b) ? ' ⚠ 남의 집 (가택 침입)' : ''}`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
+  JOBS.interact(cand);
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
   const v = nearestVehicle(2.8);
   if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });

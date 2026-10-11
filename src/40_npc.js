@@ -58,8 +58,8 @@ function edgeNearPoint(px, pz, minD, maxD, filter) {
 }
 function playersList() { // positions of all players (host view)
   // 실내에 있는 사람은 건물 문 앞 좌표로 취급(NPC가 실내 좌표로 몰려가지 않게), 수감자는 수배 0
-  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, inVeh: !!ME.vehicle, me: true, inside: ins }); }
-  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, inVeh: !!rp.veh, inside: ins }); }
+  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, gang: JOBS.gang(), inVeh: !!ME.vehicle, me: true, inside: ins }); }
+  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, gang: rp.jb === 'gangA' || rp.jb === 'gangB' ? rp.jb : null, inVeh: !!rp.veh, inside: ins }); }
   return L;
 }
 function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') { const a = anchorOf(ME); d = Math.hypot(a.x - x, a.z - z); } for (const rp of G.players.values()) { const a = anchorOf(rp); d = Math.min(d, Math.hypot(a.x - x, a.z - z)); } return d; }
@@ -85,7 +85,7 @@ function pedHostileTo(p, t) {
   }
   // player
   if (p.kind === 'police') return t.wanted > 0;
-  if (p.kind.startsWith('gang')) return p.raid || ((t.grudge && t.grudge[p.kind]) || 0) > G.t;
+  if (p.kind.startsWith('gang')) { if (t.gang === p.kind) return false; if (t.gang) return true; return p.raid || ((t.grudge && t.grudge[p.kind]) || 0) > G.t; } // 갱단원: 같은 갱은 한편, 상대 갱은 적
   return false;
 }
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();

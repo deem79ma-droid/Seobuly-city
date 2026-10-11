@@ -30,7 +30,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills })); } catch (e) { }
+  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record) })); } catch (e) { }
 }
 function onResize() {
   if (!renderer) return; const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -80,6 +80,20 @@ function initLobby() {
     tickCd(); LOBBY.cd = setInterval(tickCd, 1000);
     for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#admBtn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
   } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
+  if (IS_TOUCH) mobileTip();
+}
+// 폰으로 링크를 열면: 가로모드 + 데스크톱 사이트 안내 (확인 누르면 닫힘)
+function mobileTip() {
+  if (document.getElementById('mobTip')) return;
+  const el = document.createElement('div'); el.id = 'mobTip';
+  el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(5,6,10,.82);padding:16px;font-family:inherit';
+  el.innerHTML = '<div style="max-width:340px;width:100%;background:#12141c;border:1px solid #2a2f40;border-radius:16px;padding:22px 20px;text-align:center;color:#eef0f6;box-shadow:0 10px 40px rgba(0,0,0,.5)">'
+    + '<div style="font-size:40px;line-height:1;margin-bottom:10px">📱↻</div>'
+    + '<div style="font-size:18px;font-weight:800;margin-bottom:12px">원활한 플레이를 위해</div>'
+    + '<div style="font-size:15px;line-height:1.6;text-align:left;margin:0 auto 16px;display:inline-block"><b style="color:#ffd34a">1.</b> 휴대폰을 <b style="color:#ffd34a">가로모드</b>로 돌려주세요<br><b style="color:#ffd34a">2.</b> 브라우저 메뉴(⋮ 또는 ᴀA)에서<br>&nbsp;&nbsp;&nbsp;&nbsp;<b style="color:#ffd34a">데스크톱 사이트</b>를 켜주세요</div>'
+    + '<button id="mobTipOk" style="width:100%;padding:13px;border:0;border-radius:10px;background:#ffd34a;color:#111;font-size:16px;font-weight:800">확인</button></div>';
+  document.body.appendChild(el);
+  el.querySelector('#mobTipOk').onclick = () => el.remove();
 }
 const LOBBY = { cd: 0, busy: false, btns: ['soloBtn', 'hostBtn', 'joinBtn', 'quickBtn', 'invJoin', 'pubRefresh'], lock(on) { this.busy = on; for (const id of this.btns) { const b = $('#' + id); if (b) b.disabled = on; } for (const b of document.querySelectorAll('#pubList .pr')) b.disabled = on; } };
 // ---------- 로비: 공개방 20개 목록 (인원 표시 · 누르면 참가, 비어 있으면 내가 방장) ----------
@@ -106,7 +120,7 @@ function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; 
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
   if (NET.badName(ME.name)) { $('#lobbyMsg').textContent = '❌ "관리자"가 들어간 닉네임은 쓸 수 없어요'; $('#nameIn').focus(); return; } // 관리자는 이름표에 자동으로 붙는다
-  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
+  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); if (mode !== 'solo') await Promise.race([prepTurn(), sleep(2500)]); // 중계 서버 인증 준비 clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
   const msg = t => { $('#lobbyMsg').textContent = t; };
   if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
   msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 비공개방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : mode === 'pub' ? `🌐 공개방 ${PUBLIC_ROOMS.indexOf(code) + 1} 접속 중…` : '');
@@ -149,14 +163,14 @@ async function loadWorld() {
   // player
   const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0 }); }
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
-  WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
+  JOBS.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
   const sx = G.isHost ? 10 : -10; ME.x = sx; ME.z = 52; ME.y = groundHeight(ME.x, ME.z); ME.yaw = Math.PI; CAM.yaw = Math.PI;
   setLoad(1, '완료!'); await tick();
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -193,7 +207,7 @@ function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t
 function frame(dt, noRender) {
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; INP.fire = false; if (UI.joyReset) UI.joyReset(); }
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); JOBS.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const vv = [240, 340, 460, 520][G.quality] || 520, view2 = vv * vv, lod2 = (G.quality >= 2 ? 90 : 55) ** 2; // 품질별 차량 표시 거리 + 디테일 LOD

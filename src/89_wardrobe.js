@@ -21,7 +21,7 @@ const CLOTH_BY = new Map(CLOTH.map(c => [c.id, c]));
 const WARDROBE = {
   base: null, own: [], worn: {}, tab: 'top', prev: null, _yaw: null,
   load(sv) { this.own = Array.isArray(sv?.wardrobe) ? sv.wardrobe.filter(id => CLOTH_BY.has(id)) : []; this.worn = {}; const w = sv?.worn || {}; for (const [s] of CLOTH_SLOTS) if (w[s] && this.own.includes(w[s])) this.worn[s] = w[s]; },
-  outfit(extra) { const o = Object.assign({}, this.base || ME.outfit); for (const [s] of CLOTH_SLOTS) { const it = CLOTH_BY.get(this.worn[s]); if (it) Object.assign(o, it.set); } if (extra) Object.assign(o, extra.set); return o; },
+  outfit(extra) { const o = Object.assign({}, this.base || ME.outfit); for (const [s] of CLOTH_SLOTS) { const it = CLOTH_BY.get(this.worn[s]); if (it) Object.assign(o, it.set); } if (extra) Object.assign(o, extra.set); else { const u = typeof JOBS !== 'undefined' && JOBS.uniform(); if (u) Object.assign(o, u); } return o; }, // 직업 유니폼은 옷 위에 (옷가게 미리보기 중엔 미리보기 우선)
   apply(send = true) { // 실제 외형 적용 + 동기화 (관리자는 정장·선글라스 고정 규칙 유지)
     if (ADMIN.on) { if (ADMIN.prev) ADMIN.prev.outfit = this.outfit(); return; }
     ME.outfit = this.outfit(); if (ME.char) ME.char.setOutfit(ME.outfit); if (send) NET.send({ t: 'outfit', o: ME.outfit });

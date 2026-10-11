@@ -69,6 +69,7 @@ const INTERIOR = {
   enter(b, opts = {}) {
     if (!b || !this.canUse()) return;
     if (this.cur && this.cur.b === b) return;
+    if (!opts.fromRoof && !JOBS.onEnter(b, opts)) return;
     if (this.cur) this.dispose();
     this.clearRoof();
     const topF = this.tall(b) ? this.floorsOf(b) - 1 : 0, f0 = opts.fromRoof ? topF : 0;
@@ -131,7 +132,7 @@ const INTERIOR = {
     for (const b of buildingsNear(ME.x, ME.z)) {
       const d = b.door; const ex = ME.x - d.wx, ez = ME.z - d.wz; if (ex * ex + ez * ez > 2.2 * 2.2) continue;
       const lat = Math.abs(ex * d.sz - ez * d.sx); if (lat > 1.2) continue;
-      if ((ME.vx * -d.sx + ME.vz * -d.sz) > 1 && Math.abs(ME.y - b.y0) < 1.5) { this.enter(b); return; }
+      if ((ME.vx * -d.sx + ME.vz * -d.sz) > 1 && Math.abs(ME.y - b.y0) < 1.5) { this.enter(b, { walk: 1 }); return; }
     }
   },
   nearDoor() {

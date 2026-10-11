@@ -12,16 +12,34 @@ const NET_ERR = {
   timeout: '연결 시간 초과 — 네트워크를 확인하고 다시 시도해 주세요', nopeer: 'PeerJS를 불러오지 못했어요 (네트워크 확인 후 새로고침)',
 };
 function netErr(code) { const e = new Error(NET_ERR[code] || ('네트워크 오류: ' + code)); e.code = code; return e; }
+// ---- TURN 중계 서버: 와이파이가 다르거나 LTE/5G끼리도 연결되게 (직접 연결이 막히면 중계 서버를 거친다) ----
+// Open Relay(metered.ca) 무료 TURN의 공개 정적 인증: username = "만료시각:이름", credential = base64(HMAC-SHA1(공개 시크릿, username))
+const TURN = { ice: [], ready: null };
+function prepTurn() {
+  if (TURN.ready) return TURN.ready;
+  TURN.ready = (async () => {
+    try {
+      const user = Math.floor(Date.now() / 1000 + 24 * 3600) + ':sbc3d';
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+      const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(user)));
+      let bin = ''; for (const b of sig) bin += String.fromCharCode(b); const cred = btoa(bin);
+      TURN.ice = [{ urls: ['turn:staticauth.openrelay.metered.ca:80', 'turn:staticauth.openrelay.metered.ca:80?transport=tcp', 'turn:staticauth.openrelay.metered.ca:443', 'turns:staticauth.openrelay.metered.ca:443?transport=tcp'], username: user, credential: cred }];
+    } catch (e) { console.warn('TURN 준비 실패', e); TURN.ice = []; }
+  })();
+  return TURN.ready;
+}
 function peerOpts() {
   const o = { debug: 0, config: { iceServers: [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:stun.services.mozilla.com:3478' }
+  { urls: 'stun:staticauth.openrelay.metered.ca:80' },
+  ...TURN.ice
 ] } };
   const h = URLP.get('peerhost'); // 테스트/자체 서버용 (기본은 PeerJS 공개 클라우드 서버, https)
   if (h) { o.host = h; o.port = +(URLP.get('peerport') || 443); o.path = URLP.get('peerpath') || '/'; o.secure = URLP.has('peersecure') ? URLP.get('peersecure') === '1' : o.port === 443; }
   return o;
 }
+prepTurn();
 function inviteLink(room) { const u = new URL(location.href); u.hash = ''; for (const k of ['debug', 'quick']) u.searchParams.delete(k); u.searchParams.set('room', room); return u.toString(); }
 function cleanUrl() { const u = new URL(location.href); u.hash = ''; for (const k of ['room', 'quick']) u.searchParams.delete(k); return u.toString(); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -274,7 +292,7 @@ const NET = {
   playerMsg() {
     const m = { t: 'p', n: ME.name, x: +ME.x.toFixed(2), y: +ME.y.toFixed(2), z: +ME.z.toFixed(2), yaw: +ME.yaw.toFixed(3), spd: +ME.spd.toFixed(2), gr: ME.grounded ? 1 : 0,
       st: ME.dead ? 'dead' : ME.sitBench ? 'sit' : ME.swim ? 'swim' : ME.knockT > 0.6 ? 'knocked' : 'normal', aim: ME.aiming ? 1 : 0, ap: +(-CAM.pitch).toFixed(2), w: ME.weapon, dance: ME.dance, guard: ME.combatT > G.t ? 1 : 0,
-      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), rc: POLICE.rcOut(), wanted: ME.wanted, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
+      veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), rc: POLICE.rcOut(), wanted: ME.wanted, jb: JOBS.id, cr: JOBS.criminal() ? 1 : 0, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
     return m;
@@ -351,12 +369,13 @@ const NET = {
         if (m.join) { toast(`🎉 ${rp.name} 입장!`); UI.chatLine(null, `${rp.name}님이 들어왔습니다`); }
         this.updateRoomInfo(); break;
       }
+      case 'copArrest': case 'arrestOk': case 'heal': case 'healOk': if (m.to === ME.id) JOBS.onNet(m, f); break;
       case 'nameNo': if (!G.isHost && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce('❌ 닉네임 사용 불가', m.r === 'bad' ? '"관리자"가 들어간 닉네임은 쓸 수 없어요' : '이 방에 같은 닉네임이 있어요 — 바꿔서 다시 들어와 주세요'); setTimeout(() => location.replace(inviteLink(G.room)), 2200); } break;
       case 'migrate': if (!G.isHost && conn === this.hostConn) { this.migrateUntil = performance.now() + 25000; this.migrateAid = m.aid; } break;
       case 'p': {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) rp.name = m.n;
-        Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, hp: m.hp, grudge: m.g || {} });
+        Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, jb: JOB_BY[m.jb] ? m.jb : 'none', cr: m.cr ? 1 : 0, hp: m.hp, grudge: m.g || {} });
         refreshRemoteName(rp); if (G.isHost) POLICE.observe(conn && conn.pid ? conn.pid : f, m.wanted, m.rc);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };

@@ -133,7 +133,7 @@ const LAW = {
     if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
     const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
     INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
-    const stars = ME.wanted; const wr = ME.warrant; const s = Math.max(40, stars * 40, wr ? wr.s : 0); // 신고 수사로 정해진 형량이 있으면 그 형량
+    const stars = ME.wanted; const wr = ME.warrant; const s = Math.max(40, stars * 40, wr ? wr.s : 0, Math.ceil(JOBS.record)); // 범죄 기록(형량)이 있으면 그만큼 복역 // 신고 수사로 정해진 형량이 있으면 그 형량
     ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
@@ -163,7 +163,7 @@ const LAW = {
     if (Math.random() < 0.35 || ME.forceEscape) {
       ME.jail = null; removeCollider(c.doorCol); removeCollider(pr.gateCol); pr.gateMesh.visible = false;
       this.esc = { pr, c, until: G.t + 75 };
-      addWanted(3); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
+      addWanted(3); JOBS.crime('escape'); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
     } else { j.t += 30; j.escCool = G.t + 20; toast('❌ 탈옥 실패 — 교도관에게 들켰다! 형량 +30초', 2600); sfx('error'); CAM.shake = 0.3; }
   },
   restoreDoors() {
@@ -184,7 +184,7 @@ const LAW = {
       if (j.escT) { if (Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) > 2) { j.escT = 0; toast('⛓️ 탈옥 시도 중단'); } else if (G.t >= j.escT) { this.escapeResolve(); if (!ME.jail) { this.hud.style.display = 'none'; return; } } }
       j.t -= dt; const t = Math.max(0, Math.ceil(j.t)); const card = ME.inv.card | 0; const pr = PRISONS[j.pr];
       this.hud.style.display = ''; this.hud.innerHTML = `🔒 ${pr.name} ${j.cell + 1}번 감방 · 남은 형량 <b style="color:#ffd34a">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b><br><small style="opacity:.8">${j.escT ? `⛓️ 자물쇠 따는 중… ${Math.max(0, j.escT - G.t).toFixed(1)}초` : card > 0 ? `🪪 출소카드 ${card}장 보유 — E 로 사용` : '감방 문 앞에서 E: 탈옥 시도 · 출소카드는 경찰서에서 구입'}</small>`;
-      if (j.t <= 0) this.release('🔓 형기를 마치고 정문으로 출소했다');
+      if (j.t <= 0) { JOBS.record = 0; this.release('🔓 형기를 마치고 정문으로 출소했다 — 범죄자 신분 해제'); }
       return;
     }
     this.hud.style.display = 'none';
@@ -204,8 +204,8 @@ function safeOutfit(o, adm) { if (!o || adm || !o.mask || o.mask === 'none') ret
 function setRemoteOutfit(rp, o) { if (!o) return; rp.rawOutfit = o; rp._madm = G.adminId === rp.id; rp.char.setOutfit(safeOutfit(o, rp._madm)); }
 function refreshRemoteName(rp) {
   const adm = G.adminId === rp.id; if (rp.rawOutfit && rp._madm !== adm) setRemoteOutfit(rp, rp.rawOutfit);
-  const key = rp.name + '|' + !!rp.jail + '|' + adm; if (rp._nk === key) return; rp._nk = key;
-  rp.char.setName((adm ? '[관리자] ' : '') + (rp.name || '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ff3b3b' : rp.jail ? '#ff9a6a' : (rp.baseCol || '#9fe0ff'));
+  const key = rp.name + '|' + !!rp.jail + '|' + adm + '|' + (rp.jb || '') + '|' + (rp.cr || 0); if (rp._nk === key) return; rp._nk = key;
+  const ji = jobIcon(rp.jb); rp.char.setName((adm ? '[관리자] ' : '') + (ji ? ji + ' ' : '') + (rp.name || '') + (rp.cr && !rp.jail ? ' 🦹범죄자' : '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ff3b3b' : rp.jail ? '#ff9a6a' : rp.cr ? '#ff6a3a' : (rp.baseCol || '#9fe0ff'));
 }
 if (ADMIN.enabled()) {
   // Admin field is hidden by default; revealed only after 7 consecutive clicks on the ? button
