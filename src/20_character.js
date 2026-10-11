@@ -343,6 +343,9 @@ class Character {
       p.lHx = lerp(p.lHx, 0, e); p.rHx = lerp(p.rHx, 0.1, e); p.lHz = lerp(p.lHz, 0.2, e); p.rHz = lerp(p.rHz, -0.15, e); p.lK = lerp(p.lK, 0.1, e); p.rK = lerp(p.rK, 0.3, e); p.hdY = lerp(p.hdY, 0.5, e); p.spY = lerp(p.spY, 0, e); p.pitch = lerp(p.pitch, 0, e); p.hipsY = 0.95;
       p.bodyY = 0.12 * e;
     }
+    if (st === 'sleep') { // 침대에 반듯이 누워 자기
+      Object.assign(p, { bodyX: -Math.PI / 2, bodyY: 0.12, lSz: 0.14, rSz: -0.14, lSx: 0.05, rSx: 0.05, lE: -0.25, rE: -0.25, lHx: 0, rHx: 0, lHz: 0.04, rHz: -0.04, lK: 0.08, rK: 0.12, hdY: 0.3 + Math.sin(t * 0.3) * 0.05, hdX: 0, spY: 0, spX: 0, pitch: 0, hipsY: 0.95 });
+    }
     // apply with damping
     const k = 1 - Math.exp(-dt * (s.snap ? 60 : 18)); const c = this.pose;
     for (const key in p) { if (c[key] === undefined) c[key] = p[key]; c[key] += (p[key] - c[key]) * k; }
