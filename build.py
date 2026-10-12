@@ -66,6 +66,25 @@ out_dir = os.environ.get('OUT_DIR', root)
 os.makedirs(out_dir, exist_ok=True)
 open(os.path.join(out_dir, 'game.mjs'), 'w', encoding='utf-8').write(js)
 tpl = open(os.path.join(src, 'template.html'), encoding='utf-8').read()
+# ---- 이모티콘 전부 지우기 (저퀄리티 느낌 → 글씨·직접 그린 아이콘으로) ----
+# ★☆ 같은 기호는 남긴다 (수배 별 등). 이모티콘 뒤에 붙은 공백 하나도 같이 지운다.
+_KEEP = set('★☆✓✔✕✖✦▲▼◀▶●○◆◇■□')
+_EMO = re.compile('[\U0001F000-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF\u21A9\u21AA\u2139\u203C\u2049\u3297\u3299]')
+def _strip(t):
+    out = []; i = 0; n = len(t)
+    while i < n:
+        ch = t[i]
+        if _EMO.match(ch) and ch not in _KEEP:
+            i += 1
+            while i < n and t[i] in '\uFE0F\u200D\u20E3' or (i < n and t[i - 1] == '\u200D' and _EMO.match(t[i])): i += 1
+            if i < n and t[i] == ' ': i += 1
+            continue
+        if ch in '\uFE0F\u20E3': i += 1; continue
+        out.append(ch); i += 1
+    return ''.join(out)
+if os.environ.get('KEEP_EMOJI') != '1':
+    js = _strip(js); tpl = _strip(tpl)
+    open(os.path.join(out_dir, 'game.mjs'), 'w', encoding='utf-8').write(js)
 out = tpl.replace('/*__JS__*/', js)
 open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8').write(out)
 # ---- 검색엔진/공유용 정적 파일 (og.png, robots.txt, sitemap.xml) → 배포 폴더로 복사 ----
