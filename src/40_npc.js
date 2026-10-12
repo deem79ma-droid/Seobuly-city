@@ -1,3 +1,4 @@
+// @v 2026101218
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 46; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -23,6 +24,7 @@ function makePed(i) {
   PEDS.push(p); return p;
 }
 function pedSetIdentity(p, kind, seed) {
+  p.mem = null; // 다른 사람이 됐으니 기억도 새로
   p.kind = kind; p.seed = seed; const r = mulberry32(seed);
   const ok = kind === 'gangA' || kind === 'gangB' || kind === 'police' || kind === 'doctor' || kind === 'worker' ? kind : 'civ';
   p.outfit = randomOutfit(r, kind === 'medic' ? 'doctor' : ok);
@@ -58,8 +60,8 @@ function edgeNearPoint(px, pz, minD, maxD, filter) {
 }
 function playersList() { // positions of all players (host view)
   // 실내에 있는 사람은 건물 문 앞 좌표로 취급(NPC가 실내 좌표로 몰려가지 않게), 수감자는 수배 0
-  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, gang: JOBS.gang(), inVeh: !!ME.vehicle, me: true, inside: ins }); }
-  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, gang: rp.jb === 'gangA' || rp.jb === 'gangB' ? rp.jb : null, inVeh: !!rp.veh, inside: ins }); }
+  const L = []; if (!ME.dead) { const a = anchorOf(ME); const ins = !!INTERIOR.cur; L.push({ id: ME.id, x: a.x, y: a.y, z: a.z, wanted: ins || ME.jail ? 0 : ME.wanted, grudge: ins ? {} : ME.grudge, gang: JOBS.gang(), aimGun: ME.aiming && !WEAPONS[ME.weapon]?.melee, inVeh: !!ME.vehicle, me: true, inside: ins }); }
+  for (const [id, rp] of G.players) if (!rp.dead) { const a = anchorOf(rp); const ins = (rp.bi ?? -1) >= 0; L.push({ id, x: a.x, y: a.y, z: a.z, wanted: ins || rp.jail ? 0 : rp.wanted || 0, grudge: ins ? {} : rp.grudge || {}, gang: rp.jb === 'gangA' || rp.jb === 'gangB' ? rp.jb : null, aimGun: !!rp.aim && !WEAPONS[rp.w]?.melee, inVeh: !!rp.veh, inside: ins }); }
   return L;
 }
 function nearestPlayerDist(x, z) { let d = 1e9; if (typeof ME !== 'undefined') { const a = anchorOf(ME); d = Math.hypot(a.x - x, a.z - z); } for (const rp of G.players.values()) { const a = anchorOf(rp); d = Math.min(d, Math.hypot(a.x - x, a.z - z)); } return d; }
@@ -237,6 +239,7 @@ function pedDamage(p, amt, from, opts = {}) {
     const amtCash = p.kind.startsWith('gang') ? Math.floor(rnd(80, 600)) : p.kind === 'police' ? Math.floor(rnd(50, 200)) : Math.floor(rnd(20, 260));
     spawnPickup(p.x + rnd(-0.5, 0.5), p.z + rnd(-0.5, 0.5), amtCash);
     if (fromPlayer) notifyPlayer(from, { t: 'kill', k: p.kind });
+    if (fromPlayer) NPCMEM.witness(p.x, p.z, from, p.kind === 'gangA' || p.kind === 'gangB' ? 3 : 8, p);
   }
   // nearby civilians panic
   if (opts.kind === 'gun' || p.hp <= 0) panicAround(p.x, p.z, 30);

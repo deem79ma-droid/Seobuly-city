@@ -1,4 +1,4 @@
-// @v 2026101121
+// @v 2026101218
 
 // ================= CONSTRUCTION (건축 의뢰) =================
 const BUILD_DESIGNS = {
@@ -151,7 +151,7 @@ function applyPlotState(s) {
   p.owner = s.o; p.ownerName = s.on; p.design = s.d; p.fl = s.d ? clampFloors(s.d, s.fl) : 0; p.progress = s.pr; p.state = s.s; p.bank = s.b; syncPlotVisual(p);
   if (!wasDone && p.state === 'done' && G.started && !G.isHost) onBuildDone(p);
 }
-function savePlots() { if (!G.isHost) return; try { localStorage.setItem('sbc3d_world', JSON.stringify({ plots: PLOTS.map(plotState), time: G.time })); } catch (e) { } }
+function savePlots() { if (!G.isHost) return; ECON.save(); try { localStorage.setItem('sbc3d_world', JSON.stringify({ plots: PLOTS.map(plotState), time: G.time })); } catch (e) { } }
 function loadPlots() {
   try { const w = (NET.wsMode && NET.wsSave) || JSON.parse(localStorage.getItem('sbc3d_world') || 'null'); if (!w) return; /* 서버 저장이 있으면 그걸 쓴다 */ for (const s of w.plots) { if (s.s === 'building' && s.pr === undefined) s.pr = 0; applyPlotState(s); } if (w.time) G.time = w.time; } catch (e) { }
 }

@@ -1,4 +1,4 @@
-// @v 2026101119
+// @v 2026101219
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -33,8 +33,8 @@ const UI = {
     if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
-  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`🪵${i.wood}`); if (i.meat) parts.push(`🥩${i.meat}`); if (i.food) parts.push(`🍱${i.food}`); if (i.medkit) parts.push(`🩹${i.medkit}`); if (i.drink) parts.push(`🍺${i.drink}`); if (ME.keys && ME.keys.length) parts.push(`🔑${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
-  buildHotbar() { const hb = $('#hotbar'); hb.innerHTML = ''; WEAPON_ORDER.forEach((w, i) => { if (!ME.weapons[w]) return; const s = document.createElement('span'); s.textContent = `${i + 1} ${WEAPONS[w].icon}`; s.className = ME.weapon === w ? 'on' : ''; hb.appendChild(s); }); },
+  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`목재 ${i.wood}`); if (i.meat) parts.push(`고기 ${i.meat}`); if (i.food) parts.push(`도시락 ${i.food}`); if (i.medkit) parts.push(`구급상자 ${i.medkit}`); if (i.drink) parts.push(`음료 ${i.drink}`); if (i.card) parts.push(`출소카드 ${i.card}`); if (ME.keys && ME.keys.length) parts.push(`열쇠 ${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
+  buildHotbar() { const hb = $('#hotbar'); hb.innerHTML = ''; WEAPON_ORDER.forEach((w, i) => { if (!ME.weapons[w]) return; const s = document.createElement('span'); s.textContent = `${i + 1} ${WEAPONS[w].name}`; s.className = ME.weapon === w ? 'on' : ''; hb.appendChild(s); }); },
   updateWeapon() { const W = WEAPONS[ME.weapon]; $('#wName').textContent = `${W.icon} ${W.name}`; $('#wAmmo').textContent = W.melee ? (W.chop ? '나무를 베면 목재 획득' : '') : `${ME.mag[ME.weapon] || 0} / ${ME.ammo[ME.weapon] || 0}${ME.reloadT > 0 ? ' · 재장전…' : ''}`; this.buildHotbar(); },
   damageFlash(a) { const e = $('#dmgFlash'); e.style.transition = 'none'; e.style.opacity = Math.min(0.9, 0.3 + a); requestAnimationFrame(() => { e.style.transition = 'opacity .5s'; e.style.opacity = 0; }); },
   hitMarker() { const c = $('#cross'); c.classList.add('hit'); clearTimeout(this._hm); this._hm = setTimeout(() => c.classList.remove('hit'), 120); sfx('hit', undefined, undefined, 0.3); },
@@ -67,7 +67,7 @@ const UI = {
     const wrap = box.querySelector('.items');
     for (const it of items) {
       const b = document.createElement('button'); b.className = 'item' + (it.dis ? ' dis' : '');
-      b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
+      b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined && (typeof it.p === 'number' ? it.p > 0 : it.p !== '') ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
       b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (ME.money < it.p) { toast('💸 돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
       wrap.appendChild(b);
@@ -104,10 +104,7 @@ const UI = {
         { ic: '🎯', t: `사격 학원 (Lv ${ME.skills.shoot})`, p: 3000, d: '명중률·데미지 증가', fn: () => skillUp('shoot', '사격') },
         { ic: '🥋', t: `격투 도장 (Lv ${ME.skills.fight})`, p: 3000, d: '주먹·근접 데미지 증가', fn: () => skillUp('fight', '격투') },
         { ic: '🏊', t: `수영 강습 (Lv ${ME.skills.swim})`, p: 1500, fn: () => skillUp('swim', '수영') }]); break;
-      case 'food': this.openMenu('🍜 음식점', '배를 채우면 체력이 회복된다', [
-        { ic: '🍙', t: '김밥', p: 500, d: '+15 HP', fn: () => heal(15) }, { ic: '🍜', t: '라면', p: 900, d: '+25 HP', fn: () => heal(25) },
-        { ic: '🍗', t: '치킨', p: 3000, d: '+60 HP', fn: () => heal(60) }, { ic: '🥩', t: '고기 구워먹기', p: 0, d: '고기 1개 → +45 HP', dis: !ME.inv.meat, disMsg: '고기가 없다', fn: () => { ME.inv.meat--; heal(45); } },
-        { ic: '🍱', t: '도시락 포장', p: 1200, d: '인벤토리 +1 (언제든 +35HP)', fn: () => { ME.inv.food++; } }]); break;
+      case 'food': FOOD.open(null, false); break;
       case 'pcbang': this.openMenu('🖥️ PC방', '1시간 ₩1,000 · 에임 대회 상금!', [{ ic: '🎮', t: '에임 대회 참가', p: 1000, d: '10초 안에 타겟 클릭 → 상금', fn: () => { this.aimGame(); return true; } }]); break;
       case 'gym': this.openMenu('💪 헬스장', '', [{ ic: '🏋️', t: `웨이트 (Lv ${ME.skills.fit})`, p: 1200, d: '체력 스킬 +1', fn: () => skillUp('fit', '체력') }, { ic: '🥤', t: '프로틴 쉐이크', p: 500, d: '+10 HP · 스태미나 회복', fn: () => { heal(10); ME.stamina = 100; } }, { ic: '🥊', t: `복싱 (Lv ${ME.skills.fight})`, p: 2000, fn: () => skillUp('fight', '격투') }]); break;
       case 'pool': this.openMenu('🏊 수영장', '', [{ ic: '🏊', t: '자유 수영', p: 800, d: '+30 HP · 수영 스킬', fn: () => { heal(30); if (ME.skills.swim < 5) ME.skills.swim++; toast('🏊 상쾌하다!'); } }, { ic: '🧖', t: '사우나', p: 1500, d: 'HP 100', fn: () => { ME.hp = 100; } }]); break;
@@ -122,6 +119,7 @@ const UI = {
         { ic: '💃', t: '춤추기', p: 0, fn: () => { setTimeout(() => this.openDance(), 50); } },
         { ic: '🎧', t: 'DJ 신청곡 (BPM 변경)', p: 500, fn: () => { MUSIC.bpm = pick([110, 124, 128, 140, 96]); toast(`🎧 BPM ${MUSIC.bpm}`); } }]); break;
       case 'casino': this.openCasino(); break;
+      case 'court': courtFacilityMenu(); break;
       case 'hotel': this.openMenu('🏨 시모느 리조트 호텔', '', [{ ic: '🛏️', t: '숙박 (체력 회복 + 스폰 설정)', p: 5000, fn: () => { ME.hp = 100; ME.homePlot = null; ME.spawnHotel = true; toast('🛏️ 푹 쉬었다'); } }, { ic: '🍹', t: '루프탑 바', p: 1500, fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.4); } }]); break;
     }
   },
@@ -210,7 +208,7 @@ const UI = {
   },
   // ---------- peds / animals / players ----------
   openPed(p) {
-    const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { if (p.char) p.char.say(pick(PED_LINES[p.kind] || PED_LINES.civ), 4); pedAction(p, 'talk'); } }, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { const d = Math.floor(Math.random() * 8); ME.dance = d; pedAction(p, 'dance', d); } }];
+    const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { pedAction(p, 'talk'); } } /* NPC가 기억·상황에 맞게 대답한다 (방장이 정함) */, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { const d = Math.floor(Math.random() * 8); ME.dance = d; pedAction(p, 'dance', d); } }];
     if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { if (p.char) p.char.say('뭐, 뭐예요?!', 1.4); pedAction(p, 'rob'); } }); // 반응은 방장이 정한다: 돈 없음·순순히·도망치며 신고·반격·총
     if (p.kind === 'police' && ME.wanted) items.push({ ic: '🙇', t: '자수하기', p: ME.wanted * 1500, d: '벌금 내고 수배 해제', fn: () => { ME.wanted = 0; toast('🙇 자수했다'); } });
     if (p.kind === 'police' && ADMIN.on) items.push({ ic: '🔓', t: '수감자 무료 석방 (관리자)', p: 0, fn: () => ADMIN.freeOther() });
@@ -239,6 +237,9 @@ const UI = {
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
+      { ic: '🏛️', t: '정치 · 경제', p: 0, d: `${ECON.presName()} · 세금 ${Math.round(ECON.taxRate() * 100)}% · 집값 ×${ECON.houseMul().toFixed(2)}${ECON.E.elec ? ' · 🗳️ 선거 중!' : ''}`, fn: () => setTimeout(() => ECON.open(), 30) },
+      { ic: '📰', t: '서불리 일보', p: 0, d: ECON.E.news[0] ? ECON.E.news[0].s.slice(0, 40) : '뉴스 없음', fn: () => setTimeout(() => ECON.openNews(), 30) },
+      { ic: '🧭', t: '장소 찾기', p: 0, d: UI.waypoint ? `📍 ${UI.waypoint.label || '표시한 곳'} · ${whereTxt(UI.waypoint.x, UI.waypoint.z)}` : '총포사·옷가게·음식점… 방향·거리 안내', fn: () => setTimeout(() => NAV.open(), 30) },
       { ic: '📖', t: '가이드', p: 0, d: '돈 버는 법 · 집 · 털기 · 나무꾼 · 갱단', fn: () => setTimeout(() => openGuide(), 30) },
       { ic: '💼', t: '직업', p: 0, d: `${JOBS.cur.icon} ${JOBS.cur.name}${JOBS.criminal() ? ' · 🦹 범죄자' : ''}`, fn: () => setTimeout(() => JOBS.openMenu(), 30) },
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
@@ -305,20 +306,20 @@ const UI = {
     const toS = (wx, wz) => { const dx = wx - px, dz = wz - pz; return [cx + a * dx + c * dz, cx + b * dx + d * dz]; };
     const R = cx - 10; const clampS = (p) => { const dx = p[0] - cx, dy = p[1] - cx, l = Math.hypot(dx, dy); return l > R ? [cx + dx / l * R, cx + dy / l * R, true] : [p[0], p[1], false]; };
     x.font = `${Math.round(S / 14)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
-    for (const f of FACILITIES) { const p = toS(f.x, f.z); if (Math.hypot(p[0] - cx, p[1] - cx) > R) continue; x.fillText(f.icon, p[0], p[1]); }
-    for (const p of PLOTS) { const s = toS(p.x, p.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : p.owner === ME.id ? '🏠' : '🏘️', s[0], s[1]); }
+    for (const f of FACILITIES) { const p = toS(f.x, f.z); if (Math.hypot(p[0] - cx, p[1] - cx) > R) continue; mapBadge(x, f.type, p[0], p[1], S / 13); }
+    for (const p of PLOTS) { const s = toS(p.x, p.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; mapBadge(x, p.state === 'empty' ? 'plotEmpty' : p.state === 'building' ? 'plotBuild' : p.owner === ME.id ? 'plotMine' : 'plotOther', s[0], s[1], S / 15); }
     if (ME.wanted) for (const q of PEDS) if (q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked') { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = Math.floor(G.t * 4) % 2 ? '#ff3030' : '#3060ff'; x.beginPath(); x.arc(s[0], s[1], S / 70, 0, TAU); x.fill(); }
     for (const q of PEDS) if (q.state === 'fight' && q.kind.startsWith('gang')) { const s = toS(q.x, q.z); if (Math.hypot(s[0] - cx, s[1] - cx) > R) continue; x.fillStyle = q.kind === 'gangA' ? '#ff4040' : '#4080ff'; x.beginPath(); x.arc(s[0], s[1], S / 90, 0, TAU); x.fill(); }
-    for (const v of vehicles.values()) if (v.owner === ME.id) { const s = clampS(toS(v.x, v.z)); x.fillText('🚘', s[0], s[1]); }
-    TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); x.fillText('🚕', s[0], s[1]); }
-    if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); x.fillText('⚠️', s[0], s[1]); }
-    if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); x.fillText('📍', s[0], s[1] - 6); }
+    for (const v of vehicles.values()) if (v.owner === ME.id) { const s = clampS(toS(v.x, v.z)); mapBadge(x, 'car', s[0], s[1], S / 14); }
+    TAXI.drawRoute(x, toS); if (TAXI.cab && ME.vehicle !== TAXI.cab) { const s = clampS(toS(TAXI.cab.x, TAXI.cab.z)); mapBadge(x, 'taxi', s[0], s[1], S / 14); }
+    if (G.raid) { const s = clampS(toS(G.raid.x, G.raid.z)); mapBadge(x, 'raid', s[0], s[1], S / 13); }
+    if (this.waypoint) { const s = clampS(toS(this.waypoint.x, this.waypoint.z)); mapPin(x, s[0], s[1], S / 9); }
     JOBS.drawMini(x, toS, clampS);
     for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = clampS(toS(ra.x, ra.z)); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], S / 45, 0, TAU); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
     // player arrow
     const ang = -(ME.vehicle ? ME.vehicle.yaw : ME.yaw) + CAM.yaw; x.save(); x.translate(cx, cx); x.rotate(ang); x.fillStyle = '#fff'; x.strokeStyle = '#000'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, -S / 22); x.lineTo(S / 32, S / 30); x.lineTo(0, S / 60); x.lineTo(-S / 32, S / 30); x.closePath(); x.stroke(); x.fill(); x.restore();
     // north
-    const n = clampS(toS(px, pz - 5000)); x.fillStyle = '#fff'; x.font = `bold ${Math.round(S / 16)}px sans-serif`; x.fillText('N', n[0], n[1]);
+    const n = clampS(toS(px, pz - 5000)); x.fillStyle = '#fff'; x.font = `bold ${Math.round(S / 16)}px sans-serif`; x.fillText('북', n[0], n[1]); x.fillStyle = '#cfd6e6'; x.font = `bold ${Math.round(S / 20)}px sans-serif`; for (const [dx, dz, t] of [[5000, 0, '동'], [0, 5000, '남'], [-5000, 0, '서']]) { const q = clampS(toS(px + dx, pz + dz)); x.fillText(t, q[0], q[1]); }
     x.restore();
   },
   openMap() { this.mapOpen = true; $('#bigmap').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); this.drawBigMap(); },
@@ -334,15 +335,15 @@ const UI = {
     for (const [id, R] of Object.entries(REGIONS)) { if (id === 'sea') continue; const p = P(R.cx, R.cz); x.font = '900 24px "Black Han Sans",sans-serif'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.7)'; x.globalAlpha = 0.85; x.strokeText(R.name, p[0], p[1] - 40); x.fillStyle = R.color; x.fillText(R.name, p[0], p[1] - 40); x.globalAlpha = 1; }
     const myD = districtAt(anchorOf(ME).x, anchorOf(ME).z);
     for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
-    x.font = '15px sans-serif'; for (const f of FACILITIES) { const p = P(f.x, f.z); x.fillText(f.icon, p[0], p[1]); }
-    x.font = '16px sans-serif'; for (const p of PLOTS) { const s = P(p.x, p.z); x.fillText(p.state === 'empty' ? '🪧' : p.state === 'building' ? '🏗️' : '🏠', s[0], s[1]); }
-    for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); x.fillText('🚘', s[0], s[1]); }
-    if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); x.font = '26px sans-serif'; x.fillText('📍', s[0], s[1] - 10); }
+    for (const f of FACILITIES) { const p = P(f.x, f.z); mapBadge(x, f.type, p[0], p[1], 17); }
+    for (const p of PLOTS) { const s = P(p.x, p.z); mapBadge(x, p.state === 'empty' ? 'plotEmpty' : p.state === 'building' ? 'plotBuild' : p.owner === ME.id ? 'plotMine' : 'plotOther', s[0], s[1], 14); }
+    for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); mapBadge(x, 'car', s[0], s[1], 16); }
+    if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); mapPin(x, s[0], s[1], 28); }
     x.font = '20px sans-serif'; JOBS.drawBig(x, P);
-    TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); x.font = '20px sans-serif'; x.fillText('🚕', s[0], s[1]); }
+    TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); mapBadge(x, 'taxi', s[0], s[1], 18); }
     for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
     const MA = anchorOf(ME); const me = P(MA.x, MA.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
-    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지(📍) 설정 · 숫자 = 16개 구역 (택시 목적지) · 🚕 내 택시 · 🪧 매물  🏗️ 공사중  🏠 건물', 14, H - 16);
+    x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지 설정 · 숫자 = 16개 구역 (택시 목적지)', 14, H - 16); { let lx = 430; for (const [k, t] of [['plotEmpty', '매물'], ['plotBuild', '공사중'], ['plotMine', '내 건물'], ['taxi', '택시'], ['court', '법원'], ['army', '군부대']]) { mapBadge(x, k, lx, H - 20, 15); x.fillStyle = 'rgba(255,255,255,.85)'; x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillText(t, lx + 12, H - 16); lx += 30 + t.length * 13; } }
   },
   // ---------- touch ----------
   buildTouch() {
@@ -352,7 +353,7 @@ const UI = {
       fire: mk('tFire', '●', 'right:18px;bottom:92px', 'big'), jump: mk('tJump', '↑', 'right:112px;bottom:18px', '', '점프'), aim: mk('tAim', '◎', 'right:114px;bottom:112px', '', '조준'),
       use: mk('tUse', 'E', 'right:198px;bottom:32px', '', '상호작용'), car: mk('tCar', '차', 'right:200px;bottom:124px', '', '탑승'), run: mk('tRun', 'RUN', 'left:22px;bottom:196px', 'sm', '달리기'),
       wpn: mk('tWpn', 'W', 'right:28px;bottom:192px', 'sm', '무기'), rel: mk('tRel', 'R', 'right:84px;bottom:196px', 'sm', '재장전'),
-      phone: mk('tPhone', '☎', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', 'M', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', 'T', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', 'G', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', 'C', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
+      phone: mk('tPhone', '폰', 'left:min(36vw,230px);top:10px', 'sm'), map: mk('tMap', 'M', 'left:calc(min(36vw,230px) + 52px);top:10px', 'sm'), chat: mk('tChat', 'T', 'left:calc(min(36vw,230px) + 104px);top:10px', 'sm'), dance: mk('tDance', 'G', 'left:calc(min(36vw,230px) + 156px);top:10px', 'sm'), cam: mk('tCam', 'C', 'left:calc(min(36vw,230px) + 208px);top:10px', 'sm'),
     };
     const hold = (el, on, off) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); AU.init(); on(); el.classList.add('on'); }, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off && off(); el.classList.remove('on'); }, { passive: false }); el.addEventListener('touchcancel', e => { off && off(); el.classList.remove('on'); }); };
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
@@ -398,7 +399,7 @@ const UI = {
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
-function pedAction(p, a, d) { if (G.isHost) { if (a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = d; } if (a === 'talk') { p.state = 'talk'; p.timer = 4; p.yaw = Math.atan2(ME.x - p.x, ME.z - p.z); } if (a === 'rob') hostRob(p, ME.id); } else NET.send({ t: 'pedAct', id: p.id, a, d }); }
+function pedAction(p, a, d) { if (G.isHost) { if (a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = d; } if (a === 'talk') { p.state = 'talk'; p.timer = 4; p.yaw = Math.atan2(ME.x - p.x, ME.z - p.z);  NPCMEM.talk(p, ME.id); } if (a === 'rob') hostRob(p, ME.id); } else NET.send({ t: 'pedAct', id: p.id, a, d }); }
 function spawnOwned(g, nx, nz) {
   let v = vehicles.get(g.id);
   const r = edgeNearPoint(nx, nz, 4, 30) || edgeNearPoint(nx, nz, 20, 80);
@@ -408,7 +409,7 @@ function spawnOwned(g, nx, nz) {
   else { if (v.driver && v.driver !== ME.id) { toast('누군가 운전 중이다'); return; } v.spawn = { x, z, yaw }; v.reset(); v.color = g.color; }
   v.ctrl = 'local'; v.mesh.visible = true;
   NET.send({ t: 'vspawn', id: v.id, model: g.model, color: g.color, x, z, yaw, owner: ME.id });
-  UI.waypoint = { x, z };
+  UI.waypoint = { x, z, label: '📍 지도에 찍은 곳' };
 }
 function fastTravel(r) {
   const R = REGIONS[r]; if (ME.jail) { toast('수감 중에는 이동할 수 없다'); return; } INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true);

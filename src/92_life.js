@@ -1,3 +1,4 @@
+// @v 2026101218
 
 // ================= 생활: NPC 강도 반응 · 집에서 잠자기 =================
 
@@ -12,7 +13,8 @@ function hostRob(p, from) {
   else if (x < 0.25) r = 'gun';
   else if (x < 0.6) r = 'report';
   else r = 'pay';
-  if (r === 'pay' || r === 'report') { amt = Math.floor(rnd(30, 400)); p.robbedAt = G.t; }
+  if (r === 'pay' || r === 'report') { amt = Math.floor(rnd(20, 220) * ECON.crimeMul()); p.robbedAt = G.t; }
+  NPCMEM.witness(p.x, p.z, from, 3, p); // 피해자·목격자가 기억한다
   if (r === 'fight' || r === 'gun') {
     p.weapon = r === 'gun' ? 'pistol' : 'fist'; p.target = tg; p.state = 'fight'; if (p.char) p.char.setWeapon(p.weapon);
     const id = p.id; setTimeout(() => { const q = PEDS[id]; if (q && q.state === 'fight' && q.target && q.target.id === from && q.kind === 'civ') { q.state = 'flee'; q.timer = 8; q.weapon = 'fist'; if (q.char) q.char.setWeapon('fist'); } }, 25000);

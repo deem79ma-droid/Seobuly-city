@@ -1,4 +1,4 @@
-// @v 2026101121
+// @v 2026101218
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -110,7 +110,7 @@ const NET = {
   // 로비: 공개방 인원
   wsCounts() { return fetch(this.server() + '/rooms', { cache: 'no-store' }).then(r => r.json()).catch(() => null); },
   async wsPickPublic() { const c = await this.wsCounts() || {}; let best = null, bn = -1; for (const r of PUBLIC_ROOMS) { const n = +c[r] || 0; if (n < MAX_PLAYERS && n > bn) { best = r; bn = n; } } return best || PUBLIC_ROOMS[0]; },
-  wsSaveTick(dt) { if (!this.wsMode || !G.isHost || !G.started) return; if ((this._saveT -= dt) > 0) return; this._saveT = 30; this.wsSend({ sys: 'save', v: { plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), time: G.time, at: Date.now() } }); },
+  wsSaveTick(dt) { if (!this.wsMode || !G.isHost || !G.started) return; if ((this._saveT -= dt) > 0) return; this._saveT = 30; this.wsSend({ sys: 'save', v: { plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), time: G.time, econ: Object.assign({}, ECON.E, { elec: null, imp: null }), at: Date.now() } }); },
   peer: null, peerRoom: null, // 방 코드를 내가 점유할 때(방장 대기)의 Peer
   gpeer: null,                // 다른 방에 참가할 때의 임시 Peer
   conns: [], hostConn: null, migrateUntil: 0, migrateAid: null, lastP: 0, lastW: 0, bc: null, recovering: false, kicked: false, helloSent: false,
@@ -404,7 +404,7 @@ const NET = {
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
         const rp = getRemote(m.id); rp.name = m.n; setRemoteOutfit(rp, m.o); rp._nk = null; refreshRemoteName(rp);
-        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) });
+        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) }); ECON.broadcast();
         for (const c of this.conns) { if (c === conn || !c.pid) continue; const o = G.players.get(c.pid); if (o) try { conn.send({ t: 'peer', f: ME.id, id: c.pid, n: o.name, o: o.char.outfit }); } catch (e) { } }
         this.relay({ t: 'peer', f: ME.id, id: m.id, n: m.n, o: m.o, join: 1 }, conn);
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
@@ -444,6 +444,12 @@ const NET = {
         this.updateRoomInfo(); break;
       }
       case 'burgle': HOUSE.onNet(m, f); break;
+      case 'econ': if (!G.isHost && conn === this.hostConn) ECON.apply(m.s); break;
+      case 'pol': if (G.isHost) { const rp = G.players.get(f); ECON.hostReq(m.o, f, rp ? rp.name : '?'); } break;
+      case 'ev': if (m.to === ME.id && COURT.pending) COURT.pending.ev = +m.v || 0; break;
+      case 'pedSay': { const p = PEDS[m.id]; if (p && p.char && !G.isHost) p.char.say(String(m.s).slice(0, 60), 3.5); break; }
+      case 'pedHelp': if (G.isHost) NPCMEM.help(f, PEDS[m.id]); break;
+      case 'lawReq': case 'lawAns': case 'lawFee': if (m.to === ME.id) COURT.onNet(m, f); break;
       case 'copArrest': case 'arrestOk': case 'heal': case 'healOk': if (m.to === ME.id) JOBS.onNet(m, f); break;
       case 'nameNo': if (!G.isHost && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce('❌ 닉네임 사용 불가', m.r === 'bad' ? '"관리자"가 들어간 닉네임은 쓸 수 없어요' : '이 방에 같은 닉네임이 있어요 — 바꿔서 다시 들어와 주세요'); setTimeout(() => location.replace(inviteLink(G.room)), 2200); } break;
       case 'migrate': if (!G.isHost && conn === this.hostConn) { this.migrateUntil = performance.now() + 25000; this.migrateAid = m.aid; } break;
@@ -487,9 +493,9 @@ const NET = {
       case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
-      case 'wanted': case 'robRes': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
+      case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
       case 'plotFail': if (m.to === ME.id) { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); } break;
-      case 'income': if (m.to === ME.id) { ME.money += m.amt; sfx('cash'); toast(`💰 임대 수익 ${fmtMoney(m.amt)} 수령`); } break;
+      case 'income': if (m.to === ME.id) { const r = ECON.net(m.amt * ECON.rentMul(), 'rent'); ME.money += r.net; sfx('cash'); toast(`💰 임대 수익 ${fmtMoney(r.net)} 수령${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); } break;
       case 'seat': {
         const v = vehicles.get(m.v); if (!v) break;
         if (m.s === 'd') { if (v.ai && G.isHost) ejectNpcDriver(v); v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false; v.driver = f; v.ctrl = 'remote'; v.mesh.visible = true; if (ME.vehicle === v && ME.seat === 'd') { exitVehicle(true); } }
@@ -523,11 +529,11 @@ const NET = {
       case 'adopt': if (G.isHost) { const a = ANIMALS[m.a]; if (a && !a.owner) { a.owner = f; a.state = 'follow'; notifyPlayer(f, { t: 'adopted', a: a.id }); } } break;
       case 'pet': { const a = ANIMALS[m.a]; if (a) FX.emoji('💕', a.x, a.y + 1.2, a.z); break; }
       case 'outfit': { const rp = G.players.get(f); if (rp) setRemoteOutfit(rp, m.o); break; }
-      case 'pedAct': if (G.isHost) { const p = PEDS[m.id]; if (p && p.state !== 'dead') { if (m.a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = m.d; } if (m.a === 'talk') { p.state = 'talk'; p.timer = 4; } if (m.a === 'rob') hostRob(p, f); } } break;
+      case 'pedAct': if (G.isHost) { const p = PEDS[m.id]; if (p && p.state !== 'dead') { if (m.a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = m.d; } if (m.a === 'talk') { p.state = 'talk'; p.timer = 4; const rp = G.players.get(f); if (rp) p.yaw = Math.atan2(rp.x - p.x, rp.z - p.z); NPCMEM.talk(p, f); } if (m.a === 'rob') hostRob(p, f); } } break;
     }
   },
 };
-const NO_RELAY = new Set(['hello', 'peer', 'migrate', 'nameNo', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
+const NO_RELAY = new Set(['pol', 'pedHelp', 'hello', 'peer', 'migrate', 'nameNo', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
 // tree regrowth (host)
 function hostTrees(dt) {
   if ((G._treeT = (G._treeT || 0) - dt) > 0) return; G._treeT = 5;

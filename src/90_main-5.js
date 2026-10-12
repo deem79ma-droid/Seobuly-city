@@ -1,4 +1,4 @@
-// @v 2026101121
+// @v 2026101218
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -168,7 +168,7 @@ async function loadWorld() {
   setLoad(0.9, '사람들과 동물들 배치 중…'); await tick();
   initPeds(); initTraffic(); initAnimals(); spawnParked();
   for (const p of PLOTS) syncPlotVisual(p);
-  if (G.isHost) loadPlots();
+  if (G.isHost) { loadPlots(); ECON.load(); }
   // player
   const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
@@ -179,7 +179,7 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); NAV.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -216,7 +216,7 @@ function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t
 function frame(dt, noRender) {
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; INP.fire = false; if (UI.joyReset) UI.joyReset(); }
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sleep ? 'sleep' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); JOBS.tick(dt); SLEEP.tick(dt); HOUSE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); JOBS.tick(dt); SLEEP.tick(dt); HOUSE.tick(dt); NAV.tick(dt); ECON.hostTick(dt); ECON.dailyTick(); NPCMEM.hostTick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const vv = [240, 340, 460, 520][G.quality] || 520, view2 = vv * vv, lod2 = (G.quality >= 2 ? 90 : 55) ** 2; // 품질별 차량 표시 거리 + 디테일 LOD

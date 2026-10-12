@@ -1,3 +1,4 @@
+// @v 2026101218
 
 // ================= LAW (체포/감옥/출소카드) + ADMIN 특권 =================
 const BANS = new Set(); try { for (const b of JSON.parse(localStorage.getItem('sbc3d_bans') || '[]')) BANS.add(b); } catch (e) { }
@@ -133,7 +134,8 @@ const LAW = {
     if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
     const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
     INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
-    const stars = ME.wanted; const wr = ME.warrant; const s = Math.max(40, stars * 40, wr ? wr.s : 0, Math.ceil(JOBS.record)); // 범죄 기록(형량)이 있으면 그만큼 복역 // 신고 수사로 정해진 형량이 있으면 그 형량
+    const stars = ME.wanted; const wr = ME.warrant; const s = LAW._courtS ?? Math.max(40, stars * 40, wr ? wr.s : 0, Math.ceil(JOBS.record));
+    if (LAW._courtS === undefined && COURT.intercept(s)) return; // 먼저 법원에서 재판 // 범죄 기록(형량)이 있으면 그만큼 복역 // 신고 수사로 정해진 형량이 있으면 그 형량
     ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
@@ -173,6 +175,7 @@ const LAW = {
   },
   tick(dt) {
     if (!G.started || !ME.char) return; if (!this.built) this.build();
+    if (ME.trial) { COURT.tick(); return; }
     for (const rp of G.players.values()) refreshRemoteName(rp);
     if (ADMIN.on) ADMIN.adminTick(dt);
     if (this.esc) { const E = this.esc, pr = E.pr; const inside = ME.x > pr.x0 && ME.x < pr.x1 && ME.z > pr.z0 && ME.z < pr.z1; if ((G.t > E.until && !inside) || G.t > E.until + 60 || ME.jail) this.restoreDoors(); }

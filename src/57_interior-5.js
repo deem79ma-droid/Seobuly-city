@@ -1,4 +1,4 @@
-// @v 2026101119
+// @v 2026101217
 
 // ================= 건물 실내 (모든 건물 입장 가능) =================
 // 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
@@ -273,7 +273,7 @@ const INTERIOR = {
         for (let r = 0; r < Math.floor((D - 6) / 3); r++) for (let c = 0; c < Math.floor((W - 3) / 3.4); c++) table4(-hw + 2.4 + c * 3.4, -hd + 6 + r * 3, cafe ? 0xe8e0d0 : 0xa07850, cafe);
         if (cafe) { sofa(-hw + 1.6, hd - 2, 0x8a5a3a); plant(hw - 1, hd - 1.2); plant(-hw + 1, -hd + 4); }
         if (fac) facItem(0, -hd + 3.4);
-        else item(0, -hd + 3.4, cafe ? '☕ 커피 주문 (₩4,500 · 스태미나 회복)' : '🍜 식사 주문 (₩9,000 · 체력 회복)', () => this.buy(cafe ? 4500 : 9000, cafe ? 'stamina' : 'hp'), 2.4);
+        else item(0, -hd + 3.4, cafe ? '☕ 카페 메뉴 보기' : `${FOOD.shop(b).ic} ${FOOD.shop(b).name} 메뉴 보기`, () => FOOD.open(b, cafe), 2.4);
         break;
       }
       case 'mart': {

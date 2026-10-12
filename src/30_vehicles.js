@@ -1,3 +1,4 @@
+// @v 2026101219
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -70,7 +71,7 @@ const FX = {
   },
   smoke(x, y, z, dark = 0.2, s = 1) { this.emit(false, x + rnd(-0.3, 0.3), y, z + rnd(-0.3, 0.3), rnd(-0.3, 0.3), rnd(1.5, 3), rnd(-0.3, 0.3), rnd(2, 4), 0.6 * s, 3.5 * s, dark, dark, dark * 1.05, 0.5, -0.3, 0.3); },
   fire(x, y, z, s = 1) { this.emit(true, x + rnd(-0.4, 0.4) * s, y, z + rnd(-0.4, 0.4) * s, rnd(-0.3, 0.3), rnd(1.5, 3.5), rnd(-0.3, 0.3), rnd(0.3, 0.7), 0.8 * s, 0.2, 1, rnd(0.35, 0.7), 0.1, 1, -1, 1); },
-  emoji(text, x, y, z, dur = 1.5) { const s = textSprite(text, '#fff', 'rgba(0,0,0,0)', 64); s.position.set(x, y, z); s.material.opacity = 1; scene.add(s); this.emojis.push({ s, t: dur }); },
+  emoji(text, x, y, z, dur = 1.5) { if (!text || !String(text).trim()) return; /* 이모티콘을 지운 뒤 빈 글자는 띄우지 않는다 */ const s = textSprite(text, '#fff', 'rgba(0,0,0,0)', 64); s.position.set(x, y, z); s.material.opacity = 1; scene.add(s); this.emojis.push({ s, t: dur }); },
   confetti(x, y, z) { for (let i = 0; i < 120; i++) { const c = new THREE.Color().setHSL(Math.random(), 0.9, 0.6); this.emit(true, x, y, z, rnd(-8, 8), rnd(6, 16), rnd(-8, 8), rnd(1.5, 3), 0.25, 0.2, c.r, c.g, c.b, 1, 9, 0.8); } },
 };
 

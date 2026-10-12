@@ -1,4 +1,4 @@
-// @v 2026101119
+// @v 2026101218
 // ================= 집: 사기 · 열쇠 · 남의 집 자물쇠 따기 · 털기 · 가이드 =================
 // 집(주택·빌라·아파트)마다 열쇠가 하나. 산 집의 열쇠는 그 집만 열고, 죽어도 잃지 않는다.
 // 열쇠가 없는 집은 잠겨 있다 → 문 앞 E: 자물쇠 따기(확률) 또는 집 사기.
@@ -14,7 +14,7 @@ const HOUSE = {
     return null;
   },
   ownerId(b) { if (!b) return null; if (b.plot) return b.plot.owner; for (const [id, rp] of G.players) if (Array.isArray(rp.keys) && rp.keys.includes(b.id)) return id; return null; },
-  price(b) { return HOUSE_PRICE[b.kind] || 300000; },
+  price(b) { return Math.round((HOUSE_PRICE[b.kind] || 300000) * ECON.houseMul() / 1000) * 1000; }, // 정책·시세에 따라 바뀐다
   chance() { return JOBS.isGang() ? 0.45 : 0.35; },
   label(b) { return this.mine(b) ? `🔑 내 집 들어가기 (${b.name})` : `🏠 ${b.name} · 🔒 잠김 (E: 자물쇠 따기 / 집 사기)`; },
   // 문 앞 E
@@ -57,7 +57,7 @@ const HOUSE = {
     const key = b.id + ':' + spot; if (G.t < (this.looted[key] || 0)) { toast('이미 뒤졌다 — 텅 비었다'); return; }
     this.looted[key] = G.t + 600; const r = Math.random(); let msg;
     if (r < 0.12) { msg = '아무것도 없다…'; }
-    else { const a = Math.floor(rnd(300, spot === 'safe' ? 4000 : 1800) / 10) * 10 * JOBS.robMul(); ME.money += a; msg = `💰 ${fmtMoney(a)} 챙겼다`; sfx('cash'); }
+    else { const a = Math.floor(rnd(150, spot === 'safe' ? 2000 : 900) * ECON.crimeMul() / 10) * 10 * JOBS.robMul(); ME.money += a; msg = `💰 ${fmtMoney(a)} 챙겼다`; sfx('cash'); }
     if (Math.random() < 0.2) { const it = pick(['medkit', 'food', 'drink']); ME.inv[it] = (ME.inv[it] | 0) + 1; msg += ` · ${({ medkit: '🩹 구급상자', food: '🍱 도시락', drink: '🍺 음료' })[it]} +1`; UI.updateInv(); }
     toast(msg, 2600);
     if (Math.random() < 0.25) { addWanted(1); toast('🚨 소리를 듣고 이웃이 신고했다!', 3000); }

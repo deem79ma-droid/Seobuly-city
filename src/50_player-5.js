@@ -1,4 +1,4 @@
-// @v 2026101119
+// @v 2026101218
 
 // ================= PLAYER =================
 const ME = {
@@ -137,6 +137,7 @@ function handlePersonal(m) {
   if (m.t === 'grudge') { ME.grudge[m.g] = G.t + 90; if (!ME._gT || G.t - ME._gT > 10) { toast(m.g === 'gangA' ? '🔴 레드 크루가 너를 노린다!' : '🔵 블루 독스가 너를 노린다!'); ME._gT = G.t; } }
   if (m.t === 'kill') { ME.kills++; JOBS.onKill(m.k); }
   if (m.t === 'robRes') onRobResult(m);
+  if (m.t === 'pedTip') toast(m.s, 3500);
   if (m.t === 'meat') { ME.inv.meat++; toast('🥩 고기 +1'); }
   if (m.t === 'petDead') { ME.petId = null; toast('🐾 반려동물이 죽었다…'); }
   if (m.t === 'adopted') { ME.petId = m.a; toast('🐶 입양 완료! 이제 따라다닌다'); }
@@ -313,7 +314,7 @@ function findInteract() {
   const cand = (d, obj) => { if (d < bd) { bd = d; best = obj; } };
   INTERIOR.interacts(cand); if (INTERIOR.cur) { for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); } return best; }
   for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, f.bld ? { label: `🚪 ${f.icon} ${f.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(f.bld) } : { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
-  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, HOUSE.isHome(nd.b) && !ADMIN.on ? { label: HOUSE.label(nd.b), key: 'E', fn: () => HOUSE.door(nd.b) } : { label: `🚪 ${nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
+  { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, HOUSE.isHome(nd.b) && !ADMIN.on ? { label: HOUSE.label(nd.b), key: 'E', fn: () => HOUSE.door(nd.b) } : { label: `🚪 ${nd.b.kind === 'restaurant' ? FOOD.shop(nd.b).ic + ' ' + FOOD.shop(nd.b).name : nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
   JOBS.interact(cand);
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
   const v = nearestVehicle(2.8);
