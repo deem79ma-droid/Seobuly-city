@@ -1,3 +1,4 @@
+// @v 2026101119
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -150,15 +151,14 @@ const JOBS = {
   },
   isTrespass(b) {
     if (!b || ADMIN.on || !RESIDENTIAL.includes(b.kind)) return false;
-    if (b.plot) return b.plot.owner !== ME.id;
-    return b.kind !== 'home';
+    return !HOUSE.mine(b); // 열쇠(산 집) · 내 땅 건물이면 내 집
   },
   // 문으로 걸어 들어갈 때(walk)는 남의 집이면 막고 경고만, E로 들어가면 가택 침입
   onEnter(b, opts) {
     if (!this.isTrespass(b)) return true;
-    if (opts && opts.walk) { if (G.t > this.walkWarnT) { this.walkWarnT = G.t + 4; toast('⚠ 남의 집이다 — E 를 눌러 들어가면 가택 침입(범죄)', 3000); } return false; }
-    this.crime('home'); if (Math.random() < 0.6) addWanted(1);
-    return true;
+    if (opts && opts.picked) { this.crime('home'); return true; } // 자물쇠를 따고 들어감 = 가택 침입
+    if (opts && opts.walk) { if (G.t > this.walkWarnT) { this.walkWarnT = G.t + 4; toast('🔒 잠긴 남의 집 — E: 자물쇠 따기 / 집 사기', 3000); } return false; }
+    HOUSE.door(b); return false; // 열쇠 없으면 잠겨 있다
   },
   onKill(k) {
     if (k === 'civ' || k === 'police' || k === 'medic' || k === 'worker') { this.crime('murder'); return; }

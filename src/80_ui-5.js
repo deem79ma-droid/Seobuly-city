@@ -1,3 +1,4 @@
+// @v 2026101119
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -32,7 +33,7 @@ const UI = {
     if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
-  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`🪵${i.wood}`); if (i.meat) parts.push(`🥩${i.meat}`); if (i.food) parts.push(`🍱${i.food}`); if (i.medkit) parts.push(`🩹${i.medkit}`); if (i.drink) parts.push(`🍺${i.drink}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
+  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`🪵${i.wood}`); if (i.meat) parts.push(`🥩${i.meat}`); if (i.food) parts.push(`🍱${i.food}`); if (i.medkit) parts.push(`🩹${i.medkit}`); if (i.drink) parts.push(`🍺${i.drink}`); if (ME.keys && ME.keys.length) parts.push(`🔑${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
   buildHotbar() { const hb = $('#hotbar'); hb.innerHTML = ''; WEAPON_ORDER.forEach((w, i) => { if (!ME.weapons[w]) return; const s = document.createElement('span'); s.textContent = `${i + 1} ${WEAPONS[w].icon}`; s.className = ME.weapon === w ? 'on' : ''; hb.appendChild(s); }); },
   updateWeapon() { const W = WEAPONS[ME.weapon]; $('#wName').textContent = `${W.icon} ${W.name}`; $('#wAmmo').textContent = W.melee ? (W.chop ? '나무를 베면 목재 획득' : '') : `${ME.mag[ME.weapon] || 0} / ${ME.ammo[ME.weapon] || 0}${ME.reloadT > 0 ? ' · 재장전…' : ''}`; this.buildHotbar(); },
   damageFlash(a) { const e = $('#dmgFlash'); e.style.transition = 'none'; e.style.opacity = Math.min(0.9, 0.3 + a); requestAnimationFrame(() => { e.style.transition = 'opacity .5s'; e.style.opacity = 0; }); },
@@ -238,6 +239,7 @@ const UI = {
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
+      { ic: '📖', t: '가이드', p: 0, d: '돈 버는 법 · 집 · 털기 · 나무꾼 · 갱단', fn: () => setTimeout(() => openGuide(), 30) },
       { ic: '💼', t: '직업', p: 0, d: `${JOBS.cur.icon} ${JOBS.cur.name}${JOBS.criminal() ? ' · 🦹 범죄자' : ''}`, fn: () => setTimeout(() => JOBS.openMenu(), 30) },
       { ic: '🗺️', t: '지도', p: 0, fn: () => setTimeout(() => this.openMap(), 30) },
       { ic: '🔑', t: '내 차 부르기', p: 0, d: `보유 ${ME.garage.length}대`, fn: () => { setTimeout(() => this.openGarage(), 30); } },

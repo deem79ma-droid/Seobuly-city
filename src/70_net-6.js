@@ -1,3 +1,4 @@
+// @v 2026101121
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -43,16 +44,84 @@ prepTurn();
 function inviteLink(room) { const u = new URL(location.href); u.hash = ''; for (const k of ['debug', 'quick']) u.searchParams.delete(k); u.searchParams.set('room', room); return u.toString(); }
 function cleanUrl() { const u = new URL(location.href); u.hash = ''; for (const k of ['room', 'quick']) u.searchParams.delete(k); return u.toString(); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// ---- 게임 서버 (Cloudflare): 빌드할 때 주소가 들어간다. 비어 있으면 예전처럼 P2P ----
+const SERVER_URL = '__SERVER_URL__';
 const NET = {
+  ws: null, wsMode: false, wsHost: null, wsSave: null, wsRoom: null, wsUp: false, _saveT: 0,
+  server() { const s = URLP.get('server') || SERVER_URL; return s && !s.startsWith('__') ? s.replace(/\/+$/, '') : ''; },
+  wsSend(o) { const w = this.ws; if (w && w.readyState === 1) { try { w.send(JSON.stringify(o)); } catch (e) { } } },
+  wsConn(peerId) { const self = this; return { pid: null, peerId, open: true, lastRx: performance.now(), send(m) { self.wsSend({ to: self.wsHost === peerId && !G.isHost ? 'host' : peerId, m }); }, close() { } }; },
+  // 서버의 방에 접속 → { mode: 'host' | 'join' }
+  wsConnect(room, ms = 9000) {
+    const base = this.server(); if (!base || typeof WebSocket === 'undefined') return Promise.reject(netErr('network'));
+    try { this.ws && this.ws.close(); } catch (e) { }
+    return new Promise((res, rej) => {
+      const url = base.replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(room) + '&id=' + encodeURIComponent(ME.id);
+      let done = false; const ws = new WebSocket(url); this.ws = ws;
+      const fail = code => { if (done) return; done = true; clearTimeout(to); try { ws.close(); } catch (e) { } rej(netErr(code)); };
+      const to = setTimeout(() => fail('timeout'), ms);
+      ws.onmessage = ev => {
+        let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+        if (d.sys === 'full') { fail('full'); return; }
+        if (d.sys === 'init') {
+          this.wsMode = true; this.wsUp = true; this.wsRoom = room; this.wsHost = d.host; this.wsSave = d.save || null; this.conns = []; this.hostConn = null;
+          if (d.host !== ME.id) { this.hostConn = this.wsConn(d.host); this.conns.push(this.hostConn); }
+          if (!done) { done = true; clearTimeout(to); res({ mode: d.host === ME.id ? 'host' : 'join', room }); }
+          else this.wsResumed(d); // 끊겼다가 다시 접속
+          return;
+        }
+        if (!done) return;
+        this.wsSys(d);
+      };
+      ws.onerror = () => { if (!done) fail('network'); };
+      ws.onclose = () => { if (!done) { fail('network'); return; } if (this.ws === ws) { this.wsUp = false; this.wsLost(); } };
+    });
+  },
+  wsSys(d) {
+    if (d.sys === 'join') { if (G.isHost && !this.conns.some(c => c.peerId === d.id)) this.conns.push(this.wsConn(d.id)); this.updateRoomInfo(); return; }
+    if (d.sys === 'leave') { const c = this.conns.find(x => x.peerId === d.id); if (c) this.onClose(c); return; }
+    if (d.sys === 'gone') { const rp = G.players.get(d.id); if (rp) { UI.chatLine(null, `${rp.name}님이 나갔습니다`); removeRemote(d.id); TAXI.removeOwnedBy(d.id); this.updateRoomInfo(); } return; }
+    if (d.sys === 'host') { this.wsSetHost(d.id, d.left); return; }
+    if (d.from === undefined) return;
+    // 일반 게임 메시지
+    let c = this.conns.find(x => x.peerId === d.from);
+    if (!c) { if (!G.isHost) return; c = this.wsConn(d.from); this.conns.push(c); }
+    c.lastRx = performance.now(); this.onData(d.m, c);
+  },
+  // 서버가 정한 새 방장
+  wsSetHost(id, left) {
+    const prev = this.wsHost; this.wsHost = id; G.hostId = id;
+    if (left && left !== ME.id) { const rp = G.players.get(left); if (rp) UI.chatLine(null, `${rp.name}님(방장)이 나갔습니다`); removeRemote(left); TAXI.removeOwnedBy(left); }
+    if (id === ME.id) { this.conns = []; this.hostConn = null; if (!G.isHost) { this.becomeAuthority(); toast('👑 이제 내가 방장이다 (도시 시뮬레이션을 이어받음)', 3500); } }
+    else { this.hostConn = this.wsConn(id); this.conns = [this.hostConn]; if (G.isHost) this.becomeGuest(); if (G.started) this.hello(); }
+    if (prev !== id) G.adminId = G.adminId && G.players.has(G.adminId) || G.adminId === ME.id ? G.adminId : null;
+    this.updateRoomInfo();
+  },
+  wsResumed(d) {
+    for (const k of [...G.players.keys()]) { removeRemote(k); TAXI.removeOwnedBy(k); }
+    if (d.host === ME.id) { if (!G.isHost) this.becomeAuthority(); } else { if (G.isHost) this.becomeGuest(); this.hello(); }
+    toast('✅ 서버에 다시 접속했다'); this.updateRoomInfo();
+  },
+  wsLost() {
+    if (this.kicked || !G.online) return; toast('⚠ 서버 연결이 끊겼다 — 다시 접속 중…', 3000); this.updateRoomInfo();
+    let k = 0; const again = () => { if (this.kicked || this.wsUp || !G.online) return; this.wsConnect(this.wsRoom, 8000).catch(() => { if (++k < 30) setTimeout(again, Math.min(15000, 1500 + k * 1000)); else toast('❌ 서버에 다시 접속하지 못했다 — 새로고침해 줘', 6000); }); };
+    setTimeout(again, 1200);
+  },
+  // 로비: 공개방 인원
+  wsCounts() { return fetch(this.server() + '/rooms', { cache: 'no-store' }).then(r => r.json()).catch(() => null); },
+  async wsPickPublic() { const c = await this.wsCounts() || {}; let best = null, bn = -1; for (const r of PUBLIC_ROOMS) { const n = +c[r] || 0; if (n < MAX_PLAYERS && n > bn) { best = r; bn = n; } } return best || PUBLIC_ROOMS[0]; },
+  wsSaveTick(dt) { if (!this.wsMode || !G.isHost || !G.started) return; if ((this._saveT -= dt) > 0) return; this._saveT = 30; this.wsSend({ sys: 'save', v: { plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), time: G.time, at: Date.now() } }); },
   peer: null, peerRoom: null, // 방 코드를 내가 점유할 때(방장 대기)의 Peer
   gpeer: null,                // 다른 방에 참가할 때의 임시 Peer
   conns: [], hostConn: null, migrateUntil: 0, migrateAid: null, lastP: 0, lastW: 0, bc: null, recovering: false, kicked: false, helloSent: false,
   send(m) {
     if (!G.online) return; m.f = m.f || ME.id;
+    if (this.wsMode && G.isHost) { if (m.to) { const c = this.conns.find(x => x.pid === m.to || x.peerId === m.to); if (c) this.wsSend({ to: c.peerId, m }); } else this.wsSend({ to: '*', m }); return; } // 서버가 모두에게 뿌려준다
     for (const c of this.conns) { if (m.to && G.isHost && c.pid && c.pid !== m.to) continue; try { c.send(m); } catch (e) { } }
   },
   relay(m, from) {
     if (!G.isHost) return;
+    if (this.wsMode) { if (m.to) { const c = this.conns.find(x => x.pid === m.to || x.peerId === m.to); if (c && c !== from) this.wsSend({ to: c.peerId, m }); } else this.wsSend({ to: '*', ex: from && from.peerId, m }); return; }
     // 인원이 많을 때 방장 업로드 절약: 멀리(300m+) 있는 사람의 위치는 5번에 1번만 전달 (지도·미니맵용으로는 충분)
     const thin = m.t === 'p' && !m.vs && this.conns.length > 3; const k = thin && from ? (from._pc = (from._pc || 0) + 1) : 0;
     for (const c of this.conns) if (c !== from) {
@@ -71,7 +140,7 @@ const NET = {
     for (const c of this.conns.slice()) { if (c === except || !c.pname || this.nameKey(c.pname) !== k) continue; if (performance.now() - (c.lastRx || 0) > 4000) { this.onClose(c); continue; } return 'dup'; }
     return null;
   },
-  ownsRoom() { if (this.bc) return this.localId === 'HOST'; return !!(this.peer && this.peer.open && !this.peer.destroyed); },
+  ownsRoom() { if (this.wsMode) return this.wsHost === ME.id; if (this.bc) return this.localId === 'HOST'; return !!(this.peer && this.peer.open && !this.peer.destroyed); },
   // ---- 같은 브라우저 탭끼리 테스트 (?local=1) ----
   localTransport(room, host) {
     const bc = new BroadcastChannel('sbc3d-' + room); this.bc = bc; const self = this;
@@ -155,6 +224,7 @@ const NET = {
   // ---- 로비: 공개방 인원 조회 (서버가 없으므로 각 방의 방장 Peer에 잠깐 연결해서 인원을 묻는다) ----
   ppeer: null,
   probeRooms(codes, onCount, ms = 8000) {
+    if (this.server()) return this.wsCounts().then(c => { for (const r of codes) onCount(r, c ? (+c[r] || 0) : null); });
     if (!window.Peer || URLP.get('local')) { for (const c of codes) onCount(c, 0); return Promise.resolve(); }
     const ready = (this.ppeer && !this.ppeer.destroyed && this.ppeer.open) ? Promise.resolve(this.ppeer) : new Promise((res, rej) => {
       try { this.ppeer && this.ppeer.destroy(); } catch (e) { }
@@ -215,6 +285,7 @@ const NET = {
   },
   // ---- 연결이 끊겼을 때: 같은 방에 다시 접속 → 안 되면 내가 그 방 코드를 이어받아 기다린다 ----
   async recover() {
+    if (this.wsMode) return; // 서버 모드: 재접속은 wsLost가 맡는다
     if (this.recovering || this.kicked || !G.online || this.bc) return;
     this.recovering = true; const room = G.room; this.updateRoomInfo();
     for (let k = 0; k < 20 && this.recovering; k++) {
@@ -259,6 +330,7 @@ const NET = {
     const rp = G.players.get(aid);
     announce('👑 관리자 입장', (rp ? rp.name : '관리자') + '님이 방장이 되었습니다'); UI.chatLine(null, '👑 방장 권한이 관리자에게 넘어갔습니다');
     this.updateRoomInfo();
+    if (this.wsMode) { this.wsSend({ sys: 'sethost', id: conn.peerId }); return; } // 서버 모드: 서버가 방장을 바꾸고 모두에게 알린다
     // 여러 명 방: 게스트들은 내(방 코드 Peer)에 붙어 있으므로, 방 코드를 내려놓고 모두 관리자가 연 방으로 다시 접속시킨다
     this.migrateUntil = performance.now() + 25000; this.migrateAid = aid;
     for (const c of this.conns) { if (c === conn) continue; try { c.send({ t: 'migrate', f: ME.id, aid }); } catch (e) { } }
@@ -273,17 +345,18 @@ const NET = {
   },
   hello() { this.helloSent = true; this.send({ t: 'hello', id: ME.id, n: ME.name, o: ME.outfit, adm: ADMIN.on ? 1 : 0 }); },
   heartbeat() {
-    if (!G.online) return; const now = performance.now();
+    if (!G.online || this.wsMode) return; // 서버 모드: 연결 상태는 서버가 알려준다 const now = performance.now();
     for (const c of this.conns.slice()) { try { c.send({ t: 'hb', f: ME.id }); } catch (e) { } if (now - (c.lastRx || now) > 30000) { toast('⚠ 상대 응답 없음 — 연결 정리'); this.onClose(c); } }
   },
   updateRoomInfo() {
     const el = $('#roomInfo'); if (!el || !G.started) return;
     if (!G.online) { el.textContent = '혼자 플레이'; return; }
     const n = G.players.size + 1; const pub = PUBLIC_ROOMS.includes(G.room); const pubName = pub ? ('공개방 ' + (PUBLIC_ROOMS.indexOf(G.room)+1)) : G.room;
-    el.innerHTML = `${pub ? '⚡ ' + pubName : '🔒 비공개 방'} <b>${pub ? '' : G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}`;
+    el.innerHTML = `${pub ? '⚡ ' + pubName : '🔒 비공개 방'} <b>${pub ? '' : G.room}</b> · ${n}/${MAX_PLAYERS}명 · ${G.isHost ? '👑 방장' : '게스트'}${this.recovering ? ' · 🔄 재접속 중…' : ''}${this.wsMode ? (this.wsUp ? ' · 🟢 서버' : ' · 🔴 서버 재접속 중…') : ''}`;
   },
   // ---- outgoing ticks ----
   tick(dt) {
+    this.wsSaveTick(dt);
     if (!G.online || !this.conns.length) return;
     this.lastP -= dt; this.lastW -= dt;
     if (this.lastP <= 0) { this.lastP = G.players.size > 7 ? 1 / 10 : 1 / 15; this.send(this.playerMsg()); } // 8명 이상이면 초당 10번
@@ -295,6 +368,7 @@ const NET = {
       veh: ME.vehicle ? ME.vehicle.id : null, seat: ME.seat, dead: ME.dead ? 1 : 0, j: ME.jail ? 1 : 0, bi: myBi(), rc: POLICE.rcOut(), wanted: ME.wanted, jb: JOBS.id, cr: JOBS.criminal() ? 1 : 0, hp: Math.round(ME.hp), g: { gangA: ME.grudge.gangA || 0, gangB: ME.grudge.gangB || 0 }, gt: G.t };
     if (ME.vehicle && ME.seat === 'd') m.vs = ME.vehicle.state();
     if (TAXI.cab) m.tc = TAXI.cab.state(); // 내가 부른 택시 (AI 운전) 위치 동기화
+    if (G.t > (HOUSE._hkT || 0)) { HOUSE._hkT = G.t + 2; m.hk = HOUSE.keys(); } // 내 집 열쇠 목록 (가끔)
     return m;
   },
   worldMsg() {
@@ -369,6 +443,7 @@ const NET = {
         if (m.join) { toast(`🎉 ${rp.name} 입장!`); UI.chatLine(null, `${rp.name}님이 들어왔습니다`); }
         this.updateRoomInfo(); break;
       }
+      case 'burgle': HOUSE.onNet(m, f); break;
       case 'copArrest': case 'arrestOk': case 'heal': case 'healOk': if (m.to === ME.id) JOBS.onNet(m, f); break;
       case 'nameNo': if (!G.isHost && conn === this.hostConn) { this.kicked = true; this.recovering = false; announce('❌ 닉네임 사용 불가', m.r === 'bad' ? '"관리자"가 들어간 닉네임은 쓸 수 없어요' : '이 방에 같은 닉네임이 있어요 — 바꿔서 다시 들어와 주세요'); setTimeout(() => location.replace(inviteLink(G.room)), 2200); } break;
       case 'migrate': if (!G.isHost && conn === this.hostConn) { this.migrateUntil = performance.now() + 25000; this.migrateAid = m.aid; } break;
@@ -376,6 +451,7 @@ const NET = {
         if (!f || f === ME.id) break; const rp = getRemote(f); const nbi = m.bi ?? -1; const jump = rp.first || nbi !== (rp.bi ?? -1) || Math.hypot(m.x - rp.x, m.z - rp.z) > 40; if (jump) { rp.first = false; rp.x = rp.tx = m.x; rp.y = rp.ty = m.y; rp.z = rp.tz = m.z; } rp.bi = nbi; // 건물 출입·순간이동은 미끄러지지 않고 바로 이동
         if (rp.name !== m.n) rp.name = m.n;
         Object.assign(rp, { tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw, spd: m.spd, gr: m.gr, st: m.st, aim: m.aim, ap: m.ap, w: m.w, dance: m.dance, guard: m.guard, seat: m.seat, dead: !!m.dead, jail: !!m.j, wanted: m.wanted, jb: JOB_BY[m.jb] ? m.jb : 'none', cr: m.cr ? 1 : 0, hp: m.hp, grudge: m.g || {} });
+        if (Array.isArray(m.hk)) rp.keys = m.hk.slice(0, 40).map(Number);
         refreshRemoteName(rp); if (G.isHost) POLICE.observe(conn && conn.pid ? conn.pid : f, m.wanted, m.rc);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };

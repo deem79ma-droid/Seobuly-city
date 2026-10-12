@@ -1,3 +1,4 @@
+// @v 2026101121
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -30,7 +31,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record) })); } catch (e) { }
+  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() })); } catch (e) { }
 }
 function onResize() {
   if (!renderer) return; const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -125,7 +126,15 @@ async function startGame(mode, code) {
   if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
   msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 비공개방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : mode === 'pub' ? `🌐 공개방 ${PUBLIC_ROOMS.indexOf(code) + 1} 접속 중…` : '');
   G.isHost = mode !== 'join';
-  try {
+  let viaServer = false;
+  if (NET.server() && mode !== 'solo') { // 항상 켜져 있는 게임 서버로 접속 (안 되면 아래 P2P로)
+    try {
+      const room = mode === 'quick' ? await NET.wsPickPublic() : mode === 'host' ? (code || NET.code()) : code;
+      if (mode === 'quick') msg(`⚡ 공개방 ${PUBLIC_ROOMS.indexOf(room) + 1} 접속 중…`);
+      const r = await NET.wsConnect(room); G.online = true; G.room = r.room; G.isHost = r.mode === 'host'; viaServer = true;
+    } catch (e) { if (e.code === 'full') { msg('❌ ' + e.message); LOBBY.lock(false); return; } console.warn('서버 접속 실패 → P2P', e); NET.wsMode = false; msg('서버 연결 실패 — P2P로 시도 중…'); }
+  }
+  if (!viaServer) try {
     if (mode === 'host') {
       for (let k = 0; ; k++) { const c = (k === 0 && code) || NET.code(); try { await NET.host(c); G.room = c; break; } catch (e) { if (e.code !== 'unavailable-id' || k >= 3) throw e; } }
       G.online = true; G.isHost = true;
@@ -161,7 +170,7 @@ async function loadWorld() {
   for (const p of PLOTS) syncPlotVisual(p);
   if (G.isHost) loadPlots();
   // player
-  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0 }); }
+  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
   JOBS.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
@@ -207,7 +216,7 @@ function simulate(n, dt = 1 / 30) { for (let i = 0; i < n; i++) { G.dt = dt; G.t
 function frame(dt, noRender) {
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; INP.fire = false; if (UI.joyReset) UI.joyReset(); }
   if (!UI.menuOpen || G.online) updatePlayer(dt); else { ME.char.update(dt, { speed: 0, grounded: true, state: ME.vehicle ? 'drive' : ME.sleep ? 'sleep' : ME.sitBench ? 'sit' : 'normal', dance: ME.dance }); }
-  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); JOBS.tick(dt); SLEEP.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
+  INTERIOR.update(dt); LAW.tick(dt); POLICE.tick(dt); JOBS.tick(dt); SLEEP.tick(dt); HOUSE.tick(dt); COMFORT.tick(dt); TAXI.update(dt);
   if (G.isHost) { hostUpdatePeds(dt); hostUpdateTraffic(dt); hostUpdateAnimals(dt); hostTrees(dt); }
   _cam.copy(camera.position);
   const vv = [240, 340, 460, 520][G.quality] || 520, view2 = vv * vv, lod2 = (G.quality >= 2 ? 90 : 55) ** 2; // 품질별 차량 표시 거리 + 디테일 LOD

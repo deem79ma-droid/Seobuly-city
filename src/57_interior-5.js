@@ -1,3 +1,4 @@
+// @v 2026101119
 
 // ================= 건물 실내 (모든 건물 입장 가능) =================
 // 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
@@ -378,6 +379,8 @@ const INTERIOR = {
       bed(-hw + 1.6, lz0 + 1.6, C(RP([0x5a7ab8, 0xb85a7a, 0x5ab88a])), LY); bed(-hw + 4, lz0 + 1.6, 0xd8c070, LY);
       box(hw - 3, LY, lz0 + 0.5, 1.6, 2.0, 0.6, 0x6a4a2a, true); box(0, LY, lz0 + 0.5, 2, 1.0, 0.6, 0x8a6a4a, true);
       item(-hw + 1.6, lz0 + 3.2, '🛏️ 잠자기 (기상 시간 예약 · 체력 회복)', () => SLEEP.open(bedSpot(X(-hw + 1.6), Z(lz0 + 1.6), X(-hw + 1.6), Z(lz0 + 0.85), O.y + LY + 0.62)), 1.8, LY);
+      if (JOBS.isTrespass(b)) { item(hw - 3, lz0 + 1.3, '🗄️ 서랍 뒤지기 (남의 집)', () => HOUSE.loot(b, 'drawer'), 1.6, LY); item(-hw / 3, lz1 + 1.4, '💎 귀중품 찾기 (남의 집)', () => HOUSE.loot(b, 'safe'), 1.6); }
+      else if (!b.plot && HOUSE.keys().includes(b.id)) item(hw - 2, hd - 3, `💸 이 집 팔기 (${fmtMoney(Math.floor(HOUSE.price(b) * 0.6))})`, () => UI.openMenu('💸 집 팔기', `${b.name}을(를) 팔면 열쇠를 반납하고 <b>${fmtMoney(Math.floor(HOUSE.price(b) * 0.6))}</b>을 받는다`, [{ ic: '✅', t: '팔기', p: '', fn: () => HOUSE.sell(b) }, { ic: '↩️', t: '취소', p: '', fn: () => { } }]), 1.6);
       if (b.plot && b.plot.owner === ME.id) item(0, hd - 5, '📍 내 집을 스폰 지점으로', () => { ME.homePlot = b.plot.id; toast('📍 집이 스폰 지점이 되었다'); saveGame(); }, 1.6);
       if (fac) facItem(0, hd - 6);
     }

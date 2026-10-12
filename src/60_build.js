@@ -1,3 +1,4 @@
+// @v 2026101121
 
 // ================= CONSTRUCTION (건축 의뢰) =================
 const BUILD_DESIGNS = {
@@ -152,7 +153,7 @@ function applyPlotState(s) {
 }
 function savePlots() { if (!G.isHost) return; try { localStorage.setItem('sbc3d_world', JSON.stringify({ plots: PLOTS.map(plotState), time: G.time })); } catch (e) { } }
 function loadPlots() {
-  try { const w = JSON.parse(localStorage.getItem('sbc3d_world') || 'null'); if (!w) return; for (const s of w.plots) { if (s.s === 'building' && s.pr === undefined) s.pr = 0; applyPlotState(s); } if (w.time) G.time = w.time; } catch (e) { }
+  try { const w = (NET.wsMode && NET.wsSave) || JSON.parse(localStorage.getItem('sbc3d_world') || 'null'); if (!w) return; /* 서버 저장이 있으면 그걸 쓴다 */ for (const s of w.plots) { if (s.s === 'building' && s.pr === undefined) s.pr = 0; applyPlotState(s); } if (w.time) G.time = w.time; } catch (e) { }
 }
 // requests (host side handlers)
 function hostPlotRequest(m, fromId, fromName) {
