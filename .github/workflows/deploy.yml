@@ -12,16 +12,30 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # 게임 서버 (Cloudflare Workers + Durable Objects) — Secret CLOUDFLARE_API_TOKEN 이 있을 때만 배포
+      - name: 게임 서버 배포 (Cloudflare)
+        id: cf
+        if: ${{ env.CF_TOKEN != '' }}
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: deploy
       - name: Build (관리자 비밀번호는 저장소 Secret ADMIN_PW 에서만 읽음)
         env:
           ADMIN_PW: ${{ secrets.ADMIN_PW }}
           OUT_DIR: dist
+          SERVER_URL: ${{ steps.cf.outputs.deployment-url || vars.SERVER_URL }}
         run: python3 build.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
