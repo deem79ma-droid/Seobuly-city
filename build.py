@@ -1,7 +1,20 @@
 import glob, os, hashlib
 root = os.path.dirname(os.path.abspath(__file__))
 src = os.path.join(root, 'src')
-js = '\n'.join(open(f, encoding='utf-8').read() for f in sorted(glob.glob(src + '/[0-9]*.js')))
+import re
+# 폰에서 받으면 이름이 "70_net-6.js", "70_net (1).js" 처럼 바뀔 때가 있다 → 같은 파일이 두 벌이면 게임이 멈춘다.
+# 그래서 이름 뒤 숫자를 떼고 같은 파일끼리 묶은 뒤, 첫 줄 "// @v 숫자"가 가장 큰 것(같으면 나중 이름) 하나만 쓴다.
+def _base(path): return re.sub(r'(\s*\(\d+\)|-\d+)+\.js$', '.js', os.path.basename(path))
+def _ver(path):
+    with open(path, encoding='utf-8') as fh: m = re.match(r'//\s*@v\s*(\d+)', fh.readline())
+    return int(m.group(1)) if m else 0
+_pick = {}
+for f in sorted(glob.glob(src + '/[0-9]*.js')):
+    b = _base(f); cur = _pick.get(b)
+    if cur is None or (_ver(f), f) >= (_ver(cur), cur): _pick[b] = f
+_dups = [f for f in glob.glob(src + '/[0-9]*.js') if f not in _pick.values()]
+if _dups: print('중복 파일 무시:', ', '.join(os.path.basename(f) for f in sorted(_dups)))
+js = '\n'.join(open(_pick[b], encoding='utf-8').read() for b in sorted(_pick))
 
 # ---- 관리자 공개키 ----
 # 관리자 비밀번호는 코드/저장소에 넣지 않는다. ADMIN_PW(평문)는 환경변수/GitHub 시크릿으로만 전달되고,
@@ -45,6 +58,10 @@ if not pub and pw:
 if pub and (len(pub) != 64 or any(c not in '0123456789abcdef' for c in pub)):
     raise SystemExit('ADMIN_PUB must be 64 hex chars')
 js = js.replace("'__ADMIN_PUB__'", "'" + pub + "'")
+# ---- 게임 서버 주소 (GitHub Actions가 Cloudflare에 서버를 배포한 뒤 넣어준다. 없으면 P2P) ----
+srv = os.environ.get('SERVER_URL', '').strip().rstrip('/')
+if srv and not srv.startswith('http'): srv = 'https://' + srv
+js = js.replace("'__SERVER_URL__'", "'" + srv.replace("'", '') + "'") if srv else js
 out_dir = os.environ.get('OUT_DIR', root)
 os.makedirs(out_dir, exist_ok=True)
 open(os.path.join(out_dir, 'game.mjs'), 'w', encoding='utf-8').write(js)
@@ -56,4 +73,4 @@ import shutil
 for f in ('og.png', 'robots.txt', 'sitemap.xml'):
     s_, d_ = os.path.join(root, f), os.path.join(out_dir, f)
     if os.path.exists(s_) and os.path.abspath(s_) != os.path.abspath(d_): shutil.copyfile(s_, d_)
-print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF')
+print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF', '| server:', srv or 'P2P')
