@@ -143,7 +143,9 @@ class Character {
     const longPants = !['shorts', 'skirt'].includes(o.bottom);
     // torso
     add(P.spine, M(CG.chest, top, 0, 0.27, 0, f ? 1.12 : 1.28, 1, f ? 0.74 : 0.78));
-    if (f) { add(P.spine, M(CG.sph, top, 0.06, 0.36, 0.085, 0.065, 0.06, 0.06)); add(P.spine, M(CG.sph, top, -0.06, 0.36, 0.085, 0.065, 0.06, 0.06)); }
+    if (f) { // Smooth garment silhouette instead of two small spherical bumps.
+      for (const side of [-1, 1]) { const curve = add(P.spine, M(CG.sph, top, side * 0.074, 0.345, 0.067, 0.104, 0.092, 0.087)); curve.rotation.z = -side * 0.10; }
+    }
     add(P.hips, M(CG.pelvis, o.bottom === 'skirt' ? bot : bot, 0, 0.0, 0, f ? 1.12 : 1.05, 0.62, 0.78));
     add(P.spine, M(CG.neck, skin, 0, 0.6, 0));
     if (o.top === 'tank' || o.top === 'tshirt') add(P.spine, M(CG.sph, skin, 0, 0.52, 0.055, 0.075, 0.045, 0.04), false);

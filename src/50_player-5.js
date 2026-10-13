@@ -10,7 +10,11 @@ const ME = {
   takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
-    if (this.armor > 0) { const a = Math.min(this.armor, amt * 0.65); this.armor -= a; amt -= a; }
+    if (this.armor > 0 && amt > 0) {
+      // 방탄조끼는 한 번의 피해를 막고 사라지는 소모품이다.
+      this.armor = 0; amt = 0;
+      if (typeof toast === 'function') toast('방탄조끼가 공격을 막고 소모되었습니다');
+    }
     this.lastW = w; this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);

@@ -1,7 +1,7 @@
 // @v 2026101322
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
-const PEDS = []; const N_PED = 46; const PICKUPS = new Map(); let pickupSeq = 1;
+const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
 const PED_LINES = { // 자아 있는 대사
 
   civ: ['안녕하세요!', '오늘 날씨 좋네요', '서불리 집값 미쳤어…', '캥지베 쪽은 가지 마세요', '이벤트광장 클럽 가봤어요?', '시모느 아일랜드 놀러가고 싶다', '배고프다…', '디산베이 공기 좋아요', '말 타봤어요? 디산베이 목장에 있어요'],
@@ -31,7 +31,7 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined;
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined; p.homeX = p.x; p.homeZ = p.z;
 }
 function pedEnsureChar(p) {
   if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
@@ -69,9 +69,10 @@ function spawnPedNear(p, px, pz) {
   const r = edgeNearPoint(px, pz, 50, 190, e => !e.bridge); if (!r) return false;
   placePedOnEdge(p, r.e, r.t, Math.random() < 0.5 ? 1 : -1, Math.random() < 0.5 ? 1 : -1);
   const R = regionAt(p.x, p.z); if (R === 'sea') return false;
-  pedSetIdentity(p, pedKindFor(R), (Math.random() * 1e9) | 0);
+  // Keep the same citizen, outfit, role and memories when relocating near a player.
+  if (!p.identityPlaced) { pedSetIdentity(p, pedKindFor(R), (Math.random() * 1e9) | 0); p.identityPlaced = true; }
   if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
-  pedStartRoutine(p);
+  if (!p.homeAssigned) { p.homeX = p.x; p.homeZ = p.z; p.homeAssigned = true; } pedStartRoutine(p);
   if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
   p.spawnT = G.t; return true;
 }
@@ -99,7 +100,15 @@ function hostUpdatePeds(dt) {
     if (p.state === 'parked' && p.nextTry > G.t) continue; // 건물에 들어간/밤이라 쉬는 NPC는 잠시 뒤에 다시 등장
     if (p.state !== 'dead') { const nd = nearestPlayerDist(p.x, p.z); if ((p.state === 'parked' || nd > 240) && !(p.raid && G.raid)) { const pl = pick(anyP); if (spawnPedNear(p, pl.x, pl.z)) { } continue; } }
     p.timer -= dt; p.fireT -= dt; p.actT = Math.min(1, p.actT + dt * (p.act === 'punchR' || p.act === 'punchL' ? 3 : 2));
-    if (p.state === 'dead') { if (p.timer <= 0) { p.state = 'parked'; } continue; }
+    if (p.state === 'dead') { if (p.timer <= 0) {
+      // NPC 신원·직업은 유지하고 담당 활동 지역에서 다시 시작한다.
+      p.hp = p.kind === 'police' ? 140 : p.kind.startsWith('gang') ? 120 : 90;
+      p.target = null; p.raid = false; p.fear = 0; p.phone = false; p.state = 'walk';
+      const rx = Number.isFinite(p.homeX) ? p.homeX : p.x;
+      const rz = Number.isFinite(p.homeZ) ? p.homeZ : p.z;
+      p.x = rx; p.z = rz; p.y = groundHeight(rx, rz);
+      snapToNearestEdge(p); pedStartRoutine(p);
+    } continue; }
     if (p.state === 'knocked') { if (p.timer <= 0) p.state = 'flee', p.timer = 6; continue; }
     // perception every ~0.4s
     if (p.state === 'surrender') { p.spd = 0; p.aiming = false; if (p.timer <= 0) p.state = 'parked'; continue; } // 신고당한 갱단원: 손 들고 연행 대기
@@ -480,7 +489,7 @@ function animalDamage(a, amt, from, opts = {}) {
   else if (a.state !== 'follow') { a.state = 'flee'; a.timer = 6; const tp = from === ME.id ? ME : G.players.get(from); if (tp) { a.fx = tp.x; a.fz = tp.z; } else { a.fx = a.x + 1; a.fz = a.z; } }
 }
 function renderAnimals(dt, cam) {
-  const view = Q().npcView * 1.2;
+  const view = Math.max(125, Q().npcView * 2.2);
   for (const a of ANIMALS) {
     const d = Math.hypot(a.x - cam.x, a.z - cam.z);
     if (d > view) { if (a.obj) a.obj.root.visible = false; continue; }

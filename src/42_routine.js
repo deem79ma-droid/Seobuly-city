@@ -12,10 +12,10 @@ const JOB_NAME = { commute: '직장인', shop: '쇼핑객', jog: '조깅', bench
 function isNight() { return G.time >= 23 || G.time < 5; }
 function pedPickJob(p) {
   const h = G.time;
-  if (p.kind === 'police') return 'patrol';
+  if (p.kind === 'police') return Math.random() < 0.8 ? 'patrol' : 'phone';
   if (p.kind === 'gangA' || p.kind === 'gangB') return Math.random() < 0.7 ? 'hang' : 'walk';
-  if (p.kind === 'worker') return 'work';
-  if (p.kind === 'medic') return 'walk';
+  if (p.kind === 'worker') return Math.random() < 0.65 ? 'work' : 'commute';
+  if (p.kind === 'medic') return Math.random() < 0.7 ? 'work' : 'commute';
   const rush = (h >= 7 && h < 9.5) || (h >= 17 && h < 19.5), early = h >= 5 && h < 8, eve = h >= 18 && h < 22, day = h >= 9 && h < 21;
   const w = { commute: rush ? 4 : 0.5, shop: day ? 2.2 : 0.2, jog: early || eve ? 1.6 : 0.25, bench: day ? 1.5 : 0.3, phone: 0.8, delivery: h >= 10 && h < 22 ? 1 : 0.2, walk: 1.4, home: isNight() ? 4 : h >= 21 ? 1.5 : 0.15 };
   let tot = 0; for (const k in w) tot += w[k]; let r = Math.random() * tot; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return 'walk';
@@ -38,7 +38,10 @@ function pedStartRoutine(p) {
 // 걷는 중 일과 판단 (몇 초에 한 번)
 function pedRoutineTick(p, dt) {
   if ((p.jobT = (p.jobT ?? 8) - dt) > 0) return false;
-  p.jobT = rnd(5, 12); const j = p.job || 'walk';
+  p.jobT = rnd(5, 12);
+  // Change activities over time instead of repeating a single routine forever.
+  if (Math.random() < 0.13) { p.job = pedPickJob(p); p.jobT = rnd(10, 28); }
+  const j = p.job || 'walk';
   if (j === 'commute' || j === 'shop' || j === 'home' || j === 'delivery') {
     if (Math.random() < (j === 'home' ? 0.7 : j === 'delivery' ? 0.6 : 0.35)) { // 근처 건물로 들어간다
       let best = null, bd = 24;
