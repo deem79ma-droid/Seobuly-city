@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101322
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -23,6 +23,7 @@ const JOB_LIST = [
   { id: 'selfemp', icon: '🏪', name: '자영업자', d: '아무 데서나 노점을 열고 장사 · 사람 많은 곳·낮·내 건물 안일수록 잘 팔린다' },
   { id: 'delivery', icon: '📦', name: '택배기사', d: '지올르 물류단지에서 상차 → 목적지 배달 · 거리만큼 수입', u: { top: 'vest', topColor: '#ff8a1a', hat: 'cap', hatColor: '#ff8a1a' } },
   { id: 'lumber', icon: '🪓', name: '벌목꾼', d: '나무를 벨 때마다 벌목 수당 (목재도 그대로 얻음)', u: { top: 'long', topColor: '#a82020', bottom: 'jeans', bottomColor: '#2a3a5a', hat: 'beanie', hatColor: '#3a2a1a' } },
+  { id: 'hunter', icon: '🎯', name: '사냥꾼', d: '디산베이 숲에서 늑대·멧돼지·사슴·곰 사냥 · 마리당 포상금 + 고기 2배 · 잘못하면 잡아먹힌다', u: { top: 'vest', topColor: '#ff6a1a', bottom: 'cargo', bottomColor: '#4a5a32', hat: 'cap', hatColor: '#ff6a1a', shoes: '#2a2018' } },
   { id: 'gangA', icon: '🔴', name: '레드 크루 (갱단)', d: '레드 크루 NPC와 한편 · 블루 독스와 적 · 자릿세 수금 · 협박 수익 2배', u: { top: 'hoodie', topColor: '#c42020', hat: 'bandana', hatColor: '#c42020', bottom: 'jeans', bottomColor: '#1a1a1a' } },
   { id: 'gangB', icon: '🔵', name: '블루 독스 (갱단)', d: '블루 독스 NPC와 한편 · 레드 크루와 적 · 자릿세 수금 · 협박 수익 2배', u: { top: 'hoodie', topColor: '#2050d0', hat: 'bandana', hatColor: '#2050d0', bottom: 'jeans', bottomColor: '#1a1a1a' } },
 ];
@@ -120,6 +121,30 @@ function buildFarmField() {
   FARM.spots = spots; FARM.cx = ox + 14; FARM.cz = oz + 6;
 }
 
+// ---- 사냥꾼 오두막 (디산베이 숲 입구) ----
+const HUNT = {
+  x: -1180, z: -462,
+  build() {
+    if (this.y !== undefined) return; const y = groundHeight(this.x, this.z) - 0.1; this.y = y;
+    const g = new THREE.Group(), mb = new MB(), x = this.x, z = this.z - 6;
+    mb.box(x, y, z, 9, 3.4, 7, C(0x6a4228)); for (let i = 0; i < 6; i++) mb.box(x, y + 0.3 + i * 0.55, z + 3.52, 9.1, 0.12, 0.06, C(0x4a2a18));
+    mb.gable(x, y + 3.4, z, 9.8, 7.8, 2.4, C(0x3a2a1a)); mb.box(x, y, z + 3.52, 1.3, 2.2, 0.08, C(0x2a1a10)); mb.box(x + 2.6, y + 1.2, z + 3.53, 1.2, 0.9, 0.05, C(0xffd88a));
+    mb.box(x - 3.5, y + 3.2, z + 3.6, 0.2, 0.2, 1.2, C(0x4a2a18)); mb.cyl(x + 3.4, y, z + 5, 0.5, 0.9, C(0x5a3a1a), 10);
+    const m = new THREE.Mesh(mb.geo(), MAT.plain); m.castShadow = true; m.receiveShadow = true; g.add(m); scene.add(g);
+    addSign('HUNTING LODGE', '사냥꾼 오두막 · 등록 · 고기 매입', '#3a2a10', x, y + 4.4, z + 3.62, 7, 1.8, 0);
+    addCollider(x - 4.5, z - 3.5, x + 4.5, z + 3.5, y + 5);
+    const ring = addDoorRing(this.x, this.z, 0xff8a2a); this.ring = ring;
+  },
+  menu() {
+    const hunter = JOBS.id === 'hunter'; const price = hunter ? 900 : 350; const n = ME.inv.meat | 0;
+    UI.openMenu('사냥꾼 오두막', '디산베이 숲 입구 · <b>늑대는 무리로</b>, <b>멧돼지는 돌진</b>, <b>곰</b>은 한 방에 죽일 수 있다. 차 안에선 안전.', [
+      { ic: '', t: hunter ? '사냥꾼 그만두기' : '사냥꾼 등록', p: '', d: hunter ? '무직이 된다' : '포상금 · 고기 2배 · 고기 매입가 ↑', fn: () => { JOBS.set(hunter ? 'none' : 'hunter'); if (!hunter && !ME.weapons.rifle && !ME.weapons.shotgun && !ME.weapons.sniper) { ME.weapons.shotgun = 1; ME.mag.shotgun = WEAPONS.shotgun.mag; ME.ammo.shotgun = (ME.ammo.shotgun || 0) + WEAPONS.shotgun.mag * 2; UI.buildHotbar && UI.buildHotbar(); toast('사냥용 산탄총을 지급받았다', 3500); saveGame(); } } },
+      { ic: '', t: `고기 팔기 (${n}개)`, p: `개당 ${fmtMoney(price)}`, dis: !n, disMsg: '고기가 없다', fn: () => { ME.money += n * price; ME.inv.meat = 0; sfx('cash'); toast(`고기 ${n}개 판매 +${fmtMoney(n * price)}`); UI.updateInv && UI.updateInv(); saveGame(); } },
+      { ic: '', t: '사냥 팁', p: '', d: '밤에는 늑대가 더 멀리서 알아챈다 · 체력 30% 아래로 떨어진 동물은 도망친다', fn: () => toast('멀리서 저격하고, 무리에 둘러싸이면 차로 도망쳐라', 4000) },
+    ]);
+  },
+};
+
 const JOBS = {
   id: 'none', record: 0, task: null, payT: 0, spotT: 0, armyIn: false, armyT: 0, shotT: 0, lastArmyCrime: -999, stall: null, saleT: 0, hud: null, beam: null, cool: {}, walkWarnT: 0,
   get cur() { return JOB_BY[this.id] || JOB_BY.none; },
@@ -137,7 +162,15 @@ const JOBS = {
     bm.visible = false; bm.renderOrder = 5; scene.add(bm); this.beam = bm;
     const h = document.createElement('div'); h.id = 'jobHud'; h.className = 'panel'; h.style.cssText = 'font-size:12px;padding:5px 10px;text-align:right;line-height:1.45;max-width:230px;pointer-events:none';
     const tr = $('#topR'); if (tr) tr.appendChild(h); this.hud = h;
-    FARM.ready = true; this.newTask(); this.updateHud();
+    FARM.ready = true; HUNT.build(); this.newTask(); this.updateHud();
+  },
+  // 사냥: 동물을 잡으면 방장이 알려준다 (k = 동물 종류)
+  onHunt(k) {
+    const hunter = this.id === 'hunter'; const n = hunter ? 2 : 1; ME.inv.meat += n; toast(`고기 +${n}`);
+    const pay = { deer: 1500, boar: 3200, wolf: 2600, bear: 9000, moose: 3500, fox: 800, rabbit: 300, pheasant: 400, raccoon: 500, badger: 600 }[k];
+    if (hunter && pay) this.pay(pay, `${(ANIMAL_SPECS[k] || {}).name || k} 사냥 포상금`);
+    else if (!hunter && pay && !this._hTip) { this._hTip = 1; toast('사냥꾼 직업이면 포상금을 받는다 (디산베이 사냥꾼 오두막)', 4000); }
+    UI.updateInv && UI.updateInv();
   },
   pay(n, why) { const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); },
   // 일하는 시간: 가만히 sec초 있어야 돈이 들어온다 (딸깍 방지)
@@ -201,6 +234,7 @@ const JOBS = {
     else if (id === 'doctor') this.pickPatient();
     else if (id === 'realtor') { const c = PLOTS.filter(p => p.state === 'empty' && p.signPos).map(p => [p, Math.hypot(p.signPos[0] - a.x, p.signPos[1] - a.z)]).filter(q => q[1] > 60 && q[1] < 800); if (c.length) { const [p, d] = pick(c); this.task = { kind: 'plot', x: p.signPos[0], z: p.signPos[1], label: '📋 매물 감정', r: 4, e: 1, dist: d }; } }
     else if (id === 'lawyer' && COURT.site) this.task = { kind: 'court', x: COURT.site.x, z: COURT.site.z, label: '⚖️ 법원 (E: 법률 상담)', r: 8, passive: 1 };
+    else if (id === 'hunter') this.task = { kind: 'hunt', x: HUNT.x, z: HUNT.z - 160, label: '🎯 디산베이 사냥터 — 늑대·멧돼지는 먼저 덤빈다', r: 260, passive: 1 };
     else if (id === 'farmer') this.task = { kind: 'farm', x: FARM.cx, z: FARM.cz, label: '🌾 농장', r: 22, passive: 1 };
     else if (id === 'delivery') { const p = this.roadPoint(-40, -800); this.task = { kind: 'pickup', x: p.x, z: p.z, label: '📦 물류단지에서 상차', r: 4, e: 1 }; }
     else if (id === 'gangA' || id === 'gangB') { const d = DISTRICTS[id === 'gangA' ? 10 : 11]; const p = this.roadPoint(d.cx + rnd(-120, 120), d.cz + rnd(-120, 120)); this.task = { kind: 'collect', x: p.x, z: p.z, label: `💰 자릿세 수금 (${d.name})`, r: 4, e: 1 }; }
@@ -214,6 +248,7 @@ const JOBS = {
   // E 상호작용 후보
   interact(cand) {
     if (ME.jail || ME.dead || ME.vehicle) return;
+    if (HUNT.y !== undefined && Math.hypot(ME.x - HUNT.x, ME.z - HUNT.z) < 5 && !INTERIOR.cur) { cand(1, { label: '사냥꾼 오두막 (사냥꾼 등록 · 고기 팔기)', key: 'E', fn: () => HUNT.menu() }); }
     if (this.chan) { cand(-9, { label: `⏳ ${this.chan.label}… (움직이면 중단)`, key: 'E', fn: () => { } }); return; }
     const t = this.task;
     if (t && t.e && !INTERIOR.cur) {

@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101322
 // ================= 길찾기 · 나침반 · 장소 찾기 · 음식 메뉴 =================
 // 방위: 북 = -z, 동 = +x (지도 위쪽이 북쪽)
 const DIR8 = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
@@ -46,6 +46,7 @@ const NAV = {
   mark(x, z, label) { UI.waypoint = { x, z, label: label || '📍 표시한 곳' }; sfx('ui'); toast(`📍 ${UI.waypoint.label} — ${whereTxt(x, z)}`, 3000); },
   clear() { UI.waypoint = null; toast('📍 표시를 지웠다'); },
   init() {
+    MOUNT.build();
     if (this.hud) return;
     const css = document.createElement('style'); css.textContent = `
 #navCmp{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(300px,56vw);height:30px;overflow:hidden;border-radius:9px;background:rgba(10,14,24,.55);border:1px solid rgba(255,255,255,.14);z-index:12;pointer-events:none;font:700 12px sans-serif;color:#dfe6f5}
@@ -66,6 +67,7 @@ body.touch #navCmp{width:min(220px,46vw);height:26px;font-size:11px}`;
   // 카메라가 보는 방향 (0 = 북)
   heading() { const y = CAM.yaw; return ((Math.atan2(Math.sin(y), -Math.cos(y)) * 180 / Math.PI) + 360) % 360; },
   tick(dt) {
+    MOUNT.tick(dt);
     if (!this.cmp) return; if ((this._t -= dt) > 0) return; this._t = 0.08;
     const hd = this.heading(); const W = this.cmp.clientWidth || 260, half = W / 2, span = 75; // 화면 폭에 보이는 각도 ±75°
     let html = '<div class="ctr"></div>';
@@ -102,7 +104,7 @@ const CUISINE = [
 ];
 const CAFE_MENU = [['☕', '아메리카노', 4500, 0, 'stam'], ['🥛', '카페라떼', 5000, 5, 'stam'], ['🍵', '녹차라떼', 5500, 5, 'stam'], ['🍰', '조각 케이크', 6500, 20], ['🥐', '크루아상', 4000, 15], ['🧋', '버블티', 6000, 8, 'stam'], ['🍪', '쿠키', 3000, 10]];
 const FOOD = {
-  shop(b) { const c = CUISINE[(b.id * 7 + 3) % CUISINE.length]; return { name: `${c.name}`, ic: c.ic, c }; },
+  shop(b) { const c = (b.cuisine && CUISINE.find(q => q.k === b.cuisine)) || CUISINE[(b.id * 7 + 3) % CUISINE.length]; return { name: `${c.name}`, ic: c.ic, c }; },
   eat(it) {
     const [ic, name, price, hp, fx] = it;
     if (hp) ME.hp = Math.min(100, ME.hp + hp);
@@ -125,5 +127,28 @@ const FOOD = {
       UI.openMenu('🍜 푸드코트', '한식·분식·중식·일식·치킨·버거', items); return;
     }
     UI.openMenu(`${s.ic} ${s.name}`, '배를 채우면 체력이 회복된다', this.menuItems(s.c.menu));
+  },
+};
+
+// ================= 산: 정상석 · 들어서면 이름 알림 =================
+const MOUNT = {
+  cur: null, _t: 0,
+  peak(M) { let bx = M.x, bz = M.z, by = -1e9; for (let r = 0; r <= 90; r += 6) for (let a = 0; a < 16; a++) { const x = M.x + Math.cos(a / 16 * TAU) * r, z = M.z + Math.sin(a / 16 * TAU) * r, y = terrainH(x, z); if (y > by) { by = y; bx = x; bz = z; } } return { x: bx, z: bz, y: by }; },
+  build() {
+    if (this.built) return; this.built = true;
+    for (const M of MOUNTAINS) {
+      const p = this.peak(M); M.px = p.x; M.pz = p.z; M.top = Math.round(p.y - LAND + 20); // 해발 (바다 기준)
+      const mb = new MB(); mb.box(p.x, p.y - 0.4, p.z, 2.9, 2.4, 0.7, C(0xd8d4c8)); mb.box(p.x, p.y - 0.5, p.z, 3.6, 0.5, 1.6, C(0x8a8680));
+      const m = new THREE.Mesh(mb.geo(), MAT.plain); m.castShadow = true; scene.add(m);
+      addSign(M.hj, `${M.n} · 해발 ${M.top}m`, '#3a3a34', p.x, p.y + 1.1, p.z + 0.37, 2.7, 0.7, 0, '#f2ead0');
+      addSign(M.hj, `${M.n} · 해발 ${M.top}m`, '#3a3a34', p.x, p.y + 1.1, p.z - 0.37, 2.7, 0.7, Math.PI, '#f2ead0');
+      addCollider(p.x - 1.45, p.z - 0.35, p.x + 1.45, p.z + 0.35, p.y + 2);
+    }
+  },
+  tick(dt) {
+    if ((this._t -= dt) > 0) return; this._t = 1; if (!G.started) return;
+    const a = anchorOf(ME); const M = mountainAt(a.x, a.z);
+    if (M !== this.cur) { this.cur = M; if (M) { toast(`${M.hj} ${M.n} — ${M.d}`, 4000); } }
+    if (M && M.px !== undefined && !M._sum && Math.hypot(a.x - M.px, a.z - M.pz) < 8) { M._sum = 1; announce(`${M.hj}`, `${M.n} 정상 · 해발 ${M.top}m`); }
   },
 };

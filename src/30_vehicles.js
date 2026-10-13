@@ -1,4 +1,4 @@
-// @v 2026101219
+// @v 2026101323
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -92,6 +92,8 @@ const VMODELS = {
   horse: { name: '말', kind: 'horse', price: 0, max: 14, acc: 7, steer: 0.9, grip: 20, hp: 800, L: 2.2, W: 0.8 },
 };
 for (const k in VMODELS) { const m = VMODELS[k]; if (m.base) VMODELS[k] = Object.assign({}, VMODELS[m.base], m); }
+// 좌석 수: 스포츠카·슈퍼카·오토바이·말 2인승, 나머지 차 4인승
+for (const k of ['sports', 'supercar']) VMODELS[k].seats = 2; for (const k in VMODELS) if (!VMODELS[k].seats) VMODELS[k].seats = VMODELS[k].kind === 'car' ? 4 : 2;
 const CAR_COLORS = ['#d8d8dc', '#1a1a1e', '#b01818', '#1a3a8a', '#f2f2f2', '#6a6e74', '#2a5a3a', '#e0a020', '#8a1a4a', '#3ac0e0', '#ff6a1a', '#4a4a8a'];
 const vehicles = new Map();
 // ---- 차량 디테일 지오메트리 캐시: 알로이 휠(스포크), 그릴/문틈/사이드스커트 (모델당 1번만 만든다) ----
@@ -229,13 +231,15 @@ class Vehicle {
     this.onCrash = (imp) => { if (typeof onVehicleCrash === 'function') onVehicleCrash(this, imp); };
     if (this.kind === 'car') this.mesh = buildCarMesh(this.M, this.color, this);
     else if (this.kind === 'bike') this.mesh = buildBikeMesh(this.M, this.color, this);
+    else if (this.kind === 'heli') { this.mesh = buildHeliMesh(this.M, this.color, this); this.rpm = 0; }
     else { this.animal = new Animal('horse', opts.seed ?? 0.3); this.mesh = this.animal.root; this.seat = new THREE.Vector3(0, this.animal.bodyY + 0.12 - 0.95 + 0.25, 0.05); }
     this.mesh.position.set(x, this.y, z); this.mesh.rotation.y = yaw; scene.add(this.mesh);
-    this.radius = this.kind === 'car' ? this.M.W / 2 : 0.45;
+    this.radius = this.kind === 'car' ? this.M.W / 2 : this.kind === 'heli' ? 1.6 : 0.45;
     vehicles.set(id, this);
   }
   circles() { const f = this.kind === 'car' ? this.M.L / 2 - this.M.W / 2 : 0.55; const s = Math.sin(this.yaw), c = Math.cos(this.yaw); return [[this.x + s * f, this.z + c * f], [this.x - s * f, this.z - c * f]]; }
   drive(dt, inp) {
+    if (this.kind === 'heli') { HELI.drive(this, dt, this.dead ? {} : inp); return; }
     const M = this.M; if (this.dead) { inp = { throttle: 0, steer: 0, brake: 1 }; }
     const inWater = this.waterT > 0.5; if (inWater && this.kind !== 'horse') inp = { throttle: 0, steer: 0, brake: 0 };
     const spdAbs = Math.abs(this.speed);
@@ -246,7 +250,8 @@ class Vehicle {
       if (inp.throttle > 0) { if (this.speed < -0.5) this.speed += 22 * dt; else this.speed += M.acc * inp.throttle * dt * Math.max(0.05, 1 - this.speed / M.max); }
       else if (inp.throttle < 0) { if (this.speed > 0.5) this.speed -= 22 * dt; else this.speed -= M.acc * 0.6 * dt * Math.max(0, 1 + this.speed / (this.kind === 'horse' ? 3 : 12)); }
       else this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (1.2 + Math.abs(this.speed) * 0.04) * dt);
-      if (inp.brake) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 26 * dt);
+      if (inp.brake) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 30 * dt);
+      slopeVehicle(this, dt); // 오르막은 힘들고 내리막은 빨라진다
       const wb = this.kind === 'car' ? (M.wb[0] - M.wb[1]) : 1.4;
       let yawRate = this.speed * Math.tan(this.steer) / wb;
       const maxRate = (M.grip * 1.7) / Math.max(4, spdAbs); yawRate = clamp(yawRate, -maxRate, maxRate);
@@ -325,6 +330,7 @@ class Vehicle {
     const m = this.mesh; m.position.set(this.x, this.y, this.z); m.rotation.set(0, 0, 0); m.rotation.order = 'YXZ'; m.rotation.y = this.yaw; m.rotation.x = -this.pitch; m.rotation.z = this.roll;
     if (this.wheels) for (const w of this.wheels) { w.spin.rotation.z = -this.wheelRot; if (w.front) w.pivot.rotation.y = this.steer * (this.kind === 'bike' ? 0.6 : 1); }
     if (this.animal) { this.animal.update(dt, Math.abs(this.speed), 'walk'); }
+    if (this.rotor) { const rpm = this.ctrl === 'remote' ? (this.driver ? 1 : 0) : (this.rpm || 0); this._rs = damp(this._rs || 0, rpm, 0.8, dt); this.rotor.rotation.y += dt * this._rs * 38; this.tailRotor.rotation.x += dt * this._rs * 60; }
     const night = ENV.night;
     if (this.headMat) this.headMat.emissiveIntensity = (this.driver || this.ai) && !this.dead ? (night > 0.3 ? 3 : 0.4) : 0.05;
     if (this.tailMat) this.tailMat.emissiveIntensity = this.dead ? 0 : this.brake ? 3 : (night > 0.3 && (this.driver || this.ai) ? 1 : 0.15);

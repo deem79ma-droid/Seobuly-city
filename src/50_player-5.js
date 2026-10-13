@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101323
 
 // ================= PLAYER =================
 const ME = {
@@ -11,7 +11,7 @@ const ME = {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
     if (this.armor > 0) { const a = Math.min(this.armor, amt * 0.65); this.armor -= a; amt -= a; }
-    this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
+    this.lastW = w; this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);
     const rec = () => { if (typeof POLICE !== 'undefined') POLICE.onHurt(from, amt, w); }; // 신고용 피해 기록
@@ -22,7 +22,7 @@ const ME = {
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
     if (this.dead || adminGod()) { if (adminGod()) this.hp = 100; return; } this.dead = true; this.deadT = 0; this.hp = 0; if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
-    CINE_EV.death(); $('#death').classList.remove('hidden'); $('#deathSub').textContent = '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
+    CINE_EV.death(); $('#death').classList.remove('hidden'); $('#deathSub').textContent = (WILD_DEATH[this.lastW] ? WILD_DEATH[this.lastW] + ' · ' : '') + '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
     const lost = loseAllOnDeath(); const dl = $('#deathLoss'); // 사망하면 현금·무기·탄약·아이템·산 옷을 전부 잃는다
     if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } }
     if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 모두 잃었다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품을 모두 잃었다', sys: 1 }); }
@@ -61,7 +61,7 @@ function initInput() {
     if (k === 'l' && ME.vehicle && ME.vehicle.M.police) ME.vehicle.siren = !ME.vehicle.siren;
     if (k === 'u') COMFORT.unstick(true);
     if (k === 'j') POLICE.open();
-    if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1;
+    if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1; if (k === 'b') GRENADE.throw();
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
   });
@@ -138,7 +138,7 @@ function handlePersonal(m) {
   if (m.t === 'kill') { ME.kills++; JOBS.onKill(m.k); }
   if (m.t === 'robRes') onRobResult(m);
   if (m.t === 'pedTip') toast(m.s, 3500);
-  if (m.t === 'meat') { ME.inv.meat++; toast('🥩 고기 +1'); }
+  if (m.t === 'meat') { JOBS.onHunt(m.k); }
   if (m.t === 'petDead') { ME.petId = null; toast('🐾 반려동물이 죽었다…'); }
   if (m.t === 'adopted') { ME.petId = m.a; toast('🐶 입양 완료! 이제 따라다닌다'); }
   if (m.t === 'plotFail') { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); }
@@ -270,7 +270,7 @@ function enterVehicle(v) {
   if (v.taxiCab) { if (v.taxiOwner === ME.id) TAXI.board(); else toast('🚕 다른 손님이 부른 택시다'); return; }
   if (v.locked) { toast('🚗 판매용 전시 차량 — 판매점에서 구매하세요'); return; }
   if (v.driver && v.driver !== ME.id) {
-    if (G.players.has(v.driver)) { if (v.passenger) { toast('빈 자리가 없다'); return; } v.passenger = ME.id; ME.vehicle = v; ME.seat = 'p'; NET.send({ t: 'seat', v: v.id, s: 'p' }); toast('🧍 동승했다 (F 하차 · 우클릭 조준 사격 가능)'); return; }
+    if (G.players.has(v.driver)) { const st = freeSeat(v); if (!st) { toast(`빈 자리가 없다 (${seatCount(v)}인승)`); return; } seatSet(v, st, ME.id); ME.vehicle = v; ME.seat = st; NET.send({ t: 'seat', v: v.id, s: st }); toast(`${st === 'p' ? '조수석' : '뒷좌석'}에 탔다 (${seatCount(v)}인승 · F 하차 · 우클릭 조준 사격)`); return; }
   }
   if (v.ai) {
     const cop = v.model === 'police'; if (G.isHost) ejectNpcDriver(v); else NET.send({ t: 'jack', v: v.id });
@@ -279,6 +279,7 @@ function enterVehicle(v) {
     toast(cop ? '🚓 경찰차 탈취!' : '🔑 차량 탈취!'); JOBS.crime('car');
   } else if (v.owner && v.owner !== ME.id && !v.driver) { toast('🔑 남의 차를 훔쳤다!'); JOBS.crime('car'); } // 다른 사람 소유 차
   v.driver = ME.id; v.ctrl = 'local'; ME.vehicle = v; ME.seat = 'd'; ME.dance = -1; ME.sitBench = null; NET.send({ t: 'seat', v: v.id, s: 'd' }); sfx('door');
+  if (!ME._drvTip || G.t - ME._drvTip > 300) { ME._drvTip = G.t; toast(v.kind === 'heli' ? '헬기: W/S 앞뒤 · A/D 회전 · Space 상승 · Shift 하강 · F 내리기 (공중에서 내리면 떨어진다)' : v.kind === 'horse' ? '말: W 달리기 · Shift 전력질주 · Space 점프' : 'W 가속 · S 브레이크/후진 · Space 브레이크 · Shift 드리프트 · H 경적 · F 하차', 5000); }
   if (v.kind === 'horse') sfx('neigh', v.x, v.z);
 }
 function ejectNpcDriver(v) {
@@ -293,12 +294,15 @@ function exitVehicle(force) {
   const v = ME.vehicle; if (!v) return;
   const myCab = v.taxiCab && v.taxiOwner === ME.id && !TAXI._exiting;
   if (myCab && !force) { TAXI.stopHere(); return; } // 택시: 기사님이 세워준 뒤 내린다
-  if (!force && Math.abs(v.speed) > 8 && v.kind !== 'horse') { toast('속도를 줄여야 내릴 수 있다'); return; }
-  const side = ME.seat === 'p' ? -1 : 1; const off = v.kind === 'car' ? v.M.W / 2 + 0.7 : 0.9;
-  ME.x = v.x + Math.cos(v.yaw) * off * side; ME.z = v.z - Math.sin(v.yaw) * off * side; ME.y = groundHeight(ME.x, ME.z, v.y + 1) + 0.05; ME.yaw = v.yaw; ME.vx = ME.vz = 0; ME.vy = 0;
+  const exitSpd = Math.abs(v.speed); const air = v.kind === 'heli' && v.y - (v.groundY ?? v.y) > 1.5;
+  const side = ME.seat === 'p' || ME.seat === 'b2' ? -1 : 1; const off = v.kind === 'car' ? v.M.W / 2 + 0.7 : v.kind === 'heli' ? 2 : 0.9;
+  ME.x = v.x + Math.cos(v.yaw) * off * side; ME.z = v.z - Math.sin(v.yaw) * off * side; ME.y = air ? v.y + 0.3 : groundHeight(ME.x, ME.z, v.y + 1) + 0.05; ME.yaw = v.yaw; ME.vx = ME.vz = 0; ME.vy = 0;
+  if (air) { ME.grounded = false; ME.fallTop = ME.y; }
   const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z;
-  if (ME.seat === 'd') { v.driver = null; v.brake = true; } else v.passenger = null;
+  if (ME.seat === 'd') { v.driver = null; v.brake = true; } else seatClear(v, ME.id);
   NET.send({ t: 'seat', v: v.id, s: null }); ME.vehicle = null; ME.seat = null; ENG.set(false, 0); sfx('door');
+  // 빠르게 달리다 내리면 다친다
+  if (!force && !air && exitSpd > 7 && v.kind !== 'horse') { const dmg = Math.round((exitSpd - 5) * 3.6); ME.takeDamage(dmg, 'crash', 'fall'); ME.knock(Math.sin(v.yaw) * exitSpd * 0.45, Math.cos(v.yaw) * exitSpd * 0.45); CAM.shake = Math.min(0.7, CAM.shake + 0.4); sfx('hit'); toast(`달리는 차에서 뛰어내렸다! -${dmg} (${Math.round(exitSpd * 3.6)}km/h)`, 3000); }
   if (v.siren && !v.ai) v.siren = false;
   if (myCab) TAXI.onExit(true);
 }
@@ -371,6 +375,7 @@ function updatePlayer(dt) {
   let sprint = (KEYS['shift'] || KEYS['ShiftLeft'] || INP.touchRun || (G.opt.autoRun && mag > 0.1) || (IS_TOUCH && INP.joyMag > 0.92)) && ME.stamina > 1 && !ME.aiming;
   let speed = ME.swim ? (sprint ? 3.6 : 2.4) : ME.aiming ? 2.8 : sprint ? 9.2 + ME.skills.fit * 0.35 : (IS_TOUCH && mag < 0.5 ? 2.2 : 4.8);
   speed *= ME.speedMul || 1;
+  const SL = slopeWalk(dx, dz); speed *= SL.mul; if (mag > 0.1 && SL.stam) ME.stamina = Math.max(0, ME.stamina - SL.stam * dt * (sprint ? 1.6 : 0.6)); // 오르막은 느리고 힘들다
   if (ME.drunk > 0.4) { dx += Math.sin(G.t * 1.3) * 0.4 * ME.drunk; dz += Math.cos(G.t * 1.1) * 0.4 * ME.drunk; }
   ME.stamina = clamp(ME.stamina + (sprint && mag > 0.1 ? -dt * (14 - ME.skills.fit * 1.5) : dt * 9), 0, 100);
   if (ME.knockT > 0) { ME.knockT -= dt; speed = 0; }
@@ -411,10 +416,10 @@ function updatePlayer(dt) {
 function placeChar() {
   const c = ME.char; const v = ME.vehicle;
   if (v) {
-    const s = ME.seat === 'p' && v.seatP ? v.seatP : v.seat; _tmpV.copy(s); if (ME.seat === 'p' && !v.seatP) _tmpV.z -= 0.55;
+    _tmpV.copy(seatVec(v, ME.seat));
     v.mesh.updateMatrixWorld(); _tmpV.applyMatrix4(v.mesh.matrixWorld); c.root.position.copy(_tmpV); c.root.rotation.set(0, 0, 0); c.root.rotation.order = 'YXZ'; c.root.rotation.y = v.yaw; c.root.rotation.x = -v.pitch; c.root.rotation.z = v.roll;
     const aimY = ME.aiming ? CAM.yaw : v.yaw; if (ME.aiming) c.root.rotation.y = aimY;
-    c.update(G.dt, { state: v.kind === 'bike' ? 'bike' : v.kind === 'horse' ? 'horse' : ME.seat === 'p' ? 'passenger' : 'drive', steer: v.steer / (v.M.steer || 0.5), speed: Math.abs(v.speed), aiming: ME.aiming, aimPitch: -CAM.pitch, action: ME.action, actionT: ME.actionT });
+    c.update(G.dt, { state: v.kind === 'bike' ? 'bike' : v.kind === 'horse' ? 'horse' : ME.seat !== 'd' ? 'passenger' : 'drive', steer: v.steer / (v.M.steer || 0.5), speed: Math.abs(v.speed), aiming: ME.aiming, aimPitch: -CAM.pitch, action: ME.action, actionT: ME.actionT });
     c.root.visible = !(CAM.fp && ME.seat === 'd' && false);
     return;
   }
@@ -425,17 +430,19 @@ function placeChar() {
   c.P.head.visible = !CAM.fp;
 }
 function updateDriving(dt) {
-  const v = ME.vehicle; ME.x = v.x; ME.z = v.z; ME.y = v.y; ME.yaw = v.yaw; ME.aiming = INP.aim && !WEAPONS[ME.weapon].melee && (ME.weapon === 'pistol' || ME.weapon === 'smg' || ME.seat === 'p');
+  const v = ME.vehicle; ME.x = v.x; ME.z = v.z; ME.y = v.y; ME.yaw = v.yaw; ME.aiming = INP.aim && !WEAPONS[ME.weapon].melee && (ME.weapon === 'pistol' || ME.weapon === 'smg' || ME.seat !== 'd');
   ME.spd = 0;
   if (ME.seat !== 'd') return;
   if (v.driver !== ME.id) { ME.vehicle = null; return; }
   const mi = readMoveInput();
-  const inp = { throttle: mi.z, steer: -mi.x, brake: !!(KEYS[' '] || INP.brake) && v.kind !== 'horse', hand: !!(KEYS[' '] || INP.brake) && v.kind === 'car' && Math.abs(v.speed) > 8 };
+  const shift = !!(KEYS['shift'] || KEYS['ShiftLeft'] || KEYS['ShiftRight']);
+  const inp = { throttle: mi.z, steer: -mi.x, brake: !!(KEYS[' '] || INP.brake) && v.kind !== 'horse', hand: (shift || INP.drift) && v.kind === 'car' && Math.abs(v.speed) > 6, up: !!(KEYS[' '] || INP.jump || INP.brake), down: shift || !!INP.touchRun };
+  if (v.kind === 'heli') { inp.brake = false; }
   if (v.kind === 'horse' && (KEYS[' '] || INP.jump) && v.y <= v.groundY + 0.05) { v.vy = 6.5; v.y += 0.1; INP.jump = false; }
   if (v.kind === 'horse' && (KEYS['shift'] || INP.touchRun)) inp.throttle *= 1; else if (v.kind === 'horse') inp.throttle *= 0.55;
   if (IS_TOUCH && INP.joyMag > 0.05) { inp.throttle = clamp(mi.z * 1.4, -1, 1); inp.steer = clamp(-mi.x * 1.2, -1, 1); }
   v.drive(dt, inp); v.ctrl = 'local';
-  if (Math.abs(v.speed) > 4) runOverCheck(v, 'me');
+  if (Math.abs(v.speed) > 4 && (v.kind !== 'heli' || v.y - (v.groundY ?? v.y) < 1.5)) runOverCheck(v, 'me');
   ENG.set(!v.dead, clamp(Math.abs(v.speed) / v.M.max, 0, 1), v.kind);
   if (v.kind === 'bike' && v.lastImpact > 10) { }
   if (v.waterT > 2.5 && v.kind !== 'horse') { exitVehicle(true); toast('🌊 차가 물에 빠졌다!'); }
@@ -449,7 +456,7 @@ function updateCamera(dt) {
   const v = ME.vehicle; const scope = ME.aiming && WEAPONS[ME.weapon].scope;
   let tx, ty, tz, dist, sh = 0;
   if (v) {
-    tx = v.x; ty = v.y + (v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * 0.03;
+    tx = v.x; ty = v.y + (v.kind === 'heli' ? 3 : v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'heli' ? 15 : v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * (v.kind === 'heli' ? 0.08 : 0.03);
     if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && (ME.seat === 'd' || v.taxiCab)) { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
     if (ME.aiming) { dist = 3.2; sh = 0.6; }
   } else {
@@ -487,9 +494,9 @@ function renderRemotes(dt) {
     const c = rp.char; const v = rp.veh ? vehicles.get(rp.veh) : null;
     const vis = sameSpace(rp); c.root.visible = vis; if (!vis) { rp.x = rp.tx; rp.y = rp.ty; rp.z = rp.tz; continue; } // 다른 실내(또는 바깥)에 있는 사람은 숨긴다
     if (v) {
-      const s = rp.seat === 'p' ? (v.seatP || v.seat) : v.seat; _tmpV.copy(s); v.mesh.updateMatrixWorld(); _tmpV.applyMatrix4(v.mesh.matrixWorld);
+      _tmpV.copy(seatVec(v, rp.seat)); v.mesh.updateMatrixWorld(); _tmpV.applyMatrix4(v.mesh.matrixWorld);
       c.root.position.copy(_tmpV); c.root.rotation.set(-v.pitch, rp.aim ? rp.yaw : v.yaw, v.roll, 'YXZ'); rp.x = v.x; rp.z = v.z; rp.y = v.y;
-      c.update(dt, { state: v.kind === 'bike' ? 'bike' : v.kind === 'horse' ? 'horse' : rp.seat === 'p' ? 'passenger' : 'drive', steer: v.steer / (v.M.steer || 0.5), speed: Math.abs(v.speed), aiming: rp.aim, aimPitch: rp.ap, action: rp.act, actionT: rp.actT });
+      c.update(dt, { state: v.kind === 'bike' ? 'bike' : v.kind === 'horse' ? 'horse' : rp.seat && rp.seat !== 'd' ? 'passenger' : 'drive', steer: v.steer / (v.M.steer || 0.5), speed: Math.abs(v.speed), aiming: rp.aim, aimPitch: rp.ap, action: rp.act, actionT: rp.actT });
     } else {
       rp.x = damp(rp.x, rp.tx, 12, dt); rp.y = damp(rp.y, rp.ty, 12, dt); rp.z = damp(rp.z, rp.tz, 12, dt); rp.yaw = dampAng(rp.yaw, rp.tyaw, 12, dt);
       c.root.position.set(rp.x, rp.y, rp.z); c.root.rotation.set(0, rp.yaw, 0);

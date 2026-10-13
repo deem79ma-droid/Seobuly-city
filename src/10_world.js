@@ -1,3 +1,4 @@
+// @v 2026101322
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
@@ -13,7 +14,17 @@ const REGIONS = {
   simone: { name: '시모느 아일랜드', desc: '남동쪽 휴양 섬', color: '#4fffe0', cx: 2000, cz: 560 },
   sea: { name: '바다', desc: '', color: '#5aa0ff', cx: 0, cz: 0 },
 };
+// ---- 산 4개: 이름(한자) · 정상 위치. 시모느의 천해산이 가장 높다 ----
+const MOUNTAINS = [
+  { id: 'unryeong', n: '운령산', hj: '雲嶺山', d: '구름이 걸리는 디산베이 북쪽 큰 산 · 호수와 숲', x: -1330, z: -900, r: 330 },
+  { id: 'songrim', n: '송림산', hj: '松林山', d: '소나무 숲이 덮인 디산베이 남쪽 완만한 산', x: -1350, z: 820, r: 240 },
+  { id: 'mangseong', n: '망성산', hj: '望城山', d: '서불리 도심이 한눈에 내려다보이는 북쪽 산', x: 820, z: -935, r: 210 },
+  { id: 'cheonhae', n: '천해산', hj: '天海山', d: '바다에서 솟은 시모느 아일랜드의 최고봉 · 서불리에서 가장 높은 산', x: 2290, z: 1030, r: 260 },
+];
+const ISLE2 = { x: 2290, z: 1030, r: 235 }; // 천해산이 있는 시모느 남동쪽 땅
+function mountainAt(x, z) { let best = null, bd = 1e9; for (const M of MOUNTAINS) { const d = Math.hypot(x - M.x, z - M.z) / M.r; if (d < 1 && d < bd) { bd = d; best = M; } } return best; }
 function regionAt(x, z) {
+  if (Math.hypot(x - ISLE2.x, z - ISLE2.z) < ISLE2.r) return 'simone';
   if (((x - 2000) / 420) ** 2 + ((z - 560) / 510) ** 2 < 1) return 'simone';
   if (x > 1420) return 'sea';
   if (Math.abs(x) < 212 && Math.abs(z) < 212) return 'plaza';
@@ -110,7 +121,8 @@ function landF(x, z) {
   const l1 = smooth(30, -30, sd);
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430 + fbm(x * 0.006, z * 0.006, 3) * 30;
   const l2 = smooth(25, -25, sdI);
-  return Math.max(l1, l2);
+  const l4 = smooth(25, -25, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r + fbm(x * 0.008 + 3, z * 0.008, 3) * 40);
+  return Math.max(l1, l2, l4);
 }
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
@@ -120,6 +132,9 @@ function hillsAt(x, z) {
   // 시모느 아일랜드: 동쪽 언덕 + 북쪽 작은 봉우리
   h += 46 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 110 * 110));
   h += 24 * Math.exp(-((x - 1830) ** 2 + (z - 230) ** 2) / (2 * 80 * 80));
+  // 천해산 (시모느 · 최고봉) · 망성산 (서불리 북쪽)
+  { const d2 = (x - 2290) ** 2 + (z - 1030) ** 2; h += 330 * Math.exp(-d2 / (2 * 120 * 120)) + 40 * Math.exp(-d2 / (2 * 40 * 40)); h += (fbm(x * 0.012, z * 0.012, 3) * 0.5) * 30 * Math.exp(-d2 / (2 * 160 * 160)); }
+  { const d2 = (x - 820) ** 2 + (z + 935) ** 2; h += 135 * Math.exp(-d2 / (2 * 115 * 115)) + (fbm(x * 0.01 + 7, z * 0.01, 3) * 0.5 + 0.3) * 25 * Math.exp(-d2 / (2 * 150 * 150)); }
   // 지올르 북쪽 · 캥지베 남쪽 해안 구릉
   const band = smooth(-760, -680, x) * smooth(300, 220, x);
   h += band * smooth(-990, -1060, z) * (fbm(x * 0.006 + 2, z * 0.006, 3) * 0.5 + 0.7) * 30;
@@ -141,7 +156,7 @@ function coastDist(x, z) {
   const qx = Math.abs(x + 50) - 1450 + 220, qz = Math.abs(z) - 1100 + 220;
   const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220;
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430;
-  return -Math.min(sd, sdI);
+  return -Math.min(sd, sdI, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r);
 }
 function hmIdx(i, j) { return j * HM.W + i; }
 function hmSample(arr, x, z) {
@@ -344,7 +359,9 @@ function C(hex, mul = 1) { const c = new THREE.Color(hex); c.multiplyScalar(mul)
 function CS(r, g, b) { return new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace); }
 // per-chunk builders so frustum culling works
 const CHUNK = 260; const chunkMB = new Map();
-function mbAt(mat, x, z) { const k = mat + '|' + Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK); let m = chunkMB.get(k); if (!m) { m = new MB(); m.mat = mat; chunkMB.set(k, m); } return m; }
+// 건물 교체용 '헛돌리기': 원래 건물을 만드는 척만 해서 랜덤 순서·건물 번호를 그대로 유지한다 (집 열쇠 번호가 안 바뀌게)
+let GEN_DRY = false; const DRY_MB = new Proxy({}, { get: () => () => { } });
+function mbAt(mat, x, z) { if (GEN_DRY) return DRY_MB; const k = mat + '|' + Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK); let m = chunkMB.get(k); if (!m) { m = new MB(); m.mat = mat; chunkMB.set(k, m); } return m; }
 function flushMB(castShadow = true) {
   for (const [k, m] of chunkMB) { if (m.empty) continue; const mesh = new THREE.Mesh(m.geo(), MAT[m.mat]); mesh.castShadow = castShadow && m.mat !== 'glow'; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.updateMatrix(); scene.add(mesh); WORLD_MESHES.push(mesh); }
   chunkMB.clear();
@@ -354,6 +371,7 @@ const WORLD_MESHES = [];
 // ================= COLLIDERS =================
 const COL_CELL = 32; const colGrid = new Map(); const COLLIDERS = []; let colStamp = 0;
 function addCollider(x0, z0, x1, z1, y1 = 100, type = 'bld', ref = null, y0 = -50) {
+  if (GEN_DRY) return null;
   const c = { x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), y0, y1, type, ref, stamp: 0, circle: false };
   COLLIDERS.push(c); gridInsert(c); return c;
 }
@@ -483,6 +501,7 @@ const BLD_KIND = {
 };
 const BUILDINGS = []; const BLD_GRID = new Map(); const BLD_CELL = 64;
 function regBuilding(kind, x, z, w, d, top, side, extra = {}) {
+  if (GEN_DRY) return { door: {} };
   const [sx, sz] = SIDE_VEC[side] || [0, 1];
   const wx = x + sx * (w / 2), wz = z + sz * (d / 2); // 문이 붙은 벽면 중앙
   const door = extra.door || { x: wx + sx * 1.4, z: wz + sz * 1.4 };
@@ -633,6 +652,11 @@ function seoKind(x, z) { const k = hash2(x * 7 | 0, z * 13 | 0); return k < 0.12
 function buildLotBuilding(lot, side, R, b) {
   const lw = lot.x1 - lot.x0, ld = lot.z1 - lot.z0, cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
   if (R === 'seoburi') {
+    const g = genrePick(cx, cz);
+    if (g) { GEN_DRY = true; try { buildLotBuilding(lot, side, '__seo', b); } finally { GEN_DRY = false; } const keep = wrng; wrng = mulberry32(hash2(cx | 0, cz | 0) * 4e9 | 0); try { buildGenre(g, lot, side); } finally { wrng = keep; } return; }
+    buildLotBuilding(lot, side, '__seo', b); return;
+  }
+  if (R === '__seo') {
     const dc = Math.hypot(cx - 760, cz) / 520; const hMax = lerp(175, 38, clamp(dc, 0, 1));
     const h = Math.max(16, wr(0.35, 1) * hMax); const style = wrng() < 0.6 ? 'glass' : 'office';
     const col = C(wpick(PALETTE[style]));
@@ -929,7 +953,8 @@ function fenceRect(x0, z0, x1, z1, col = C(0x777a80), h = 2.2, gap = null) {
   if (gap === 's') { const mx = (x0 + x1) / 2; seg(x0, z1, mx - 3, z1); seg(mx + 3, z1, x1, z1); } else seg(x0, z1, x1, z1);
   seg(x0, z0, x1, z0); seg(x0, z0, x0, z1); seg(x1, z0, x1, z1);
 }
-const ZOO_SETS = [['lion', 'zebra', 'giraffe'], ['elephant', 'bear', 'penguin'], ['giraffe', 'lion', 'deer'], ['bear', 'zebra', 'elephant'], ['penguin', 'lion', 'giraffe']];
+// 우리 하나에 여러 종(+로 연결)이 같이 산다
+const ZOO_SETS = [['lion+tiger', 'zebra+ostrich', 'giraffe'], ['elephant', 'panda+bear', 'penguin+polarbear'], ['hippo+rhino', 'camel', 'giraffe+deer'], ['bear', 'zebra', 'elephant'], ['penguin', 'lion', 'giraffe']];
 function buildZooBlock(b) {
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2; const w = b.ix1 - b.ix0, d = b.iz1 - b.iz0;
   buildZoo(cx, cz, w, d, b.region);
@@ -943,9 +968,9 @@ function buildZoo(cx, cz, w, d, region) {
   for (let i = 0; i < 3; i++) {
     const x0 = cx - w / 2 + 6 + i * (ew + 2), x1 = x0 + ew, z0 = cz - d / 2 + 6, z1 = cz + d / 2 - 14;
     fenceRect(x0, z0, x1, z1, C(0x5a4a3a), 2.4);
-    m.box((x0 + x1) / 2, LAND + 0.21, (z0 + z1) / 2, x1 - x0 - 0.5, 0.02, z1 - z0 - 0.5, set[i] === 'penguin' ? C(0xdde8ee) : C(0xa89060));
-    if (set[i] === 'penguin') { const p = new THREE.Mesh(new THREE.PlaneGeometry(ew * 0.5, (z1 - z0) * 0.4), MAT.poolWater); p.rotation.x = -Math.PI / 2; p.position.set((x0 + x1) / 2, LAND + 0.25, (z0 + z1) / 2); scene.add(p); }
-    for (let k = 0; k < 3; k++) TREES.push({ type: set[i] === 'giraffe' ? 'acacia' : 'oak', x: wr(x0 + 2, x1 - 2), z: wr(z0 + 2, z1 - 2), s: wr(0.8, 1.1), noCollide: false });
+    m.box((x0 + x1) / 2, LAND + 0.21, (z0 + z1) / 2, x1 - x0 - 0.5, 0.02, z1 - z0 - 0.5, set[i].includes('penguin') ? C(0xdde8ee) : C(0xa89060));
+    if (set[i].includes('penguin')) { const p = new THREE.Mesh(new THREE.PlaneGeometry(ew * 0.5, (z1 - z0) * 0.4), MAT.poolWater); p.rotation.x = -Math.PI / 2; p.position.set((x0 + x1) / 2, LAND + 0.25, (z0 + z1) / 2); scene.add(p); }
+    for (let k = 0; k < 3; k++) TREES.push({ type: set[i].includes('giraffe') ? 'acacia' : 'oak', x: wr(x0 + 2, x1 - 2), z: wr(z0 + 2, z1 - 2), s: wr(0.8, 1.1), noCollide: false });
     pens.push({ x0: x0 + 1.5, x1: x1 - 1.5, z0: z0 + 1.5, z1: z1 - 1.5, kind: set[i] });
   }
   addSign('동물원', 'ZOO · ' + REGIONS[region].name, '#2e5a1a', cx, LAND + 4.2, cz + d / 2 + 0.2, 9, 2.2, 0);
@@ -1011,8 +1036,113 @@ function buildBridge() {
   }
   addCollider(1250, 432.2, 1700, 432.9, 30, 'rail'); addCollider(1250, 447.1, 1700, 447.8, 30, 'rail');
 }
+// ================= 서불리 장르 건물 100개 =================
+// 서불리 도심 필지 중 100곳을 영화관·박물관·소방서·주유소·노래방 같은 다양한 건물로 바꾼다.
+// k = 실내 종류(기존 실내 재사용), cu = 식당 메뉴 종류, deco = 겉모양 장식
+const GENRES = [
+  { id: 'cinema', n: '영화관', e: 'CINEMA', k: 'office', h: [16, 22], st: 'office', col: 0x2a2a3a, deco: 'marquee', bg: '#a01020' },
+  { id: 'museum', n: '시립 박물관', e: 'MUSEUM', k: 'bank', h: [14, 18], st: 'office', col: 0xe8e0cc, deco: 'columns', bg: '#5a4a2a' },
+  { id: 'gallery', n: '현대 미술관', e: 'ART GALLERY', k: 'office', h: [14, 20], st: 'glass', col: 0xf4f4f4, deco: 'cube', bg: '#111111' },
+  { id: 'library', n: '중앙 도서관', e: 'LIBRARY', k: 'academy', h: [12, 16], st: 'brick', col: 0xa85a40, deco: 'columns', bg: '#2a4a3a' },
+  { id: 'books', n: '서점', e: 'BOOKS', k: 'mart', h: [10, 16], st: 'brick', col: 0x8a4a3a, deco: 'awning', aw: 0x2a6a4a, bg: '#2a5a3a', shop: 1 },
+  { id: 'bakery', n: '빵집', e: 'BAKERY', k: 'cafe', h: [8, 14], st: 'brick', col: 0xd8b088, deco: 'awning', aw: 0xc8582a, bg: '#8a4a1a', shop: 1 },
+  { id: 'flower', n: '꽃집', e: 'FLOWERS', k: 'mart', h: [8, 12], st: 'office', col: 0xf4e8ec, deco: 'awning', aw: 0xe86a9a, bg: '#c84a7a', shop: 1 },
+  { id: 'pharmacy', n: '약국', e: 'PHARMACY', k: 'mart', h: [10, 18], st: 'office', col: 0xf0f0ec, deco: 'cross', bg: '#1a8a4a', shop: 1 },
+  { id: 'chicken', n: '치킨집', e: 'CHICKEN', k: 'restaurant', cu: 'chk', h: [8, 14], st: 'brick', col: 0xd89a4a, deco: 'awning', aw: 0xe8a018, bg: '#c86a10', shop: 1 },
+  { id: 'pizza', n: '피자집', e: 'PIZZA', k: 'restaurant', cu: 'piz', h: [8, 14], st: 'brick', col: 0xb8483a, deco: 'awning', aw: 0x2a8a3a, bg: '#a82a1a', shop: 1 },
+  { id: 'snack', n: '분식집', e: 'SNACK BAR', k: 'restaurant', cu: 'snack', h: [8, 12], st: 'office', col: 0xf0d8a8, deco: 'awning', aw: 0xe84a3a, bg: '#d8402a', shop: 1 },
+  { id: 'bbq', n: '고깃집', e: 'K-BBQ', k: 'restaurant', cu: 'bbq', h: [8, 14], st: 'brick', col: 0x6a3a2a, deco: 'neon', bg: '#5a1a0a', shop: 1 },
+  { id: 'sushi', n: '초밥집', e: 'SUSHI', k: 'restaurant', cu: 'jpn', h: [8, 12], st: 'office', col: 0x2a2a2a, deco: 'awning', aw: 0x1a1a1a, bg: '#1a1a1a', shop: 1 },
+  { id: 'chinese', n: '중국집', e: 'CHINESE', k: 'restaurant', cu: 'chn', h: [8, 14], st: 'brick', col: 0xb8302a, deco: 'neon', bg: '#c81a1a', shop: 1 },
+  { id: 'burger', n: '버거집', e: 'BURGER', k: 'restaurant', cu: 'bur', h: [8, 10], st: 'office', col: 0xe8c040, deco: 'billboard', bg: '#d8401a', shop: 1 },
+  { id: 'korean', n: '한식당', e: 'KOREAN', k: 'restaurant', cu: 'kor', h: [8, 12], st: 'brick', col: 0x8a6a4a, deco: 'awning', aw: 0x5a3a1a, bg: '#4a2a10', shop: 1 },
+  { id: 'icecream', n: '아이스크림 가게', e: 'ICE CREAM', k: 'cafe', h: [8, 10], st: 'office', col: 0xf8d8e8, deco: 'awning', aw: 0x6ad0e8, bg: '#e86aa8', shop: 1 },
+  { id: 'karaoke', n: '노래방', e: 'KARAOKE', k: 'pcbang', h: [12, 20], st: 'office', col: 0x3a2a5a, deco: 'neon', bg: '#6a1aa0', shop: 1 },
+  { id: 'arcade', n: '오락실', e: 'ARCADE', k: 'pcbang', h: [10, 16], st: 'office', col: 0x1a1a3a, deco: 'neon', bg: '#1a3aa0', shop: 1 },
+  { id: 'bowling', n: '볼링장', e: 'BOWLING', k: 'gym', h: [10, 13], st: 'metal', col: 0x4a6a8a, deco: 'pin', bg: '#1a4a8a' },
+  { id: 'sauna', n: '찜질방', e: 'SAUNA', k: 'pool', h: [14, 20], st: 'office', col: 0xe8d8c0, deco: 'billboard', bg: '#a05a1a' },
+  { id: 'hair', n: '미용실', e: 'HAIR SALON', k: 'mart', h: [8, 14], st: 'office', col: 0xf4f4f4, deco: 'pole', bg: '#2a2a2a', shop: 1 },
+  { id: 'laundry', n: '세탁소', e: 'LAUNDRY', k: 'mart', h: [8, 12], st: 'brick', col: 0x9ab0c8, deco: 'awning', aw: 0x3a6ad0, bg: '#2a5ab0', shop: 1 },
+  { id: 'post', n: '우체국', e: 'POST OFFICE', k: 'bank', h: [10, 14], st: 'brick', col: 0xc85a3a, deco: 'flag', bg: '#d03a1a' },
+  { id: 'fire', n: '소방서', e: 'FIRE STATION', k: 'office', h: [12, 15], st: 'brick', col: 0x9a3a2a, deco: 'garage', bg: '#c8201a' },
+  { id: 'tv', n: '서불리 방송국', e: 'SBC TV', k: 'office', h: [40, 70], st: 'glass', col: 0x7fa2c8, deco: 'antenna', bg: '#1a2a6a' },
+  { id: 'news', n: '서불리 일보', e: 'DAILY NEWS', k: 'office', h: [30, 50], st: 'office', col: 0xd8d2c4, deco: 'billboard', bg: '#2a2a2a' },
+  { id: 'motel', n: '모텔', e: 'MOTEL', k: 'hotel', h: [16, 24], st: 'brick', col: 0xc8a0b8, deco: 'neon', bg: '#c81a8a' },
+  { id: 'guest', n: '게스트하우스', e: 'GUEST HOUSE', k: 'hotel', h: [12, 18], st: 'brick', col: 0xe0c8a0, deco: 'awning', aw: 0x3a8a6a, bg: '#2a6a5a' },
+  { id: 'dept', n: '서불리 백화점', e: 'DEPARTMENT STORE', k: 'mart', h: [28, 40], st: 'glass', col: 0xd8c9a0, deco: 'billboard', bg: '#8a1a3a' },
+  { id: 'hyper', n: '대형마트', e: 'HYPERMARKET', k: 'mart', h: [12, 16], st: 'metal', col: 0xe8e8e8, deco: 'billboard', bg: '#e8401a' },
+  { id: 'furniture', n: '가구 전시장', e: 'FURNITURE', k: 'mart', h: [12, 18], st: 'glass', col: 0xc8b89a, deco: 'cube', bg: '#5a4a2a' },
+  { id: 'electro', n: '전자상가', e: 'ELECTRONICS', k: 'mart', h: [16, 28], st: 'glass', col: 0x8ad1d6, deco: 'neon', bg: '#1a5ab0' },
+  { id: 'garage', n: '자동차 정비소', e: 'AUTO REPAIR', k: 'office', h: [8, 10], st: 'metal', col: 0x7a7a80, deco: 'garage', bg: '#2a2a2a' },
+  { id: 'gas', n: '주유소', e: 'GAS STATION', k: 'mart', h: [6, 7], st: 'office', col: 0xf0f0f0, deco: 'canopy', bg: '#1a8a3a', small: 1 },
+  { id: 'carwash', n: '세차장', e: 'CAR WASH', k: 'mart', h: [6, 7], st: 'metal', col: 0xd8e8f4, deco: 'canopy', bg: '#1a6ad0', small: 1 },
+  { id: 'cathedral', n: '서불리 성당', e: 'CATHEDRAL', k: 'church', h: [16, 22], st: 'brick', col: 0xd8c8a8, deco: 'spire', bg: '#4a3a2a' },
+  { id: 'univ', n: '서불리 대학교', e: 'UNIVERSITY', k: 'academy', h: [18, 30], st: 'brick', col: 0xa86a4a, deco: 'columns', bg: '#1a3a6a' },
+  { id: 'kinder', n: '유치원', e: 'KINDERGARTEN', k: 'academy', h: [7, 9], st: 'office', col: 0xf8e070, deco: 'stripes', bg: '#e86a1a' },
+  { id: 'taekwon', n: '태권도장', e: 'TAEKWONDO', k: 'gym', h: [8, 14], st: 'office', col: 0xf0f0f0, deco: 'flag', bg: '#1a3a9a', shop: 1 },
+  { id: 'yoga', n: '요가 · 필라테스', e: 'YOGA', k: 'gym', h: [10, 16], st: 'glass', col: 0xa0b8a8, deco: 'awning', aw: 0x6a9a6a, bg: '#3a6a4a', shop: 1 },
+  { id: 'dental', n: '치과', e: 'DENTAL', k: 'office', h: [14, 24], st: 'office', col: 0xeef4f8, deco: 'cross', bg: '#1a7ab0', shop: 1 },
+  { id: 'vet', n: '동물병원', e: 'ANIMAL HOSPITAL', k: 'office', h: [8, 12], st: 'office', col: 0xf0f8f0, deco: 'cross', bg: '#3a9a5a', shop: 1 },
+  { id: 'realty', n: '공인중개사', e: 'REAL ESTATE', k: 'office', h: [10, 18], st: 'office', col: 0xe6dccc, deco: 'awning', aw: 0x2a3a6a, bg: '#2a3a6a', shop: 1 },
+  { id: 'convention', n: '컨벤션 센터', e: 'CONVENTION', k: 'office', h: [16, 20], st: 'glass', col: 0xb8c6d4, deco: 'arch', bg: '#2a4a6a' },
+  { id: 'aquarium', n: '아쿠아리움', e: 'AQUARIUM', k: 'pool', h: [12, 16], st: 'glass', col: 0x7ab8e0, deco: 'dome', bg: '#1a5a9a' },
+  { id: 'arena', n: '실내 체육관', e: 'ARENA', k: 'gym', h: [16, 20], st: 'metal', col: 0xc8ccd2, deco: 'dome', bg: '#2a2a6a' },
+  { id: 'officetel', n: '오피스텔', e: 'OFFICETEL', k: 'apartment', h: [36, 60], st: 'glass', col: 0xb8c6d4, deco: 'stripes', bg: '#3a4a5a' },
+  { id: 'jazz', n: '재즈바', e: 'JAZZ BAR', k: 'restaurant', cu: 'kor', h: [8, 12], st: 'brick', col: 0x3a2a2a, deco: 'neon', bg: '#2a1a3a', shop: 1 },
+  { id: 'pub', n: '펍', e: 'PUB', k: 'restaurant', cu: 'bur', h: [8, 12], st: 'brick', col: 0x2a4a2a, deco: 'awning', aw: 0x1a3a1a, bg: '#1a3a1a', shop: 1 },
+];
+let GENRE_N = 0; const GENRE_MAX = 100;
+function genrePick(cx, cz) {
+  if (GENRE_N >= GENRE_MAX || hash2(cx * 3 | 0, cz * 7 | 0) > 0.46) return null;
+  return GENRES[GENRE_N++ % GENRES.length];
+}
+function buildGenre(g, lot, side) {
+  const lw = lot.x1 - lot.x0, ld = lot.z1 - lot.z0, cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2;
+  const [sx, sz] = SIDE_VEC[side]; const along = sx !== 0; // 정면이 동서쪽이면 정면 폭은 z 방향
+  let w = Math.min(lw - wr(5, 9), g.small ? 18 : 46), d = Math.min(ld - wr(5, 9), g.small ? 14 : 44);
+  if (g.small) { w = Math.min(w, 16); d = Math.min(d, 12); }
+  const h = wr(g.h[0], g.h[1]); const col = C(g.col);
+  // 작은 건물(주유소·세차장)은 뒤쪽으로 밀고 앞에 마당
+  const bx = g.small ? cx - sx * (lw / 2 - w / 2 - 3) : cx, bz = g.small ? cz - sz * (ld / 2 - d / 2 - 3) : cz;
+  const top = addBuildingBox(bx, bz, w, d, h, g.st, col, { shop: !!g.shop });
+  const m = mbAt('plain', bx, bz), gl = mbAt('glow', bx, bz), y0 = LAND - 0.2;
+  const half = along ? w / 2 : d / 2, faceW = along ? d : w;
+  // 정면 기준 상자: lat(정면 좌우) · out(정면에서 바깥으로) · wl(좌우 폭) · dd(앞뒤 두께)
+  const F = (mb, lat, y, out, wl, hh, dd, c) => { const x = bx + sx * (half + out) + (along ? 0 : lat), z = bz + sz * (half + out) + (along ? lat : 0); if (along) mb.box(x, y, z, dd, hh, wl, c); else mb.box(x, y, z, wl, hh, dd, c); };
+  const FC = (mb, lat, y, out, r, hh, c, seg = 12, r2) => { const x = bx + sx * (half + out) + (along ? 0 : lat), z = bz + sz * (half + out) + (along ? lat : 0); mb.cyl(x, y, z, r, hh, c, seg, r2 ?? r); };
+  const bgc = C(new THREE.Color(g.bg).getHex());
+  switch (g.deco) {
+    case 'marquee': F(m, 0, y0 + 4.6, 2, faceW * 0.7, 0.8, 4, C(0x1a1a1a)); F(gl, 0, y0 + 4.5, 4.05, faceW * 0.7, 0.25, 0.1, CS(1, 0.85, 0.3)); F(gl, 0, y0 + 5.4, 4.05, faceW * 0.7, 0.25, 0.1, CS(1, 0.3, 0.3)); F(gl, faceW / 2 - 2, y0 + 6, 0.6, 0.6, h - 8, 1.2, CS(1, 0.2, 0.25)); break;
+    case 'columns': for (let i = 0; i < 6; i++) FC(m, (i - 2.5) * faceW / 7, y0, 3, 0.6, Math.min(h - 1, 9), C(0xf2ecdc), 14); F(m, 0, y0 + Math.min(h - 1, 9), 3, faceW * 0.9, 1.0, 6.5, C(0xe8e0cc)); for (let k = 0; k < 3; k++) F(m, 0, y0 + k * 0.3, 4 + 3.2 - k * 1.0, faceW * 0.9, 0.3, 1.2 + k, C(0xd8d0c0)); break;
+    case 'cube': F(m, 0, y0, 1.5, faceW * 0.5, h * 0.8, 1.2, C(0x1a1a1a)); m.box(bx, top, bz, w * 0.6, 6, d * 0.6, C(0xf4f4f4)); gl.box(bx, top + 6, bz, w * 0.6 + 0.2, 0.2, d * 0.6 + 0.2, CS(1, 1, 1)); break;
+    case 'awning': { const ac = C(g.aw || 0x2a6a4a); F(m, 0, y0 + 3.6, 1.2, faceW * 0.85, 0.35, 2.4, ac); for (let i = 0; i < 8; i++) F(m, (i - 3.5) * faceW * 0.85 / 8, y0 + 3.3, 2.35, faceW * 0.85 / 16, 0.35, 0.1, i % 2 ? ac : C(0xffffff)); break; }
+    case 'cross': F(gl, faceW / 2 - 2.2, y0 + h * 0.6, 0.5, 2.6, 0.8, 0.3, CS(0.1, 0.9, 0.4)); F(gl, faceW / 2 - 2.2, y0 + h * 0.6 - 0.9, 0.5, 0.8, 2.6, 0.3, CS(0.1, 0.9, 0.4)); break;
+    case 'neon': for (let i = 0; i < Math.min(5, Math.floor(h / 3)); i++) F(gl, 0, y0 + 5 + i * 2.6, 0.32, faceW * 0.9, 0.22, 0.1, i % 2 ? CS(1, 0.2, 0.8) : CS(0.2, 0.9, 1)); F(gl, -faceW / 2 + 1.2, y0 + 4, 0.8, 0.5, h - 5, 1.4, CS(1, 0.3, 0.6)); break;
+    case 'billboard': { const bw = Math.min(w, d) * 0.8; m.box(bx - bw / 3, top, bz, 0.4, 4, 0.4, C(0x555555)); m.box(bx + bw / 3, top, bz, 0.4, 4, 0.4, C(0x555555)); if (along) m.box(bx, top + 4, bz, 0.5, 5, bw, bgc); else m.box(bx, top + 4, bz, bw, 5, 0.5, bgc); if (along) gl.box(bx + sx * 0.3, top + 4, bz, 0.1, 0.25, bw, CS(1, 1, 0.8)); else gl.box(bx, top + 4, bz + sz * 0.3, bw, 0.25, 0.1, CS(1, 1, 0.8)); break; }
+    case 'pin': m.cyl(bx, top, bz, 1.4, 3, C(0xffffff), 16, 1.0); m.cyl(bx, top + 3, bz, 1.0, 1.0, C(0xd82020), 16, 0.8); m.cyl(bx, top + 4, bz, 0.8, 2.2, C(0xffffff), 16, 0.9); m.cyl(bx, top + 6.2, bz, 0.9, 1.0, C(0xffffff), 16, 0.2); break;
+    case 'pole': FC(m, faceW / 2 - 1.5, y0 + 1.5, 0.4, 0.25, 0.3, C(0x888888)); FC(gl, faceW / 2 - 1.5, y0 + 1.8, 0.4, 0.22, 1.6, CS(1, 0.2, 0.2)); FC(gl, faceW / 2 - 1.5, y0 + 2.2, 0.4, 0.23, 0.3, CS(0.2, 0.4, 1)); FC(gl, faceW / 2 - 1.5, y0 + 2.8, 0.4, 0.23, 0.3, CS(1, 1, 1)); break;
+    case 'flag': for (let i = 0; i < 3; i++) { FC(m, (i - 1) * 3, y0, 4, 0.12, 10, C(0xcccccc), 6); F(m, (i - 1) * 3 + 1, y0 + 8.2, 4, 2, 1.3, 0.05, [C(0xd02020), C(0x2050d0), C(0xf0f0f0)][i]); } break;
+    case 'garage': for (let i = 0; i < 3; i++) F(m, (i - 1) * faceW / 3.4, y0, 0.1, faceW / 4, 5, 0.2, i === 1 ? C(0xd8d8d8) : C(g.id === 'fire' ? 0xc82020 : 0x5a5e64)); if (g.id === 'fire') m.box(bx - (along ? 0 : w / 2 - 3), y0, bz - (along ? d / 2 - 3 : 0), 5, h + 9, 5, col); break;
+    case 'canopy': { const ox = bx + sx * (half + 10), oz = bz + sz * (half + 10); for (const [a, c2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) m.box(ox + a * 6, y0, oz + c2 * 4, 0.5, 5.5, 0.5, C(0xcccccc)); m.box(ox, y0 + 5.5, oz, 15, 1, 11, C(0xf2f2f2)); gl.box(ox, y0 + 5.5, oz, 15.2, 0.25, 11.2, g.id === 'gas' ? CS(0.1, 0.8, 0.3) : CS(0.2, 0.5, 1)); if (g.id === 'gas') for (const a of [-3, 3]) { m.box(ox + (along ? 0 : a), y0, oz + (along ? a : 0), 1.0, 1.8, 0.7, C(0xd8d8d8)); gl.box(ox + (along ? 0 : a), y0 + 1.3, oz + (along ? a : 0), 1.05, 0.3, 0.75, CS(0.1, 0.8, 0.3)); } else m.box(ox, y0, oz, 5, 4.5, 9, C(0x3a6ad0)); addCollider(ox - 7.5, oz - 5.5, ox + 7.5, oz + 5.5, y0 + 6.5, 'roof', null, y0 + 5.4); break; }
+    case 'spire': { const tx = bx, tz = bz; m.box(tx, top, tz, 5, 10, 5, col); m.cyl(tx, top + 10, tz, 3.4, 12, C(0x5a4a3a), 4, 0.05); gl.box(tx, top + 22.2, tz, 0.3, 3, 0.3, CS(1, 0.9, 0.5)); gl.box(tx, top + 24, tz, 1.6, 0.3, 0.3, CS(1, 0.9, 0.5)); break; }
+    case 'antenna': { m.box(bx, top, bz, 0.6, 30, 0.6, C(0x8a8a8a)); m.box(bx, top + 10, bz, 3, 0.3, 0.3, C(0x8a8a8a)); m.box(bx, top + 20, bz, 0.3, 0.3, 3, C(0x8a8a8a)); gl.box(bx, top + 30, bz, 0.5, 0.5, 0.5, CS(1, 0.1, 0.1)); m.cyl(bx + w / 4, top, bz + d / 4, 0.3, 2, C(0x999999)); m.cyl(bx + w / 4, top + 2, bz + d / 4, 2.4, 0.4, C(0xeeeeee), 16, 1.2); break; }
+    case 'stripes': { const cs = [C(0xe84a4a), C(0x4a8ae8), C(0x4ac86a), C(0xf2c23a)]; for (let i = 0; i < 4; i++) F(m, (i - 1.5) * faceW / 4.2, y0 + 1, 0.12, faceW / 4.6, Math.min(h - 2, 6), 0.1, cs[i]); break; }
+    case 'arch': for (let i = 0; i < 6; i++) { const r = 1 - (i / 6) ** 2; if (along) m.box(bx, top + i * 1.1, bz, w * 0.9 * r, 1.1, d * 0.95, C(0x9fb4c8)); else m.box(bx, top + i * 1.1, bz, w * 0.95, 1.1, d * 0.9 * r, C(0x9fb4c8)); } break;
+    case 'dome': { const R = Math.min(w, d) * 0.42; let r = R; for (let i = 0; i < 6; i++) { const r2 = R * Math.cos((i + 1) / 6 * Math.PI / 2); m.cyl(bx, top + R * Math.sin(i / 6 * Math.PI / 2), bz, r, R * (Math.sin((i + 1) / 6 * Math.PI / 2) - Math.sin(i / 6 * Math.PI / 2)) + 0.05, g.id === 'aquarium' ? CS(0.4, 0.7, 0.95) : C(0xd8dce2), 20, Math.max(0.05, r2)); r = r2; } break; }
+  }
+  // 간판 (정면)
+  const sw = Math.min(faceW * 0.75, 18), sy = g.shop ? y0 + 5.6 : Math.min(top - 3, y0 + (g.deco === 'columns' ? 11.5 : 7.5));
+  const sxp = bx + sx * (half + (g.deco === 'columns' ? 6.3 : 0.32)), szp = bz + sz * (half + (g.deco === 'columns' ? 6.3 : 0.32));
+  addSign(g.e, g.n, g.bg, sxp, sy, szp, sw, sw / 4, SIDE_YAW[side]);
+  const b = regBuilding(g.k, bx, bz, w + 0.4, d + 0.4, top, side, { genre: g.id });
+  b.name = g.n; if (g.cu) b.cuisine = g.cu;
+  roofProps(bx, bz, w * 0.7, d * 0.7, top, g.deco === 'billboard' || g.deco === 'dome' || g.deco === 'pin' || g.deco === 'antenna' ? 0 : 2);
+}
 // ================= PLAZA =================
-const CLUB = { x: -105, z: -95, w: 56, d: 46 }; const CASINO = { x: 110, z: -100 };
+const CLUB = { x: -105, z: -95, w: 56, d: 46, roof: null };
+// 클럽 안에 있으면 지붕을 숨긴다 (frame에서 매번)
+function clubRoofTick() { if (!CLUB.roof || typeof camera === 'undefined' || !camera) return; const p = camera.position, A = (typeof ME !== 'undefined' && (ME.vehicle || ME)) || p; const inX = q => q.x > CLUB.x - CLUB.w / 2 && q.x < CLUB.x + CLUB.w / 2 && q.z > CLUB.z - CLUB.d / 2 && q.z < CLUB.z + CLUB.d / 2; const hide = inX(A) && inX(p) && p.y > LAND + CLUB.H - 1; for (const r of CLUB.roof) r.visible = !hide; } // 카메라가 지붕 위로 올라가면 지붕만 숨긴다
+const CASINO = { x: 110, z: -100 };
 let danceFloor = null;
 function buildPlaza() {
   const m = mbAt('plain', 0, 0);
@@ -1039,9 +1169,33 @@ function buildPlaza() {
   for (const [px, pz] of [[-c.w / 2 + 1, -c.d / 2 + 1], [c.w / 2 - 1, -c.d / 2 + 1], [-c.w / 2 + 1, c.d / 2 - 1], [c.w / 2 - 1, c.d / 2 - 1]]) { mm.box(c.x + px, LAND + 0.6, c.z + pz, 0.6, 12, 0.6, C(0x444444)); addCollider(c.x + px - 0.3, c.z + pz - 0.3, c.x + px + 0.3, c.z + pz + 0.3); }
   mm.box(c.x, LAND + 12.6, c.z - c.d / 2 + 1, c.w, 0.6, 0.6, C(0x444444)); mm.box(c.x, LAND + 12.6, c.z + c.d / 2 - 1, c.w, 0.6, 0.6, C(0x444444));
   mm.box(c.x - c.w / 2 + 1, LAND + 12.6, c.z, 0.6, 0.6, c.d, C(0x444444)); mm.box(c.x + c.w / 2 - 1, LAND + 12.6, c.z, 0.6, 0.6, c.d, C(0x444444));
-  addSign('CLUB NEON', '클럽 네온 · 이벤트광장', '#2a0a4a', c.x, LAND + 10.5, c.z - c.d / 2 + 1.2, 16, 4, 0, '#ff6af0');
+  addSign('DJ BOOTH', '클럽 네온 메인 스테이지', '#2a0a4a', c.x, LAND + 7.5, c.z - c.d / 2 + 1.0, 14, 3.5, 0, '#ff6af0');
   const fc = { id: FACILITIES.length, type: 'club', name: '클럽 네온 (바)', icon: '🪩', region: 'plaza', x: c.x + c.w / 2 - 5, z: c.z + c.d / 2 - 5, cx: c.x, cz: c.z, side: 's' }; fc.ring = addDoorRing(fc.x, fc.z, 0xff4fd8); FACILITIES.push(fc);
   m.box(fc.x, LAND + 0.6, fc.z - 1.6, 6, 1.1, 1, C(0x5a2a6a));
+  // ---- 클럽 건물: 벽 · 지붕 · 네온 외관 · 입구(남쪽) ----
+  { const H = 11, T = 0.8, wc = C(0x1c1428), y0 = LAND - 0.2, x0 = c.x - c.w / 2, x1 = c.x + c.w / 2, z0 = c.z - c.d / 2, z1 = c.z + c.d / 2, gap = 10;
+    const wm = mbAt('plain', c.x, c.z), gl = mbAt('glow', c.x, c.z);
+    const wall = (cx2, cz2, ww, dd) => { wm.box(cx2, y0, cz2, ww, H, dd, wc); addCollider(cx2 - ww / 2, cz2 - dd / 2, cx2 + ww / 2, cz2 + dd / 2, y0 + H); };
+    wall(c.x, z0 + T / 2, c.w, T); wall(x0 + T / 2, c.z, T, c.d); wall(x1 - T / 2, c.z, T, c.d);
+    const seg = (c.w - gap) / 2; wall(x0 + seg / 2, z1 - T / 2, seg, T); wall(x1 - seg / 2, z1 - T / 2, seg, T);
+    wm.box(c.x, y0 + 4.6, z1 - T / 2, gap, H - 4.6, T, wc); addCollider(c.x - gap / 2, z1 - T, c.x + gap / 2, z1, y0 + H, 'bld', null, y0 + 4.6);
+    // 외벽 네온 띠
+    for (const [yy, cc] of [[3.2, CS(1, 0.25, 0.85)], [8.6, CS(0.2, 0.85, 1)]]) {
+      gl.box(c.x, y0 + yy, z0 - 0.05, c.w + 0.2, 0.28, 0.12, cc); gl.box(x0 - 0.05, y0 + yy, c.z, 0.12, 0.28, c.d + 0.2, cc); gl.box(x1 + 0.05, y0 + yy, c.z, 0.12, 0.28, c.d + 0.2, cc);
+      gl.box(x0 + seg / 2, y0 + yy, z1 + 0.05, seg, 0.28, 0.12, cc); gl.box(x1 - seg / 2, y0 + yy, z1 + 0.05, seg, 0.28, 0.12, cc);
+    }
+    for (let i = 0; i < 7; i++) { const xx = x0 + 3 + i * (seg - 6) / 6; gl.box(xx, y0 + 0.4, z1 + 0.06, 0.3, H - 1, 0.1, i % 2 ? CS(1, 0.25, 0.85) : CS(0.6, 0.3, 1)); gl.box(x1 - (xx - x0), y0 + 0.4, z1 + 0.06, 0.3, H - 1, 0.1, i % 2 ? CS(1, 0.25, 0.85) : CS(0.6, 0.3, 1)); }
+    // 입구: 캐노피 · 레드카펫 · 차단봉
+    wm.box(c.x, y0 + 4.4, z1 + 2.2, gap + 2, 0.5, 4.4, C(0x111018)); gl.box(c.x, y0 + 4.35, z1 + 4.4, gap + 2, 0.18, 0.1, CS(1, 0.85, 0.3));
+    wm.box(c.x, y0 + 0.62, z1 + 4, 4, 0.03, 9, C(0xa01020));
+    for (const sx2 of [-2.6, 2.6]) for (let k = 0; k < 4; k++) { wm.cyl(c.x + sx2, y0 + 0.6, z1 + 1.5 + k * 2.2, 0.08, 1, C(0xd8b040), 8); gl.box(c.x + sx2, y0 + 1.4, z1 + 2.6 + k * 2.2, 0.06, 0.06, 2.2, CS(0.9, 0.1, 0.2)); }
+    addSign('CLUB NEON', '클럽 네온 · 매일 밤 오픈', '#2a0a4a', c.x, y0 + 7.6, z1 + 0.45, 18, 4.2, 0, '#ff6af0');
+    // 지붕: 따로 만든 판 → 안에 들어가면 숨긴다 (카메라가 지붕에 가리지 않게)
+    const rf = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.6, 0.6, c.d + 0.6), new THREE.MeshStandardMaterial({ color: 0x15101e, roughness: 0.9 })); rf.position.set(c.x, y0 + H + 0.3, c.z); rf.castShadow = true; scene.add(rf);
+    const rg = new THREE.Mesh(new THREE.BoxGeometry(c.w + 0.8, 0.25, c.d + 0.8), new THREE.MeshBasicMaterial({ color: 0xff3ad8 })); rg.position.set(c.x, y0 + H + 0.1, c.z); scene.add(rg);
+    CLUB.roof = [rf, rg]; CLUB.H = H;
+    addCollider(x0, z0, x1, z1, y0 + H + 0.6, 'roof', null, y0 + H);
+  }
   // casino
   const k = CASINO; addBuildingBox(k.x, k.z, 50, 36, 16, 'glass', C(0xd8b060), { y0: LAND - 0.2 });
   m.box(k.x, LAND + 15.8, k.z, 30, 3, 20, C(0xcfa040));

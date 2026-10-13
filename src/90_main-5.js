@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101323
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -183,7 +183,7 @@ async function loadWorld() {
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); NAV.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); NAV.init(); HELI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -236,7 +236,7 @@ function frame(dt, noRender) {
   renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
-  updateCamera(dt); CINE.update(dt); // 컷신이 있으면 카메라를 덮어쓴다
+  updateCamera(dt); CINE.update(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
   const fx = ME.vehicle ? ME.vehicle : ME; updateEnv(dt, { x: fx.x, y: fx.y, z: fx.z }); updateGrass(camera.position.x, camera.position.z);
   // headlight spot for my car
   const cl = ENV.carLight; if (ME.vehicle && ENV.night > 0.3 && ME.vehicle.kind !== 'horse') { const v = ME.vehicle; cl.intensity = 220; cl.position.set(v.x + Math.sin(v.yaw) * 2, v.y + 1, v.z + Math.cos(v.yaw) * 2); cl.target.position.set(v.x + Math.sin(v.yaw) * 25, v.y - 1, v.z + Math.cos(v.yaw) * 25); } else cl.intensity = 0;

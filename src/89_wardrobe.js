@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101323
 // ================= 옷가게 · 옷장 =================
 // 로비 꾸미기는 그대로(기본 외형). 게임 안에서는 옷가게에서 옷을 "사서" 옷장에 모으고 갈아입는다.
 // 기본 외형(base) 위에 입은 옷(worn)을 덮어써서 실제 외형을 만든다 → NET 'outfit' 으로 상대에게 동기화.
@@ -76,7 +76,7 @@ const WARDROBE = {
   },
 };
 // ================= 사망 시 소지품 전부 잃기 =================
-const INV_NAME = { wood: '🪵 나무', meat: '🍖 고기', food: '🍱 도시락', medkit: '🩹 구급상자', drink: '🥤 음료', ticket: '🎟️ 입장권', card: '🪪 출소카드' };
+const INV_NAME = { grenade: '수류탄', wood: '🪵 나무', meat: '🍖 고기', food: '🍱 도시락', medkit: '🩹 구급상자', drink: '🥤 음료', ticket: '🎟️ 입장권', card: '🪪 출소카드' };
 function loseAllOnDeath() {
   if (adminGod()) return null; // 관리자 면제
   const lost = []; const money = Math.max(0, Math.floor(ME.money));

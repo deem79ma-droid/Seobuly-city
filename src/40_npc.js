@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101322
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 46; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -170,7 +170,7 @@ function pedFlee(p, dt) {
 function targetPos(tg) {
   if (!tg) return null;
   if (tg.kind === 'me') return ME.dead || INTERIOR.cur || ME.jail ? null : { x: ME.x, y: ME.y, z: ME.z, veh: ME.vehicle };
-  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead && !((rp.bi ?? -1) >= 0) && !rp.jail ? { x: rp.x, y: rp.y, z: rp.z } : null; }
+  if (tg.kind === 'player') { const rp = G.players.get(tg.id); return rp && !rp.dead && !((rp.bi ?? -1) >= 0) && !rp.jail ? { x: rp.x, y: rp.y, z: rp.z, veh: rp.veh } : null; }
   if (tg.kind === 'ped') { const q = PEDS[tg.id]; return q && q.state !== 'dead' && q.state !== 'parked' ? { x: q.x, y: q.y, z: q.z } : null; }
   return null;
 }
@@ -394,7 +394,7 @@ const ANIMALS = [];
 function initAnimals() {
   const r = mulberry32(4242); let id = 0;
   const add = (kind, bounds, extra = {}) => { const S = ANIMAL_SPECS[kind]; const x = lerp(bounds.x0, bounds.x1, r()), z = lerp(bounds.z0, bounds.z1, r()); const a = { id: id++, kind, S, x, z, y: groundHeight(x, z), yaw: r() * TAU, spd: 0, hp: S.hp, maxHp: S.hp, state: 'idle', timer: r() * 5, bounds, seed: r(), owner: null, ...extra }; ANIMALS.push(a); return a; };
-  for (const zoo of ZOOS) for (const pen of zoo.pens) { const n = pen.kind === 'elephant' || pen.kind === 'giraffe' ? 2 : pen.kind === 'penguin' ? 5 : 3; for (let i = 0; i < n; i++) add(pen.kind, pen, { zoo: true }); }
+  for (const zoo of ZOOS) for (const pen of zoo.pens) for (const k of pen.kind.split('+')) { const n = k === 'elephant' || k === 'giraffe' || k === 'hippo' || k === 'rhino' ? 2 : k === 'penguin' ? 5 : k === 'panda' || k === 'polarbear' ? 1 : 2; for (let i = 0; i < n; i++) add(k, pen, { zoo: true }); }
   for (const f of FARMS) for (const k of f.kinds) if (k !== 'horse') add(k, { x0: f.x0 + 2, x1: f.x1 - 2, z0: f.z0 + 2, z1: f.z1 - 2 }, { farm: true });
   // wild deer in disanbay forests
   for (let i = 0; i < 14; i++) { const cx = lerp(-1450, -760, r()), cz = lerp(-1000, 1000, r()); if (terrainH(cx, cz) < LAND + 1) continue; add('deer', { x0: cx - 60, x1: cx + 60, z0: cz - 60, z1: cz + 60, wild: true }, { wild: true }); }
@@ -405,6 +405,29 @@ function initAnimals() {
   }
   for (let i = 0; i < 6; i++) add(r() < 0.5 ? 'dog' : 'cat', { x0: -150, x1: 150, z0: -150, z1: 150 }, { stray: true });
   for (let i = 0; i < 5; i++) add('chicken', { x0: -1100, x1: -1000, z0: 20, z1: 60 }, { farm: true });
+  // ---- 디산베이 야생: 늑대 무리 · 멧돼지 · 곰 (사냥 가능, 잘못하면 잡아먹힌다) ----
+  const w = mulberry32(7171); const spot = (xa, xb) => { for (let k = 0; k < 30; k++) { const x = lerp(xa, xb, w()), z = lerp(-980, 980, w()); if (terrainH(x, z) > LAND + 1 && roadDistAt(x, z) > 25 && Math.hypot(x + 1100, z) > 110) return [x, z]; } return [lerp(xa, xb, 0.5), -600]; };
+  const B = (x, z, r) => ({ x0: x - r, x1: x + r, z0: z - r, z1: z + r, wild: true });
+  for (let p = 0; p < 6; p++) { const [x, z] = spot(-1520, -780); const n = 3 + (p % 2); for (let i = 0; i < n; i++) add('wolf', B(x, z, 70), { wild: true, pack: p }); }
+  for (let i = 0; i < 12; i++) { const [x, z] = spot(-1520, -760); add('boar', B(x, z, 60), { wild: true }); }
+  for (let i = 0; i < 3; i++) { const [x, z] = spot(-1560, -1300); add('bear', B(x, z, 80), { wild: true }); }
+  // ---- 순한 동물들: 숲 · 호수 · 농장 · 광장 · 공원 · 시모느 바닷가 ----
+  const v = mulberry32(9393);
+  for (const [k, n, r] of [['fox', 6, 60], ['rabbit', 12, 40], ['squirrel', 10, 30], ['raccoon', 5, 40], ['badger', 4, 40], ['moose', 4, 90], ['pheasant', 7, 40], ['crow', 6, 50]]) for (let i = 0; i < n; i++) { const [x, z] = spot(-1500, -770); add(k, B(x, z, r), { wild: true }); }
+  for (const [k, n] of [['duck', 7], ['goose', 4], ['flamingo', 6], ['otter', 3]]) for (let i = 0; i < n; i++) { const a = v() * TAU, rr = LAKE.r + 6 + v() * 14; const x = LAKE.x + Math.cos(a) * rr, z = LAKE.z + Math.sin(a) * rr; add(k, { x0: x - 10, x1: x + 10, z0: z - 10, z1: z + 10 }); }
+  const F0 = FARMS[0]; if (F0) for (const [k, n] of [['goat', 4], ['duck', 3], ['goose', 3]]) for (let i = 0; i < n; i++) add(k, { x0: F0.x0 + 2, x1: F0.x1 - 2, z0: F0.z0 + 2, z1: F0.z1 - 2 }, { farm: true });
+  for (let i = 0; i < 12; i++) add('pigeon', { x0: -40, x1: 40, z0: -40, z1: 40 });
+  for (let i = 0; i < 8; i++) { const b = BLOCKS[Math.floor(v() * BLOCKS.length)]; add(v() < 0.5 ? 'crow' : 'squirrel', { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 - 3, z1: b.z0 + 2.5 }); }
+  for (const [k, n] of [['seagull', 10], ['crab', 10], ['turtle', 6]]) for (let i = 0; i < n; i++) { for (let t = 0; t < 20; t++) { const a = v() * TAU; const x = 2000 + Math.cos(a) * 395, z = 560 + Math.sin(a) * 485; if (terrainH(x, z) > LAND - 1.2 && terrainH(x, z) < LAND + 3) { add(k, { x0: x - 12, x1: x + 12, z0: z - 12, z1: z + 12 }); break; } } }
+  for (let i = 0; i < 4; i++) add('peacock', { x0: 1960, x1: 2040, z0: 520, z1: 600 });
+}
+// 야생 동물 공격 성향: r 감지 거리(밤에 rn) · dmg 한 번 피해 · kill 즉사 확률 · cool 공격 간격
+const WILD = { wolf: { r: 18, rn: 32, dmg: 13, kill: 0, cool: 0.9, eat: true }, boar: { r: 9, rn: 11, dmg: 30, kill: 0.18, cool: 1.7 }, bear: { r: 13, rn: 16, dmg: 28, kill: 0.15, cool: 1.3 } };
+const WILD_DEATH = { wolf: '늑대 무리에게 잡아먹혔다', boar: '멧돼지 엄니에 받혀 즉사했다', bear: '곰에게 찢겨 죽었다' };
+function wildAggro(a, pl) {
+  a.state = 'attack'; a.timer = 14; a.target = { kind: pl.me ? 'me' : 'player', id: pl.id };
+  if (a.kind === 'wolf') for (const o of ANIMALS) if (o !== a && o.pack === a.pack && o.kind === 'wolf' && o.state !== 'dead' && o.state !== 'attack' && Math.hypot(o.x - a.x, o.z - a.z) < 50) { o.state = 'attack'; o.timer = 14; o.target = a.target; }
+  if (Math.random() < 0.5) sfx(a.kind === 'wolf' ? 'bark' : 'roar', a.x, a.z, a.kind === 'boar' ? 0.5 : 0.8);
 }
 function hostUpdateAnimals(dt) {
   const players = playersList();
@@ -421,7 +444,14 @@ function hostUpdateAnimals(dt) {
     } else if (a.state === 'flee') {
       sp = S.speed; const dx = a.x - a.fx, dz = a.z - a.fz; const dd = Math.hypot(dx, dz) || 1; tx = a.x + dx / dd * 5; tz = a.z + dz / dd * 5; if (a.timer <= 0) a.state = 'idle';
     } else if (a.state === 'attack') {
-      const tp = targetPos(a.target); if (!tp || a.timer <= 0) { a.state = 'idle'; } else { tx = tp.x; tz = tp.z; const d = Math.hypot(tp.x - a.x, tp.z - a.z); sp = d > 2 ? S.speed : 0; if (d < 2.4 && a.atkT <= 0) { a.atkT = 1.1; dealDamage(a.target, a.kind === 'bear' ? 22 : 18, 'n', { kind: 'melee' }); sfx('roar', a.x, a.z, 0.6); } }
+      const tp = targetPos(a.target); const WD = a.wild && WILD[a.kind]; const bcx = (a.bounds.x0 + a.bounds.x1) / 2, bcz = (a.bounds.z0 + a.bounds.z1) / 2;
+      if (!tp || a.timer <= 0 || (WD && (Math.hypot(a.x - bcx, a.z - bcz) > 170 || a.hp < a.maxHp * 0.3 || tp.veh))) { a.state = WD && a.hp < a.maxHp * 0.3 ? 'flee' : 'walk'; a.timer = 6; a.tx = bcx; a.tz = bcz; if (tp) { a.fx = tp.x; a.fz = tp.z; } }
+      else { tx = tp.x; tz = tp.z; const d = Math.hypot(tp.x - a.x, tp.z - a.z); sp = d > 2 ? S.speed * (WD && a.kind === 'boar' && d > 5 ? 1.35 : 1) : 0; a.timer = Math.max(a.timer, d < 25 ? 6 : 0);
+        if (d < (a.kind === 'boar' ? 2.8 : 2.4) && a.atkT <= 0) {
+          if (WD) { a.atkT = WD.cool; const inst = Math.random() < WD.kill; const hp = a.target.kind === 'me' ? ME.hp : (G.players.get(a.target.id) || {}).hp; const eat = WD.eat && hp !== undefined && hp < 30;
+            dealDamage(a.target, inst || eat ? 999 : WD.dmg, 'n', { kind: 'melee', w: a.kind }); sfx(a.kind === 'wolf' ? 'bark' : 'roar', a.x, a.z, 0.7);
+            if (a.kind === 'boar') { a.atkT += 0.8; a.yaw += Math.PI * 0.8; } }
+          else { a.atkT = 1.1; dealDamage(a.target, a.kind === 'bear' ? 22 : 18, 'n', { kind: 'melee' }); sfx('roar', a.x, a.z, 0.6); } } }
     } else {
       if (a.timer <= 0) { if (a.state === 'walk') { a.state = 'idle'; a.timer = rnd(2, 8); } else { a.state = 'walk'; a.timer = rnd(3, 9); a.tx = lerp(a.bounds.x0, a.bounds.x1, Math.random()); a.tz = lerp(a.bounds.z0, a.bounds.z1, Math.random()); } }
       if (a.state === 'walk') { tx = a.tx; tz = a.tz; sp = S.speed * 0.3; if (Math.hypot(tx - a.x, tz - a.z) < 1) { a.state = 'idle'; a.timer = rnd(2, 6); } }
@@ -429,7 +459,8 @@ function hostUpdateAnimals(dt) {
       for (const pl of players) {
         const d = Math.hypot(pl.x - a.x, pl.z - a.z);
         if (S.shy && d < 16 && !pl.inVeh) { a.state = 'flee'; a.timer = 5; a.fx = pl.x; a.fz = pl.z; }
-        if (S.predator && d < 7 && pl.x > a.bounds.x0 - 1 && pl.x < a.bounds.x1 + 1 && pl.z > a.bounds.z0 - 1 && pl.z < a.bounds.z1 + 1) { a.state = 'attack'; a.timer = 12; a.target = { kind: pl.me ? 'me' : 'player', id: pl.id }; }
+        const WD = a.wild && WILD[a.kind]; if (WD && !pl.inVeh && d < (ENV.night > 0.5 ? WD.rn : WD.r) && a.hp > a.maxHp * 0.3) { wildAggro(a, pl); break; }
+        if (S.predator && !a.wild && d < 7 && pl.x > a.bounds.x0 - 1 && pl.x < a.bounds.x1 + 1 && pl.z > a.bounds.z0 - 1 && pl.z < a.bounds.z1 + 1) { a.state = 'attack'; a.timer = 12; a.target = { kind: pl.me ? 'me' : 'player', id: pl.id }; }
       }
       if (Math.random() < dt * 0.02 && S.sfx) sfx(S.sfx, a.x, a.z, 0.5);
     }
@@ -437,7 +468,7 @@ function hostUpdateAnimals(dt) {
       const dx = tx - a.x, dz = tz - a.z; const d = Math.hypot(dx, dz); if (d > 0.3) { a.yaw = dampAng(a.yaw, Math.atan2(dx, dz), 5, dt); a.x += Math.sin(a.yaw) * sp * dt; a.z += Math.cos(a.yaw) * sp * dt; }
     }
     a.spd = sp;
-    if (a.state !== 'follow') { const b = a.bounds; const m = a.stray || a.wild ? 0 : 0; if (!a.wild && !a.stray || a.state !== 'flee') { a.x = clamp(a.x, b.x0, b.x1); a.z = clamp(a.z, b.z0, b.z1); } }
+    if (a.state !== 'follow') { const b = a.bounds; const m = a.stray || a.wild ? 0 : 0; if ((!a.wild && !a.stray || a.state !== 'flee') && !(a.wild && a.state === 'attack')) { a.x = clamp(a.x, b.x0, b.x1); a.z = clamp(a.z, b.z0, b.z1); } }
     const r = resolveCircle(a.x, a.z, Math.min(0.8, (S.body ? S.body[2] : 0.3) * 0.6), a.y, 1); a.x = r.x; a.z = r.z; a.y = groundHeight(a.x, a.z, a.y + 1);
     if (terrainH(a.x, a.z) < LAND - 1.5 && a.state !== 'follow') { a.x -= Math.sin(a.yaw) * 2; a.z -= Math.cos(a.yaw) * 2; a.yaw += Math.PI; }
   }
@@ -445,7 +476,7 @@ function hostUpdateAnimals(dt) {
 function animalDamage(a, amt, from, opts = {}) {
   if (!a || a.state === 'dead') return; a.hp -= amt; FX.impact({ x: a.x, y: a.y + 0.6, z: a.z }, 'blood');
   if (a.hp <= 0) { a.state = 'dead'; a.timer = 60; if (a.owner) { notifyPlayer(a.owner, { t: 'petDead' }); a.owner = null; } if (from && !String(from).startsWith('n') && (a.farm || a.wild)) notifyPlayer(from, { t: 'meat', k: a.kind }); return; }
-  if (a.S.predator && from && !String(from).startsWith('n')) { a.state = 'attack'; a.timer = 15; a.target = { kind: from === ME.id ? 'me' : 'player', id: from }; }
+  if ((a.S.predator || (a.wild && WILD[a.kind])) && from && !String(from).startsWith('n') && a.hp > a.maxHp * 0.3) { a.state = 'attack'; a.timer = 15; a.target = { kind: from === ME.id ? 'me' : 'player', id: from }; }
   else if (a.state !== 'follow') { a.state = 'flee'; a.timer = 6; const tp = from === ME.id ? ME : G.players.get(from); if (tp) { a.fx = tp.x; a.fz = tp.z; } else { a.fx = a.x + 1; a.fz = a.z; } }
 }
 function renderAnimals(dt, cam) {

@@ -1,3 +1,4 @@
+// @v 2026101322
 
 // ================= CHARACTERS =================
 const OPT = {
@@ -405,10 +406,38 @@ const ANIMAL_SPECS = {
   sheep: { body: [0.9, 0.5, 0.48], leg: 0.38, legR: 0.05, neck: 0.1, head: [0.15, 0.18, 0.24], snout: 0.05, ear: 'side', tail: 0.1, col: ['#f4f0e8'], headCol: '#2a2420', fluffy: true, speed: 2.5, hp: 60, name: '양' },
   deer: { body: [1.0, 0.38, 0.32], leg: 0.75, legR: 0.045, neck: 0.45, neckUp: 0.9, head: [0.14, 0.17, 0.3], snout: 0.05, ear: 'point', antler: true, tail: 0.12, col: ['#a86a3a'], speed: 9, hp: 60, name: '사슴', shy: true },
   lion: { body: [1.4, 0.5, 0.45], leg: 0.6, legR: 0.09, neck: 0.25, head: [0.3, 0.3, 0.38], snout: 0.1, ear: 'round', tail: 0.75, mane: 'lion', col: ['#d8a050'], speed: 8, hp: 200, sfx: 'roar', name: '사자', predator: true },
+  wolf: { body: [0.95, 0.32, 0.26], leg: 0.52, legR: 0.05, neck: 0.16, head: [0.16, 0.15, 0.27], snout: 0.17, ear: 'point', tail: 0.5, col: ['#6a6a6a', '#8a8580', '#4a4540', '#9a958a'], headCol: null, speed: 9.5, hp: 70, sfx: 'bark', name: '늑대' },
+  boar: { body: [1.15, 0.5, 0.44], leg: 0.36, legR: 0.07, neck: 0.08, head: [0.24, 0.25, 0.36], snout: 0.2, ear: 'point', tusk: true, tail: 0.15, col: ['#3a2a20', '#4a3828', '#2a201a'], speed: 8.5, hp: 150, name: '멧돼지' },
   bear: { body: [1.4, 0.65, 0.6], leg: 0.55, legR: 0.12, neck: 0.15, head: [0.3, 0.3, 0.34], snout: 0.12, ear: 'round', tail: 0.08, col: ['#4a3020', '#2a1a10'], speed: 6, hp: 250, sfx: 'roar', name: '곰', predator: true },
   elephant: { body: [2.4, 1.3, 1.2], leg: 1.2, legR: 0.25, neck: 0.1, head: [0.65, 0.8, 0.7], snout: 0, trunk: true, ear: 'big', tail: 0.5, col: ['#8a8a90'], speed: 2.5, hp: 600, name: '코끼리' },
   giraffe: { body: [1.5, 0.6, 0.5], leg: 1.6, legR: 0.07, neck: 1.9, neckUp: 1.2, head: [0.15, 0.2, 0.4], snout: 0, ear: 'point', horn: 'ossi', tail: 0.6, col: ['#e8b050'], spots: '#7a4a1a', speed: 4, hp: 250, name: '기린' },
   zebra: { body: [1.3, 0.5, 0.42], leg: 0.85, legR: 0.06, neck: 0.6, neckUp: 1.0, head: [0.17, 0.22, 0.48], snout: 0, ear: 'point', tail: 0.5, mane: true, col: ['#f4f4f4'], stripes: true, speed: 7, hp: 120, name: '얼룩말', shy: true },
+  // ---- 추가 동물 (숲·호수·바닷가·도시·동물원) ----
+  fox: { body: [0.6, 0.24, 0.2], leg: 0.3, legR: 0.035, neck: 0.1, head: [0.12, 0.11, 0.2], snout: 0.13, ear: 'point', tail: 0.45, bushy: true, col: ['#d8702a', '#c86020'], speed: 7.5, hp: 30, name: '여우', shy: true },
+  rabbit: { body: [0.32, 0.2, 0.18], leg: 0.12, legR: 0.03, neck: 0.04, head: [0.09, 0.09, 0.11], snout: 0.03, ear: 'long', tail: 0.06, bushy: true, col: ['#d8c8b0', '#8a7a68', '#f0f0f0'], speed: 7, hp: 12, name: '토끼', shy: true },
+  squirrel: { body: [0.22, 0.12, 0.1], leg: 0.08, legR: 0.02, neck: 0.03, head: [0.06, 0.06, 0.08], snout: 0.03, ear: 'point', tail: 0.3, bushy: true, col: ['#a0602a', '#6a4a30'], speed: 6, hp: 8, name: '다람쥐', shy: true },
+  raccoon: { body: [0.55, 0.25, 0.24], leg: 0.2, legR: 0.04, neck: 0.06, head: [0.13, 0.11, 0.14], snout: 0.07, ear: 'point', tail: 0.35, bushy: true, col: ['#7a7470'], headCol: '#4a4440', speed: 4.5, hp: 25, name: '너구리', shy: true },
+  badger: { body: [0.6, 0.2, 0.26], leg: 0.14, legR: 0.05, neck: 0.05, head: [0.12, 0.1, 0.18], snout: 0.08, ear: 'round', tail: 0.12, col: ['#6a6460'], headCol: '#e8e8e8', speed: 4, hp: 35, name: '오소리', shy: true },
+  otter: { body: [0.7, 0.18, 0.18], leg: 0.1, legR: 0.04, neck: 0.1, head: [0.1, 0.09, 0.12], snout: 0.05, ear: 'round', tail: 0.4, col: ['#5a4030'], speed: 4, hp: 20, name: '수달', shy: true },
+  moose: { body: [1.7, 0.7, 0.6], leg: 1.1, legR: 0.08, neck: 0.35, neckUp: 0.6, head: [0.25, 0.3, 0.5], snout: 0.15, ear: 'side', antler: true, tail: 0.1, col: ['#4a3020'], speed: 7, hp: 220, name: '엘크', shy: true },
+  goat: { body: [0.75, 0.32, 0.26], leg: 0.4, legR: 0.04, neck: 0.2, neckUp: 0.8, head: [0.1, 0.12, 0.2], snout: 0.06, ear: 'side', horn: true, tail: 0.1, col: ['#f0ece0', '#8a6a4a', '#3a3028'], speed: 5, hp: 45, name: '염소' },
+  camel: { body: [1.6, 0.6, 0.5], leg: 1.2, legR: 0.07, neck: 0.7, neckUp: 0.7, head: [0.16, 0.18, 0.36], snout: 0.1, ear: 'round', hump: true, tail: 0.4, col: ['#c8a060'], speed: 5, hp: 160, name: '낙타' },
+  hippo: { body: [2.0, 0.9, 1.0], leg: 0.4, legR: 0.2, neck: 0.1, head: [0.45, 0.4, 0.6], snout: 0.25, ear: 'round', tail: 0.2, col: ['#8a7080'], speed: 4, hp: 300, name: '하마' },
+  rhino: { body: [2.0, 0.9, 0.9], leg: 0.55, legR: 0.18, neck: 0.15, head: [0.35, 0.38, 0.6], snout: 0.2, ear: 'point', horn: 'rhino', tail: 0.25, col: ['#8a8a88'], speed: 5, hp: 320, name: '코뿔소' },
+  tiger: { body: [1.5, 0.5, 0.42], leg: 0.6, legR: 0.09, neck: 0.2, head: [0.28, 0.26, 0.3], snout: 0.1, ear: 'round', tail: 0.9, col: ['#e88a2a'], stripes: true, tint: true, speed: 9, hp: 200, sfx: 'roar', name: '호랑이', predator: true },
+  panda: { body: [1.1, 0.6, 0.6], leg: 0.4, legR: 0.13, neck: 0.1, head: [0.32, 0.3, 0.3], snout: 0.08, ear: 'round', tail: 0.08, col: ['#f4f4f0'], spots: '#111111', speed: 2.5, hp: 180, name: '판다' },
+  polarbear: { body: [1.6, 0.7, 0.65], leg: 0.6, legR: 0.13, neck: 0.25, head: [0.28, 0.28, 0.38], snout: 0.14, ear: 'round', tail: 0.08, col: ['#f2f0e8'], speed: 6, hp: 280, sfx: 'roar', name: '북극곰', predator: true },
+  turtle: { body: [0.7, 0.25, 0.55], leg: 0.1, legR: 0.08, neck: 0.15, head: [0.1, 0.09, 0.14], snout: 0.03, ear: 'none', tail: 0.1, shell: true, col: ['#7a8a5a'], speed: 0.8, hp: 60, name: '바다거북' },
+  crab: { body: [0.35, 0.12, 0.5], leg: 0.1, legR: 0.025, neck: 0.01, head: [0.05, 0.05, 0.05], snout: 0, ear: 'none', tail: 0.01, claws: true, col: ['#d8402a'], speed: 2, hp: 10, name: '게', shy: true },
+  duck: { biped: true, h: 0.35, col: ['#e8e0d0', '#6a5030'], speed: 2.2, hp: 10, name: '오리', shy: true },
+  goose: { biped: true, h: 0.55, col: ['#f4f4f4'], speed: 2.4, hp: 18, name: '거위' },
+  pigeon: { biped: true, h: 0.28, col: ['#8a8a98', '#6a6a78'], speed: 2.5, hp: 6, name: '비둘기', shy: true },
+  crow: { biped: true, h: 0.3, col: ['#1a1a1e'], beak: '#1a1a1a', speed: 2.5, hp: 8, name: '까마귀', shy: true },
+  seagull: { biped: true, h: 0.34, col: ['#f4f4f4'], beak: '#f0c020', speed: 3, hp: 8, name: '갈매기', shy: true },
+  flamingo: { biped: true, h: 1.3, col: ['#f08aa8'], beak: '#2a2a2a', speed: 3, hp: 20, name: '홍학', shy: true },
+  ostrich: { biped: true, h: 2.0, col: ['#3a2a20'], belly: '#e8e0d8', speed: 10, hp: 90, name: '타조', shy: true },
+  pheasant: { biped: true, h: 0.45, col: ['#8a4a20'], comb: true, speed: 5, hp: 12, name: '꿩', shy: true },
+  peacock: { biped: true, h: 0.7, col: ['#2a6ab0'], belly: '#3ac08a', speed: 2.5, hp: 20, name: '공작' },
   penguin: { biped: true, h: 0.6, col: ['#1a1a20'], belly: '#f4f4f4', speed: 1, hp: 20, name: '펭귄' },
   chicken: { biped: true, h: 0.35, col: ['#f4f0e8', '#c87030'], comb: true, speed: 2, hp: 10, name: '닭' },
 };
@@ -421,7 +450,7 @@ class Animal {
     this.t = seed * 10; this.phase = seed * TAU; this.legs = []; this.deadT = 0;
     const col = S.col[Math.floor(seed * S.col.length)];
     let mat = cmat(col, 0.85);
-    if (S.stripes) { mat = new THREE.MeshStandardMaterial({ map: stripeTex(), roughness: 0.85 }); }
+    if (S.stripes) { mat = new THREE.MeshStandardMaterial({ map: stripeTex(), roughness: 0.85, color: S.tint ? col : 0xffffff }); }
     if (S.spots) { mat = new THREE.MeshStandardMaterial({ map: spotTex(S.spots), color: col, roughness: 0.85 }); }
     if (S.biped) { this.buildBiped(S, mat, col); return; }
     const [bl, bh, bw] = S.body; const legH = S.leg; const bodyY = legH + bh * 0.4;
@@ -460,12 +489,19 @@ class Animal {
       if (S.horn === 'ossi') head.add(M(CG.cyl, mat, hw * 0.4 * s, hh * 1.0, hl * 0.1, 0.025, 0.14, 0.025));
       if (S.antler) { const a = M(CG.cyl, cmat('#c8b090', 0.7), hw * 0.5 * s, hh * 1.4, hl * 0.1, 0.02, 0.45, 0.02); a.rotation.z = -0.5 * s; head.add(a); const a2 = M(CG.cyl, cmat('#c8b090', 0.7), hw * 0.9 * s, hh * 1.7, hl * 0.2, 0.015, 0.22, 0.015); a2.rotation.x = 0.6; head.add(a2); }
     }
+    if (S.ear === 'long') for (const s of [1, -1]) { const e = M(CG.sph, headMat, hw * 0.35 * s, hh * 1.6, -hl * 0.05, hw * 0.18, hh * 1.1, hw * 0.1); e.rotation.z = -0.15 * s; head.add(e); }
+    if (S.horn === 'rhino') { const h = M(CG.cone, cmat('#d8d0c0', 0.5), 0, hh * 0.2, hl * 0.75 + S.snout, 0.09, 0.4, 0.09); h.rotation.x = 0.3; head.add(h); }
+    if (S.hump) this.body.add(M(CG.sph, mat, 0, bodyY + bh * 0.55, 0, bw * 0.4, bh * 0.5, bl * 0.25));
+    if (S.shell) this.body.add(M(CG.sph, cmat('#4a5a2a', 0.9), 0, bodyY + bh * 0.1, 0, bw * 0.62, bh * 0.75, bl * 0.62));
+    if (S.claws) for (const s of [1, -1]) this.body.add(M(CG.sph, mat, bw * 0.5 * s, bodyY, bl * 0.45, 0.08, 0.06, 0.1));
+    if (S.tusk) for (const s of [1, -1]) { const t = M(CG.cone, cmat('#f2ead8', 0.4), hw * 0.45 * s, -hh * 0.35, hl * 0.8 + S.snout, 0.035, 0.2, 0.035); t.rotation.x = -0.9; t.rotation.z = 0.4 * s; head.add(t); }
     if (S.trunk) { this.trunk = []; let parent = head; for (let i = 0; i < 4; i++) { const g = new THREE.Group(); g.position.set(0, i === 0 ? -hh * 0.3 : -0.28, i === 0 ? hl * 0.7 : 0); parent.add(g); g.add(M(CG.cyl, mat, 0, -0.14, 0, 0.14 - i * 0.025, 0.3, 0.14 - i * 0.025)); g.rotation.x = 0.2; this.trunk.push(g); parent = g; } for (const s of [1, -1]) { const tk = M(CG.cone, cmat('#f4f0e0', 0.4), 0.18 * s, -hh * 0.4, hl * 0.75, 0.04, 0.4, 0.04); tk.rotation.x = 2.2; head.add(tk); } }
     if (S.mane === true) { const m = M(CG.box, cmat('#1a1a1a', 0.9), 0, nl * 0.55, -bw * 0.18, 0.05, nl * 0.95, 0.12); this.neck.add(m); }
     if (S.mane === 'lion') head.add(M(CG.sph, cmat('#7a4a1a', 1), 0, 0.02, hl * 0.05, hw * 1.55, hh * 1.5, hl * 0.6));
     // tail
     this.tail = new THREE.Group(); this.tail.position.set(0, bodyY + bh * 0.15, -bl * 0.5); this.body.add(this.tail);
-    this.tail.add(M(CG.cyl, S.stripes ? cmat('#f4f4f4') : mat, 0, -S.tail * 0.5, 0, 0.03, S.tail, 0.03)); this.tail.rotation.x = 0.5;
+    if (S.bushy) { this.tail.add(M(CG.sph, mat, 0, -S.tail * 0.5, 0, S.tail * 0.28, S.tail * 0.6, S.tail * 0.28)); this.tail.rotation.x = -0.6; }
+    else { this.tail.add(M(CG.cyl, S.stripes && !S.tint ? cmat('#f4f4f4') : mat, 0, -S.tail * 0.5, 0, 0.03, S.tail, 0.03)); this.tail.rotation.x = 0.5; }
     this.body.traverse(m => { if (m.isMesh) m.castShadow = true; });
     this.height = bodyY + bh;
   }
@@ -475,7 +511,7 @@ class Animal {
     if (S.belly) this.body.add(M(CG.sph, cmat(S.belly, 0.8), 0, h * 0.5, h * 0.08, h * 0.24, h * 0.34, h * 0.24));
     this.head = new THREE.Group(); this.head.position.set(0, h * 0.95, h * 0.05); this.body.add(this.head);
     this.head.add(M(CG.sph, mat, 0, 0, 0, h * 0.2, h * 0.2, h * 0.2));
-    this.head.add(M(CG.cone, cmat(S.comb ? '#f0a020' : '#f0a020', 0.5), 0, -h * 0.02, h * 0.22, h * 0.05, h * 0.15, h * 0.05)).rotation.x = Math.PI / 2;
+    this.head.add(M(CG.cone, cmat(S.beak || '#f0a020', 0.5), 0, -h * 0.02, h * 0.22, h * 0.05, h * 0.15, h * 0.05)).rotation.x = Math.PI / 2;
     if (S.comb) this.head.add(M(CG.box, cmat('#e02020', 0.6), 0, h * 0.2, 0, h * 0.03, h * 0.12, h * 0.15));
     for (const s of [1, -1]) {
       this.head.add(M(CG.sph, cmat('#111', 0.2), h * 0.11 * s, h * 0.05, h * 0.15, h * 0.035, h * 0.035, h * 0.035));

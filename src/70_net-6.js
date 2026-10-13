@@ -1,4 +1,4 @@
-// @v 2026101220
+// @v 2026101323
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -463,7 +463,7 @@ const NET = {
         refreshRemoteName(rp); if (G.isHost) POLICE.observe(conn && conn.pid ? conn.pid : f, m.wanted, m.rc);
         // grudge times are sender-relative -> convert
         if (m.g) rp.grudge = { gangA: m.g.gangA ? G.t + (m.g.gangA - m.gt) : 0, gangB: m.g.gangB ? G.t + (m.g.gangB - m.gt) : 0 };
-        if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } if (old.passenger === f) old.passenger = null; } rp.veh = m.veh; }
+        if (rp.veh !== m.veh) { const old = rp.veh && vehicles.get(rp.veh); if (old) { if (old.driver === f) { old.driver = null; old.ctrl = G.isHost ? 'local' : 'remote'; } seatClear(old, f); } rp.veh = m.veh; }
         if (m.tc) TAXI.onNet({ s: m.tc }, f);
         if (m.vs) { const v = vehicles.get(m.vs[0]); if (v) { if (v.driver !== f) { v.driver = f; } if (v.ai) { if (G.isHost) ejectNpcDriver(v); v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false; } v.ctrl = 'remote'; v.applyState(m.vs); v.mesh.visible = true; } }
         break;
@@ -498,11 +498,12 @@ const NET = {
       case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
       case 'plotFail': if (m.to === ME.id) { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); } break;
       case 'income': if (m.to === ME.id) { const r = ECON.net(m.amt * ECON.rentMul(), 'rent'); ME.money += r.net; sfx('cash'); toast(`💰 임대 수익 ${fmtMoney(r.net)} 수령${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); } break;
+      case 'nade': if (m.o && typeof m.o.x === 'number') GRENADE.spawn(Object.assign({}, m.o, { by: f })); break;
       case 'seat': {
         const v = vehicles.get(m.v); if (!v) break;
         if (m.s === 'd') { if (v.ai && G.isHost) ejectNpcDriver(v); v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false; v.driver = f; v.ctrl = 'remote'; v.mesh.visible = true; if (ME.vehicle === v && ME.seat === 'd') { exitVehicle(true); } }
-        else if (m.s === 'p') { v.passenger = f; }
-        else { if (v.driver === f) { v.driver = null; v.ctrl = G.isHost ? 'local' : 'remote'; v.brake = true; } if (v.passenger === f) v.passenger = null; }
+        else if (m.s === 'p' || m.s === 'b1' || m.s === 'b2') { seatSet(v, m.s, f); }
+        else { if (v.driver === f) { v.driver = null; v.ctrl = G.isHost ? 'local' : 'remote'; v.brake = true; } seatClear(v, f); }
         const rp = G.players.get(f); if (rp) { rp.veh = m.s ? m.v : null; rp.seat = m.s; }
         break;
       }
