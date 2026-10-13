@@ -21,12 +21,12 @@
 <meta property="og:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="서불리 시티 3D 게임 화면">
+<meta property="og:image:alt" content="서불리 시티 3D 공식 로고 이미지">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="서불리 시티 3D - 무료 브라우저 오픈월드 멀티플레이 게임">
 <meta name="twitter:description" content="설치 없이 브라우저에서 바로 즐기는 무료 3D 오픈월드 게임. 친구들과 최대 20명 멀티플레이로 도시를 누비며 차량 운전, 택시, 건축, 땅 구매, 카지노, 경찰·교도소까지 — 서불리 시티에서 나만의 이야기를 만들어 보세요.">
 <meta name="twitter:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png">
-<meta name="twitter:image:alt" content="서불리 시티 3D 게임 화면">
+<meta name="twitter:image:alt" content="서불리 시티 3D 공식 로고 이미지">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -3091,7 +3091,7 @@ function pedEnsureChar(p) {
 function placePedOnEdge(p, e, t, side, dir) {
   const E = EDGES[e]; const a = NODES[E.a], b = NODES[E.b]; p.e = e; p.t = t; p.side = side; p.dir = dir;
   const dx = (b.x - a.x) / E.len, dz = (b.z - a.z) / E.len; const off = E.w / 2 + 2.6;
-  p.x = a.x + dx * t + (-dz) * off * side; p.z = a.z + dz * t + dx * off * side; p.y = groundHeight(p.x, p.z);
+  p.x = a.x + dx * t + (-dz) * off * side; p.z = a.z + dz * t + dx * off * side; p.y = groundHeight(p.x, p.z); p.fallGroundY = p.y;
 }
 let EDGE_CELLS = null;
 function buildEdgeCells() {
@@ -3126,7 +3126,7 @@ function spawnPedNear(p, px, pz) {
   if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
   if (!p.homeAssigned) { p.homeX = p.x; p.homeZ = p.z; p.homeAssigned = true; } pedStartRoutine(p);
   if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
-  p.spawnT = G.t; return true;
+  p.fallGroundY = p.y; p.spawnT = G.t; return true;
 }
 function initPeds() { for (let i = 0; i < N_PED; i++) { const p = makePed(i); pedSetIdentity(p, 'civ', i * 7919 + 13); p.state = 'parked'; p.x = 0; p.z = 0; } }
 // hostile check: returns true if ped p wants to attack target t
@@ -3158,7 +3158,7 @@ function hostUpdatePeds(dt) {
       p.target = null; p.raid = false; p.fear = 0; p.phone = false; p.state = 'walk';
       const rx = Number.isFinite(p.homeX) ? p.homeX : p.x;
       const rz = Number.isFinite(p.homeZ) ? p.homeZ : p.z;
-      p.x = rx; p.z = rz; p.y = groundHeight(rx, rz);
+      p.x = rx; p.z = rz; p.y = groundHeight(rx, rz); p.fallGroundY = p.y;
       snapToNearestEdge(p); pedStartRoutine(p);
     } continue; }
     if (p.state === 'knocked') { if (p.timer <= 0) p.state = 'flee', p.timer = 6; continue; }
@@ -3187,6 +3187,20 @@ function hostUpdatePeds(dt) {
     else if (p.state === 'club') { p.spd = 0; p.yaw += dt * 0.2; if (Math.random() < dt * 0.02) p.dance = Math.floor(Math.random() * 8); }
     else if (p.state === 'dance') { p.spd = 0; if (p.timer <= 0) { p.state = 'walk'; p.dance = -1; } }
     else if (p.state === 'talk') { p.spd = 0; if (p.timer <= 0) p.state = 'walk'; }
+    // Terrain drop damage for NPCs. NPC movement normally snaps to the terrain,
+    // so compare the previous grounded height against the new grounded height.
+    // Ignore respawn/teleport states and small slopes; host alone applies damage.
+    if (p.state !== 'dead' && p.state !== 'parked' && p.state !== 'club') {
+      const h = groundHeight(p.x, p.z, p.y + 1);
+      if (Number.isFinite(p.fallGroundY)) {
+        const drop = p.fallGroundY - h;
+        if (drop > 3.5 && drop < 120) {
+          const damage = Math.min(180, Math.round((drop - 3.5) * 11));
+          if (damage > 0) pedDamage(p, damage, null, { kind: 'fall' });
+        }
+      }
+      p.fallGroundY = h;
+    } else p.fallGroundY = p.y;
   }
   if (G.isHost) raidUpdate(dt);
 }
@@ -3237,7 +3251,7 @@ function targetPos(tg) {
 }
 function pedFight(p, dt) {
   const tp = targetPos(p.target); if (!tp) { p.state = p.raid ? 'raid' : 'walk'; p.target = null; if (!p.raid) snapToNearestEdge(p); return; }
-  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
+  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 3, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
   const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz);
   const W = WEAPONS[p.weapon]; const ranged = !W.melee; const want = ranged ? (p.kind === 'police' ? 14 : 11) : 1.3;
   p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt);
@@ -3262,7 +3276,7 @@ function pedFight(p, dt) {
       const mz = { x: p.x + Math.sin(p.yaw) * 0.5, y: p.y + 1.45, z: p.z + Math.cos(p.yaw) * 0.5 };
       showShot(mz, end, W.sfx, hit ? (p.target.kind === 'ped' ? 'blood' : 'blood') : 'dust');
       NET.send({ t: 'shot', a: [mz.x, mz.y, mz.z], b: [end.x, end.y, end.z], w: p.weapon, i: hit ? 'blood' : 'dust' });
-      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun', w: p.weapon });
+      if (hit) dealDamage(p.target, shotDamage(p.weapon, false), 'n' + p.id, { kind: 'gun', w: p.weapon, head: false });
     } else if (d < 1.8) {
       p.fireT = 0.7; p.act = Math.random() < 0.5 ? 'punchR' : 'punchL'; p.actT = 0;
       if (p.weapon === 'bat') p.act = 'bat';
@@ -3645,7 +3659,7 @@ const ME = {
   wanted: 0, wantedCool: 0, weapon: 'fist', weapons: { fist: 1 }, ammo: {}, mag: {}, inv: { wood: 0, meat: 0, food: 2, medkit: 1, drink: 0, ticket: 0 },
   skills: { shoot: 0, fight: 0, drive: 0, fit: 0, swim: 0, study: 0 }, garage: [], outfit: null, vehicle: null, seat: null, dead: false, deadT: 0, spawn: null,
   char: null, grudge: {}, drunk: 0, dance: -1, action: null, actionT: 1, aiming: false, swim: false, knockT: 0, sitBench: null, reloadT: 0, fireT: 0, punchSide: 0,
-  combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
+  debt: 0, combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
   takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
@@ -3753,9 +3767,16 @@ function raycastWorld(o, d, maxD, opt = {}) {
   if (o.y + d.y * best.t < -0.2 && d.y < 0) { const tw = (-0.2 - o.y) / d.y; if (tw < best.t) best = { t: tw, kind: 'water' }; }
   best.p = new THREE.Vector3(o.x + d.x * best.t, o.y + d.y * best.t, o.z + d.z * best.t); return best;
 }
+// 고정 전투 피해: 권총 머리 50, 샷건 머리 즉사, SMG 70, 저격 100, 기타 총격 30.
+function shotDamage(w, head) {
+  if (!head) return 30;
+  return ({ pistol: 50, shotgun: 999, smg: 70, sniper: 100 })[w] || 30;
+}
 // ----- damage routing -----
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
+  if (opts.kind === 'gun') amt = shotDamage(opts.w || 'pistol', !!opts.head);
+  if (opts.kind === 'melee' && opts.w === 'fist') amt = 3;
   if (tg.kind === 'me') {
     if (from === ME.id) return; const hb = ME.hp; ME.takeDamage(amt, from, opts.w);
     if (G.isHost && /^n\d+$/.test(String(from))) POLICE.hostSelfHit(String(from), opts.w, opts.kind, hb - Math.max(0, ME.hp)); // 방장 화면의 NPC가 방장을 때림 → 사건 기록
@@ -3766,7 +3787,7 @@ function dealDamage(tg, amt, from, opts = {}) {
     if (!tg.id || tg.id === ME.id || tg.id === from) return;
     const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
     const w = opts.w || (opts.kind === 'car' ? 'car' : opts.kind === 'boom' ? 'boom' : from === ME.id ? ME.weapon : '');
-    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w }); return;
+    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w, head: !!opts.head }); return;
   }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
@@ -3834,10 +3855,10 @@ function tryAttack() {
     const dd = _d.clone(); dd.x += rnd(-sp, sp); dd.y += rnd(-sp, sp); dd.z += rnd(-sp, sp); dd.normalize();
     const h = raycastWorld(_o, dd, W.range, { ignoreVeh: ME.vehicle });
     let imp = h.kind === 'water' ? 'water' : h.kind === 'tree' ? 'wood' : h.kind === 'veh' ? 'spark' : h.kind === 'world' ? 'spark' : 'dust';
-    const dmg = W.dmg * (h.head ? 2.6 : 1) * (1 + ME.skills.shoot * 0.05);
-    if (h.kind === 'ped') { dealDamage({ kind: 'ped', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
-    else if (h.kind === 'animal') { dealDamage({ kind: 'animal', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
-    else if (h.kind === 'player') { dealDamage({ kind: 'player', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
+    const dmg = shotDamage(w, !!h.head);
+    if (h.kind === 'ped') { dealDamage({ kind: 'ped', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
+    else if (h.kind === 'animal') { dealDamage({ kind: 'animal', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
+    else if (h.kind === 'player') { dealDamage({ kind: 'player', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
     else if (h.kind === 'veh') { h.ref.damage(dmg * 2.2, ME.id); anyHit = true; if (h.ref.driver && h.ref.driver !== ME.id && G.players.has(h.ref.driver) && Math.random() < 0.3) dealDamage({ kind: 'player', id: h.ref.driver }, dmg * 0.5, ME.id); if (h.ref.ai && !h.ref.dead) { const p = PEDS.find(q => q.state === 'parked'); } }
     FX.tracer(_m, h.p); FX.impact(h.p, imp);
     if (i === 0) NET.send({ t: 'shot', a: [_m.x, _m.y, _m.z], b: [h.p.x, h.p.y, h.p.z], w: W.sfx, i: imp });
@@ -3853,7 +3874,7 @@ function tryAttack() {
 function meleeResolve() {
   if (ME.dead) return; const W = WEAPONS[ME.weapon]; const fx = Math.sin(ME.yaw), fz = Math.cos(ME.yaw); const R = W.range;
   const mv = ME.weapon === 'fist' ? ME.action : null; const heavy = mv === 'upper' || mv === 'hook';
-  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1) * ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1);
+  const dmg = (ME.weapon === 'fist' ? 3 : W.dmg) * (ME.weapon === 'fist' ? 1 : (1 + ME.skills.fight * 0.12)) * (ME.drunk > 0.3 ? 0.8 : 1) * (ME.weapon === 'fist' ? 1 : ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1));
   let best = null, bd = R + 0.01;
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
@@ -3863,7 +3884,7 @@ function meleeResolve() {
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
     else {
-      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' });
+      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee', w: ME.weapon });
       const hy = ME.y + (mv === 'upper' ? 1.55 : 1.35), ix = lerp(ME.x, best.x, 0.75), iz = lerp(ME.z, best.z, 0.75);
       sfx(ME.weapon === 'fist' ? (heavy ? 'punchH' : 'punch') : 'chop', best.x, best.z); FX.impact({ x: ix, y: hy, z: iz }, ME.weapon === 'fist' ? 'dust' : 'blood');
       if (ME.weapon === 'fist') { FX.impact({ x: ix, y: hy, z: iz }, 'spark'); FX.emoji(heavy ? '' : '✦', ix, hy + 0.15, iz, heavy ? 0.45 : 0.3); CAM.shake = Math.min(0.6, CAM.shake + (heavy ? 0.28 : 0.13)); ME.vx *= 0.3; ME.vz *= 0.3; G.hitStop = G.t + (heavy ? 0.07 : 0.035); NET.send({ t: 'punchFx', x: +ix.toFixed(2), y: +hy.toFixed(2), z: +iz.toFixed(2), h: heavy ? 1 : 0 }); }
@@ -4758,7 +4779,7 @@ const INTERIOR = {
         { const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.4, 28), new THREE.MeshBasicMaterial({ color: 0x8a8e94 })); vd.rotation.x = Math.PI / 2; vd.position.set(X(0), O.y + 1.7, Z(-hd + 0.3)); group.add(vd); box(0, 1.6, -hd + 0.55, 1.6, 0.2, 0.2, 0xd8c070); }
         for (let i = 0; i < 2; i++) { box(hw - 1, 0, hd - 4 - i * 1.6, 0.8, 1.7, 1.0, 0x2a4a6a, true); box(hw - 1.42, 1.0, hd - 4 - i * 1.6, 0.02, 0.4, 0.5, 0x6ad8ff); }
         for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x2a3a5a, 1);
-        item(0, -hd + 5.2, '은행 창구 (잔액 확인)', () => toast(`잔액: ${fmtMoney(ME.money)} — 늘 감사합니다`), 2.4);
+        item(0, -hd + 5.2, '은행 창구 (대출·빚 상환)', () => CREDIT.bankMenu(), 2.4);
         item(hw - 1.8, hd - 4.8, 'ATM (₩10,000 출금 연출)', () => { sfx('cash'); toast('지갑에 이미 돈이 있습니다 — 잔액 ' + fmtMoney(ME.money)); }, 1.6);
         break;
       }
@@ -5673,7 +5694,7 @@ const NET = {
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
         const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자 (게스트는 NPC 피해를 꾸며낼 수 없다)
-        const before = ME.hp; ME.takeDamage(+m.amt || 0, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        const amount = m.k === 'gun' ? shotDamage(w, !!m.head) : m.k === 'melee' && w === 'fist' ? 3 : Math.max(0, Math.min(999, +m.amt || 0)); const before = ME.hp; ME.takeDamage(amount, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
         if (G.isHost) POLICE.hostSelfHit(src, w, m.k, d);
         if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;
@@ -5800,7 +5821,7 @@ const UI = {
       const b = document.createElement('button'); b.className = 'item' + (it.dis ? ' dis' : '');
       b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined && (typeof it.p === 'number' ? it.p > 0 : it.p !== '') ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
-      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (ME.money < it.p) { toast('돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('신용불량자 — 빚을 갚기 전에는 구매할 수 없습니다'); return; } if (ME.money < it.p) { toast('돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
       wrap.appendChild(b);
     }
     box.querySelector('.close').onclick = () => this.closeMenu();
@@ -5876,7 +5897,7 @@ const UI = {
     this.menuOpen = true; const o = Object.assign({}, ME.outfit);
     const box = $('#menuBox'); box.innerHTML = `<h2>옷가게</h2><div class="desc">변경 비용 ₩1,500 · 실시간 미리보기</div><div class="cust" id="cust2" style="max-height:52vh"></div><div class="row" style="margin-top:12px"><button class="btn" id="buyCl">구매 (₩1,500)</button><button class="btn b3" id="cancelCl">취소</button></div>`;
     buildCustomizer($('#cust2'), o, (no) => { ME.char.setOutfit(no); });
-    $('#buyCl').onclick = () => { if (ME.money < 1500) { toast('돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('새 옷!'); saveGame(); this.closeMenu(); setTimeout(() => CINE_EV.outfit('맞춤 옷'), 150); };
+    $('#buyCl').onclick = () => { if (CREDIT.blocked()) { toast('신용불량자 — 의상 구매 불가'); return; } if (ME.money < 1500) { toast('돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('새 옷!'); saveGame(); this.closeMenu(); setTimeout(() => CINE_EV.outfit('맞춤 옷'), 150); };
     $('#cancelCl').onclick = () => { ME.char.setOutfit(ME.outfit); this.closeMenu(); };
     $('#menu').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock();
   },
@@ -6659,7 +6680,7 @@ const LAW = {
 // ---- 이름표 / 배지: 방장이 서명으로 검증한 관리자(G.adminId)에게만 '관리자' 배지 ----
 function adminGod() { return !!(ADMIN.on && ADMIN.ready); } // 인증된 관리자만 체력 무한
 function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id && id !== ME.id); }
-function displayName(id, name) { return (isAdminId(id) ? '[관리자] ' : '') + (name || ''); }
+function displayName(id, name) { return (isAdminId(id) ? '[관리자] ' : '') + (id === ME.id && typeof CREDIT !== 'undefined' && CREDIT.blocked() ? '[빚쟁이] ' : '') + (name || ''); }
 // 관리자 마스크는 방장이 인증한 관리자에게만 보인다 (조작된 외형으로 관리자 흉내 방지)
 function safeOutfit(o, adm) { if (!o || adm || !o.mask || o.mask === 'none') return o; return Object.assign({}, o, { mask: 'none' }); }
 function setRemoteOutfit(rp, o) { if (!o) return; rp.rawOutfit = o; rp._madm = G.adminId === rp.id; rp.char.setOutfit(safeOutfit(o, rp._madm)); }
@@ -7131,7 +7152,7 @@ const WARDROBE = {
   close() { $('#menu').classList.remove('side'); if (this._yaw !== null) CAM.yaw = this._yaw; this._yaw = null; this.prev = null; if (ME.char) ME.char.setOutfit(ME.outfit); },
   preview(it) { this.prev = it ? it.id : null; if (ME.char) ME.char.setOutfit(this.outfit(it)); this.render(); },
   buy(it) {
-    if (this.own.includes(it.id)) return this.wear(it); const p = this.priceOf(it);
+    if (this.own.includes(it.id)) return this.wear(it); if (CREDIT.blocked()) { toast('신용불량자 — 구매 불가'); return; } const p = this.priceOf(it);
     if (ME.money < p) { toast('돈이 부족하다'); sfx('error'); return; }
     ME.money -= p; this.own.push(it.id); this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('cash'); toast(`${it.name} 구매 · 착용!`); saveGame(); this.render(); CINE.big('새 옷', it.name, '#ff7ad0', 1800);
   },
@@ -7203,7 +7224,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() }; } catch (e) { return; }
+  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() }; } catch (e) { return; }
   if (ACCT.on) { ACCT.data = o; ACCT.push(o); return; } // 로그인: 서버에 저장
   try { localStorage.setItem('sbc3d_save', JSON.stringify(o)); } catch (e) { }
 }
@@ -7346,7 +7367,7 @@ async function loadWorld() {
   for (const p of PLOTS) syncPlotVisual(p);
   if (G.isHost) { loadPlots(); ECON.load(); }
   // player
-  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
+  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, debt: Math.max(0, Number(sv.debt) || 0), weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
   JOBS.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
@@ -8879,6 +8900,18 @@ const GRENADE = {
 };
 
 // ---------- 교통법규: 제한속도 · 신호위반 · 음주운전 · 인도 주행 ----------
+const CREDIT = {
+  threshold: 200000,
+  blocked() { return (ME.debt || 0) >= this.threshold; },
+  fine(amount) { const paid = Math.min(Math.max(0, ME.money), amount); ME.money -= paid; ME.debt = Math.max(0, (ME.debt || 0) + amount - paid); if (this.blocked()) toast('신용불량자: 신규 구매·대출 불가. 무료 노동으로 빚을 갚으세요.', 5500); saveGame(); return paid; },
+  repay(amount) { const paid = Math.min(Math.max(0, ME.money), Math.max(0, ME.debt || 0), amount); ME.money -= paid; ME.debt -= paid; saveGame(); toast(paid ? `빚 ${fmtMoney(paid)} 상환 · 남은 빚 ${fmtMoney(ME.debt)}` : '상환할 돈이 없습니다'); },
+  loan() { if (this.blocked() || ME.debt > 0) { toast('기존 빚이 있어 신규 대출이 거절됐습니다'); return; } ME.money += 50000; ME.debt = (ME.debt || 0) + 60000; saveGame(); toast('5만원 대출 · 상환액 6만원'); },
+  bankMenu() { UI.openMenu('서불리 은행', `현금 ${fmtMoney(ME.money)} · 채무 ${fmtMoney(ME.debt || 0)}${this.blocked() ? ' · 신용불량자' : ''}`, [
+    {ic:'',t:'빚 1만원 상환',p:0,fn:()=>this.repay(10000)},
+    {ic:'',t:'가능한 금액 전부 상환',p:0,fn:()=>this.repay(Infinity)},
+    {ic:'',t:'5만원 대출 (상환액 6만원)',p:0,fn:()=>this.loan()}
+  ]); }
+};
 const TRAFFIC_LAW = {
   overT: 0, cool: 0, lastNode: null, warnT: 0,
   limit(x, z) { const r = regionAt(x, z); return r === 'disanbay' ? 80 : r === 'sea' ? 90 : r === 'plaza' ? 40 : 60; },
@@ -8887,7 +8920,7 @@ const TRAFFIC_LAW = {
     if (G.t < this.cool) return; this.cool = G.t + 25;
     const cop = this.copsNear(ME.x, ME.z, 70);
     if (cop && crimeWanted) { addWanted(1); toast(`교통경찰에게 걸렸다 — ${why} · 수배 ★`, 4000); sfx('siren'); }
-    const pay = Math.min(ME.money, amt); ME.money -= pay;
+    const pay = CREDIT.fine(amt);
     toast(`[${cop ? '교통경찰' : '단속 카메라'}] ${why} — 범칙금 ${fmtMoney(amt)}`, 4500); sfx('error');
     NET.send({ t: 'chat', m: `${ME.name} — ${why} 단속 (범칙금 ${fmtMoney(amt)})`, sys: 1, quiet: 1 });
   },
