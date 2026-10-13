@@ -487,7 +487,7 @@ const NET = {
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
         const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자 (게스트는 NPC 피해를 꾸며낼 수 없다)
-        const before = ME.hp; ME.takeDamage(+m.amt || 0, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        const amount = m.k === 'gun' ? shotDamage(w, !!m.head) : m.k === 'melee' && w === 'fist' ? 3 : Math.max(0, Math.min(999, +m.amt || 0)); const before = ME.hp; ME.takeDamage(amount, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
         if (G.isHost) POLICE.hostSelfHit(src, w, m.k, d);
         if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;

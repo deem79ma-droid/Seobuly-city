@@ -201,7 +201,7 @@ const LAW = {
 // ---- 이름표 / 배지: 방장이 서명으로 검증한 관리자(G.adminId)에게만 '👑관리자' 배지 ----
 function adminGod() { return !!(ADMIN.on && ADMIN.ready); } // 인증된 관리자만 체력 무한
 function isAdminId(id) { return !!id && (id === ME.id ? ADMIN.on && ADMIN.ready : G.adminId === id && id !== ME.id); }
-function displayName(id, name) { return (isAdminId(id) ? '[관리자] ' : '') + (name || ''); }
+function displayName(id, name) { return (isAdminId(id) ? '[관리자] ' : '') + (id === ME.id && typeof CREDIT !== 'undefined' && CREDIT.blocked() ? '[빚쟁이] ' : '') + (name || ''); }
 // 관리자 마스크는 방장이 인증한 관리자에게만 보인다 (조작된 외형으로 관리자 흉내 방지)
 function safeOutfit(o, adm) { if (!o || adm || !o.mask || o.mask === 'none') return o; return Object.assign({}, o, { mask: 'none' }); }
 function setRemoteOutfit(rp, o) { if (!o) return; rp.rawOutfit = o; rp._madm = G.adminId === rp.id; rp.char.setOutfit(safeOutfit(o, rp._madm)); }

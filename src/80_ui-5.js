@@ -69,7 +69,7 @@ const UI = {
       const b = document.createElement('button'); b.className = 'item' + (it.dis ? ' dis' : '');
       b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined && (typeof it.p === 'number' ? it.p > 0 : it.p !== '') ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
-      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (ME.money < it.p) { toast('💸 돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전에는 구매할 수 없습니다'); return; } if (ME.money < it.p) { toast('💸 돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
       wrap.appendChild(b);
     }
     box.querySelector('.close').onclick = () => this.closeMenu();
@@ -145,7 +145,7 @@ const UI = {
     this.menuOpen = true; const o = Object.assign({}, ME.outfit);
     const box = $('#menuBox'); box.innerHTML = `<h2>👕 옷가게</h2><div class="desc">변경 비용 ₩1,500 · 실시간 미리보기</div><div class="cust" id="cust2" style="max-height:52vh"></div><div class="row" style="margin-top:12px"><button class="btn" id="buyCl">구매 (₩1,500)</button><button class="btn b3" id="cancelCl">취소</button></div>`;
     buildCustomizer($('#cust2'), o, (no) => { ME.char.setOutfit(no); });
-    $('#buyCl').onclick = () => { if (ME.money < 1500) { toast('💸 돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('👕 새 옷!'); saveGame(); this.closeMenu(); setTimeout(() => CINE_EV.outfit('맞춤 옷'), 150); };
+    $('#buyCl').onclick = () => { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 의상 구매 불가'); return; } if (ME.money < 1500) { toast('💸 돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('👕 새 옷!'); saveGame(); this.closeMenu(); setTimeout(() => CINE_EV.outfit('맞춤 옷'), 150); };
     $('#cancelCl').onclick = () => { ME.char.setOutfit(ME.outfit); this.closeMenu(); };
     $('#menu').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock();
   },

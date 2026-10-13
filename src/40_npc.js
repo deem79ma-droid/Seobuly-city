@@ -39,7 +39,7 @@ function pedEnsureChar(p) {
 function placePedOnEdge(p, e, t, side, dir) {
   const E = EDGES[e]; const a = NODES[E.a], b = NODES[E.b]; p.e = e; p.t = t; p.side = side; p.dir = dir;
   const dx = (b.x - a.x) / E.len, dz = (b.z - a.z) / E.len; const off = E.w / 2 + 2.6;
-  p.x = a.x + dx * t + (-dz) * off * side; p.z = a.z + dz * t + dx * off * side; p.y = groundHeight(p.x, p.z);
+  p.x = a.x + dx * t + (-dz) * off * side; p.z = a.z + dz * t + dx * off * side; p.y = groundHeight(p.x, p.z); p.fallGroundY = p.y;
 }
 let EDGE_CELLS = null;
 function buildEdgeCells() {
@@ -74,7 +74,7 @@ function spawnPedNear(p, px, pz) {
   if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
   if (!p.homeAssigned) { p.homeX = p.x; p.homeZ = p.z; p.homeAssigned = true; } pedStartRoutine(p);
   if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
-  p.spawnT = G.t; return true;
+  p.fallGroundY = p.y; p.spawnT = G.t; return true;
 }
 function initPeds() { for (let i = 0; i < N_PED; i++) { const p = makePed(i); pedSetIdentity(p, 'civ', i * 7919 + 13); p.state = 'parked'; p.x = 0; p.z = 0; } }
 // hostile check: returns true if ped p wants to attack target t
@@ -106,7 +106,7 @@ function hostUpdatePeds(dt) {
       p.target = null; p.raid = false; p.fear = 0; p.phone = false; p.state = 'walk';
       const rx = Number.isFinite(p.homeX) ? p.homeX : p.x;
       const rz = Number.isFinite(p.homeZ) ? p.homeZ : p.z;
-      p.x = rx; p.z = rz; p.y = groundHeight(rx, rz);
+      p.x = rx; p.z = rz; p.y = groundHeight(rx, rz); p.fallGroundY = p.y;
       snapToNearestEdge(p); pedStartRoutine(p);
     } continue; }
     if (p.state === 'knocked') { if (p.timer <= 0) p.state = 'flee', p.timer = 6; continue; }
@@ -135,6 +135,20 @@ function hostUpdatePeds(dt) {
     else if (p.state === 'club') { p.spd = 0; p.yaw += dt * 0.2; if (Math.random() < dt * 0.02) p.dance = Math.floor(Math.random() * 8); }
     else if (p.state === 'dance') { p.spd = 0; if (p.timer <= 0) { p.state = 'walk'; p.dance = -1; } }
     else if (p.state === 'talk') { p.spd = 0; if (p.timer <= 0) p.state = 'walk'; }
+    // Terrain drop damage for NPCs. NPC movement normally snaps to the terrain,
+    // so compare the previous grounded height against the new grounded height.
+    // Ignore respawn/teleport states and small slopes; host alone applies damage.
+    if (p.state !== 'dead' && p.state !== 'parked' && p.state !== 'club') {
+      const h = groundHeight(p.x, p.z, p.y + 1);
+      if (Number.isFinite(p.fallGroundY)) {
+        const drop = p.fallGroundY - h;
+        if (drop > 3.5 && drop < 120) {
+          const damage = Math.min(180, Math.round((drop - 3.5) * 11));
+          if (damage > 0) pedDamage(p, damage, null, { kind: 'fall' });
+        }
+      }
+      p.fallGroundY = h;
+    } else p.fallGroundY = p.y;
   }
   if (G.isHost) raidUpdate(dt);
 }
@@ -185,7 +199,7 @@ function targetPos(tg) {
 }
 function pedFight(p, dt) {
   const tp = targetPos(p.target); if (!tp) { p.state = p.raid ? 'raid' : 'walk'; p.target = null; if (!p.raid) snapToNearestEdge(p); return; }
-  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 8, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
+  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 3, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
   const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz);
   const W = WEAPONS[p.weapon]; const ranged = !W.melee; const want = ranged ? (p.kind === 'police' ? 14 : 11) : 1.3;
   p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt);
@@ -210,7 +224,7 @@ function pedFight(p, dt) {
       const mz = { x: p.x + Math.sin(p.yaw) * 0.5, y: p.y + 1.45, z: p.z + Math.cos(p.yaw) * 0.5 };
       showShot(mz, end, W.sfx, hit ? (p.target.kind === 'ped' ? 'blood' : 'blood') : 'dust');
       NET.send({ t: 'shot', a: [mz.x, mz.y, mz.z], b: [end.x, end.y, end.z], w: p.weapon, i: hit ? 'blood' : 'dust' });
-      if (hit) dealDamage(p.target, W.dmg * (p.kind === 'police' ? 0.8 : 0.7), 'n' + p.id, { kind: 'gun', w: p.weapon });
+      if (hit) dealDamage(p.target, shotDamage(p.weapon, false), 'n' + p.id, { kind: 'gun', w: p.weapon, head: false });
     } else if (d < 1.8) {
       p.fireT = 0.7; p.act = Math.random() < 0.5 ? 'punchR' : 'punchL'; p.actT = 0;
       if (p.weapon === 'bat') p.act = 'bat';

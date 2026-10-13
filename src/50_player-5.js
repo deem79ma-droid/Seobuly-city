@@ -6,7 +6,7 @@ const ME = {
   wanted: 0, wantedCool: 0, weapon: 'fist', weapons: { fist: 1 }, ammo: {}, mag: {}, inv: { wood: 0, meat: 0, food: 2, medkit: 1, drink: 0, ticket: 0 },
   skills: { shoot: 0, fight: 0, drive: 0, fit: 0, swim: 0, study: 0 }, garage: [], outfit: null, vehicle: null, seat: null, dead: false, deadT: 0, spawn: null,
   char: null, grudge: {}, drunk: 0, dance: -1, action: null, actionT: 1, aiming: false, swim: false, knockT: 0, sitBench: null, reloadT: 0, fireT: 0, punchSide: 0,
-  combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
+  debt: 0, combatT: 0, kills: 0, homePlot: null, petId: null, spd: 0, stepT: 0,
   takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
@@ -114,9 +114,16 @@ function raycastWorld(o, d, maxD, opt = {}) {
   if (o.y + d.y * best.t < -0.2 && d.y < 0) { const tw = (-0.2 - o.y) / d.y; if (tw < best.t) best = { t: tw, kind: 'water' }; }
   best.p = new THREE.Vector3(o.x + d.x * best.t, o.y + d.y * best.t, o.z + d.z * best.t); return best;
 }
+// 고정 전투 피해: 권총 머리 50, 샷건 머리 즉사, SMG 70, 저격 100, 기타 총격 30.
+function shotDamage(w, head) {
+  if (!head) return 30;
+  return ({ pistol: 50, shotgun: 999, smg: 70, sniper: 100 })[w] || 30;
+}
 // ----- damage routing -----
 function dealDamage(tg, amt, from, opts = {}) {
   if (!tg) return;
+  if (opts.kind === 'gun') amt = shotDamage(opts.w || 'pistol', !!opts.head);
+  if (opts.kind === 'melee' && opts.w === 'fist') amt = 3;
   if (tg.kind === 'me') {
     if (from === ME.id) return; const hb = ME.hp; ME.takeDamage(amt, from, opts.w);
     if (G.isHost && /^n\d+$/.test(String(from))) POLICE.hostSelfHit(String(from), opts.w, opts.kind, hb - Math.max(0, ME.hp)); // 방장 화면의 NPC가 방장을 때림 → 사건 기록
@@ -127,7 +134,7 @@ function dealDamage(tg, amt, from, opts = {}) {
     if (!tg.id || tg.id === ME.id || tg.id === from) return;
     const rp = G.players.get(tg.id); if (rp) { rp.act = 'hit'; rp.actT = 0; }
     const w = opts.w || (opts.kind === 'car' ? 'car' : opts.kind === 'boom' ? 'boom' : from === ME.id ? ME.weapon : '');
-    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w }); return;
+    sendDmg({ t: 'dmg', to: tg.id, amt: Math.round(amt * 10) / 10, from, k: opts.kind, w, head: !!opts.head }); return;
   }
   if (tg.kind === 'ped') { if (G.isHost) pedDamage(PEDS[tg.id], amt, from, opts); else { NET.send({ t: 'pdmg', id: tg.id, amt, from, k: opts.kind }); const p = PEDS[tg.id]; if (p) { p.act = 'hit'; p.actT = 0; } } return; }
   if (tg.kind === 'animal') { if (G.isHost) animalDamage(ANIMALS[tg.id], amt, from, opts); else NET.send({ t: 'admg', id: tg.id, amt, from }); return; }
@@ -195,10 +202,10 @@ function tryAttack() {
     const dd = _d.clone(); dd.x += rnd(-sp, sp); dd.y += rnd(-sp, sp); dd.z += rnd(-sp, sp); dd.normalize();
     const h = raycastWorld(_o, dd, W.range, { ignoreVeh: ME.vehicle });
     let imp = h.kind === 'water' ? 'water' : h.kind === 'tree' ? 'wood' : h.kind === 'veh' ? 'spark' : h.kind === 'world' ? 'spark' : 'dust';
-    const dmg = W.dmg * (h.head ? 2.6 : 1) * (1 + ME.skills.shoot * 0.05);
-    if (h.kind === 'ped') { dealDamage({ kind: 'ped', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
-    else if (h.kind === 'animal') { dealDamage({ kind: 'animal', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
-    else if (h.kind === 'player') { dealDamage({ kind: 'player', id: h.ref.id }, dmg, ME.id, { kind: 'gun' }); imp = 'blood'; anyHit = true; }
+    const dmg = shotDamage(w, !!h.head);
+    if (h.kind === 'ped') { dealDamage({ kind: 'ped', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
+    else if (h.kind === 'animal') { dealDamage({ kind: 'animal', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
+    else if (h.kind === 'player') { dealDamage({ kind: 'player', id: h.ref.id }, dmg, ME.id, { kind: 'gun', w, head: !!h.head }); imp = 'blood'; anyHit = true; }
     else if (h.kind === 'veh') { h.ref.damage(dmg * 2.2, ME.id); anyHit = true; if (h.ref.driver && h.ref.driver !== ME.id && G.players.has(h.ref.driver) && Math.random() < 0.3) dealDamage({ kind: 'player', id: h.ref.driver }, dmg * 0.5, ME.id); if (h.ref.ai && !h.ref.dead) { const p = PEDS.find(q => q.state === 'parked'); } }
     FX.tracer(_m, h.p); FX.impact(h.p, imp);
     if (i === 0) NET.send({ t: 'shot', a: [_m.x, _m.y, _m.z], b: [h.p.x, h.p.y, h.p.z], w: W.sfx, i: imp });
@@ -214,7 +221,7 @@ function tryAttack() {
 function meleeResolve() {
   if (ME.dead) return; const W = WEAPONS[ME.weapon]; const fx = Math.sin(ME.yaw), fz = Math.cos(ME.yaw); const R = W.range;
   const mv = ME.weapon === 'fist' ? ME.action : null; const heavy = mv === 'upper' || mv === 'hook';
-  const dmg = W.dmg * (1 + ME.skills.fight * 0.12) * (ME.drunk > 0.3 ? 0.8 : 1) * ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1);
+  const dmg = (ME.weapon === 'fist' ? 3 : W.dmg) * (ME.weapon === 'fist' ? 1 : (1 + ME.skills.fight * 0.12)) * (ME.drunk > 0.3 ? 0.8 : 1) * (ME.weapon === 'fist' ? 1 : ({ jab: 0.85, cross: 1.1, hook: 1.25, upper: 1.6 }[mv] || 1));
   let best = null, bd = R + 0.01;
   const consider = (x, z, kind, id, ref) => { const dx = x - ME.x, dz = z - ME.z; const d = Math.hypot(dx, dz); if (d > R + 0.4) return; const f = (dx * fx + dz * fz) / (d || 1); if (f < 0.45 && d > 0.8) return; if (d < bd) { bd = d; best = { kind, id, ref, x, z }; } };
   for (const p of PEDS) if (p.state !== 'dead' && p.state !== 'parked') consider(p.x, p.z, 'ped', p.id, p);
@@ -224,7 +231,7 @@ function meleeResolve() {
   if (best) {
     if (best.kind === 'veh') { best.ref.damage(dmg * 1.5, ME.id); sfx('hit', best.x, best.z); FX.impact({ x: best.x, y: ME.y + 1, z: best.z }, 'spark'); }
     else {
-      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee' });
+      dealDamage({ kind: best.kind, id: best.id }, dmg, ME.id, { kind: 'melee', w: ME.weapon });
       const hy = ME.y + (mv === 'upper' ? 1.55 : 1.35), ix = lerp(ME.x, best.x, 0.75), iz = lerp(ME.z, best.z, 0.75);
       sfx(ME.weapon === 'fist' ? (heavy ? 'punchH' : 'punch') : 'chop', best.x, best.z); FX.impact({ x: ix, y: hy, z: iz }, ME.weapon === 'fist' ? 'dust' : 'blood');
       if (ME.weapon === 'fist') { FX.impact({ x: ix, y: hy, z: iz }, 'spark'); FX.emoji(heavy ? '💥' : '✦', ix, hy + 0.15, iz, heavy ? 0.45 : 0.3); CAM.shake = Math.min(0.6, CAM.shake + (heavy ? 0.28 : 0.13)); ME.vx *= 0.3; ME.vz *= 0.3; G.hitStop = G.t + (heavy ? 0.07 : 0.035); NET.send({ t: 'punchFx', x: +ix.toFixed(2), y: +hy.toFixed(2), z: +iz.toFixed(2), h: heavy ? 1 : 0 }); }

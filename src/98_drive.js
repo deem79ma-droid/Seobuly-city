@@ -125,6 +125,18 @@ const GRENADE = {
 };
 
 // ---------- 교통법규: 제한속도 · 신호위반 · 음주운전 · 인도 주행 ----------
+const CREDIT = {
+  threshold: 200000,
+  blocked() { return (ME.debt || 0) >= this.threshold; },
+  fine(amount) { const paid = Math.min(Math.max(0, ME.money), amount); ME.money -= paid; ME.debt = Math.max(0, (ME.debt || 0) + amount - paid); if (this.blocked()) toast('⛔ 신용불량자: 신규 구매·대출 불가. 무료 노동으로 빚을 갚으세요.', 5500); saveGame(); return paid; },
+  repay(amount) { const paid = Math.min(Math.max(0, ME.money), Math.max(0, ME.debt || 0), amount); ME.money -= paid; ME.debt -= paid; saveGame(); toast(paid ? `🏦 빚 ${fmtMoney(paid)} 상환 · 남은 빚 ${fmtMoney(ME.debt)}` : '상환할 돈이 없습니다'); },
+  loan() { if (this.blocked() || ME.debt > 0) { toast('⛔ 기존 빚이 있어 신규 대출이 거절됐습니다'); return; } ME.money += 50000; ME.debt = (ME.debt || 0) + 60000; saveGame(); toast('🏦 5만원 대출 · 상환액 6만원'); },
+  bankMenu() { UI.openMenu('🏦 서불리 은행', `현금 ${fmtMoney(ME.money)} · 채무 ${fmtMoney(ME.debt || 0)}${this.blocked() ? ' · 신용불량자' : ''}`, [
+    {ic:'💳',t:'빚 1만원 상환',p:0,fn:()=>this.repay(10000)},
+    {ic:'💰',t:'가능한 금액 전부 상환',p:0,fn:()=>this.repay(Infinity)},
+    {ic:'🏦',t:'5만원 대출 (상환액 6만원)',p:0,fn:()=>this.loan()}
+  ]); }
+};
 const TRAFFIC_LAW = {
   overT: 0, cool: 0, lastNode: null, warnT: 0,
   limit(x, z) { const r = regionAt(x, z); return r === 'disanbay' ? 80 : r === 'sea' ? 90 : r === 'plaza' ? 40 : 60; },
@@ -133,7 +145,7 @@ const TRAFFIC_LAW = {
     if (G.t < this.cool) return; this.cool = G.t + 25;
     const cop = this.copsNear(ME.x, ME.z, 70);
     if (cop && crimeWanted) { addWanted(1); toast(`교통경찰에게 걸렸다 — ${why} · 수배 ★`, 4000); sfx('siren'); }
-    const pay = Math.min(ME.money, amt); ME.money -= pay;
+    const pay = CREDIT.fine(amt);
     toast(`[${cop ? '교통경찰' : '단속 카메라'}] ${why} — 범칙금 ${fmtMoney(amt)}`, 4500); sfx('error');
     NET.send({ t: 'chat', m: `${ME.name} — ${why} 단속 (범칙금 ${fmtMoney(amt)})`, sys: 1, quiet: 1 });
   },

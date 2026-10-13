@@ -53,7 +53,7 @@ const WARDROBE = {
   close() { $('#menu').classList.remove('side'); if (this._yaw !== null) CAM.yaw = this._yaw; this._yaw = null; this.prev = null; if (ME.char) ME.char.setOutfit(ME.outfit); },
   preview(it) { this.prev = it ? it.id : null; if (ME.char) ME.char.setOutfit(this.outfit(it)); this.render(); },
   buy(it) {
-    if (this.own.includes(it.id)) return this.wear(it); const p = this.priceOf(it);
+    if (this.own.includes(it.id)) return this.wear(it); if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 구매 불가'); return; } const p = this.priceOf(it);
     if (ME.money < p) { toast('💸 돈이 부족하다'); sfx('error'); return; }
     ME.money -= p; this.own.push(it.id); this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('cash'); toast(`🛍️ ${it.name} 구매 · 착용!`); saveGame(); this.render(); CINE.big('새 옷', it.name, '#ff7ad0', 1800);
   },

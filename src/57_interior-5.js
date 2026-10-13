@@ -330,7 +330,7 @@ const INTERIOR = {
         { const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.4, 28), new THREE.MeshBasicMaterial({ color: 0x8a8e94 })); vd.rotation.x = Math.PI / 2; vd.position.set(X(0), O.y + 1.7, Z(-hd + 0.3)); group.add(vd); box(0, 1.6, -hd + 0.55, 1.6, 0.2, 0.2, 0xd8c070); }
         for (let i = 0; i < 2; i++) { box(hw - 1, 0, hd - 4 - i * 1.6, 0.8, 1.7, 1.0, 0x2a4a6a, true); box(hw - 1.42, 1.0, hd - 4 - i * 1.6, 0.02, 0.4, 0.5, 0x6ad8ff); }
         for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x2a3a5a, 1);
-        item(0, -hd + 5.2, '🏦 은행 창구 (잔액 확인)', () => toast(`🏦 잔액: ${fmtMoney(ME.money)} — 늘 감사합니다`), 2.4);
+        item(0, -hd + 5.2, '🏦 은행 창구 (대출·빚 상환)', () => CREDIT.bankMenu(), 2.4);
         item(hw - 1.8, hd - 4.8, '🏧 ATM (₩10,000 출금 연출)', () => { sfx('cash'); toast('🏧 지갑에 이미 돈이 있습니다 — 잔액 ' + fmtMoney(ME.money)); }, 1.6);
         break;
       }
