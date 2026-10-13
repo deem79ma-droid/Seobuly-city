@@ -7,7 +7,7 @@
 //   - 로비용 공개방 인원 집계
 // 를 맡는다. 접속이 없으면 잠들고(과금 없음), 누가 들어오면 깨어난다.
 const MAX_PLAYERS = 20;
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json; charset=utf-8' };
+const CORS = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json; charset=utf-8' };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: CORS });
 // ---- 계정 ----
 // 닉네임 = 계정 이름 (서버 전체에서 하나뿐). 비밀번호는 브라우저에서 PBKDF2로 한 번 갈아서(k) 보내고,
@@ -41,7 +41,10 @@ export default {
       return env.GAME_ROOMS.get(env.GAME_ROOMS.idFromName('room:' + room)).fetch(req);
     }
     if (url.pathname === '/acct' && req.method === 'POST') {
-      let b; try { b = JSON.parse(await req.text()); } catch (e) { return json({ err: 'bad' }, 400); }
+      if (Number(req.headers.get('content-length') || 0) > 110000) return json({ err: 'too_large' }, 413);
+      let raw; try { raw = await req.text(); } catch (e) { return json({ err: 'bad' }, 400); }
+      if (raw.length > 110000) return json({ err: 'too_large' }, 413);
+      let b; try { b = JSON.parse(raw); } catch (e) { return json({ err: 'bad' }, 400); }
       if (!b || typeof b !== 'object') return json({ err: 'bad' }, 400);
       const key = acctKey(b.nick); if (!key) return json({ err: 'nick' });
       b.nick = b.nick.normalize('NFC').trim(); const r = await acctCall(env, key, b);
@@ -127,10 +130,14 @@ export class GameRoom {
     if (typeof msg !== 'string' || msg.length > 400000) return;
     let d; try { d = JSON.parse(msg); } catch (e) { return; }
     if (d.sys) {
-      if (d.sys === 'save' && from === this.host && d.v && typeof d.v === 'object') await this.ctx.storage.put('save', d.v); // 방 상태 저장 (방장만)
+      if (d.sys === 'save' && from === this.host && d.v && typeof d.v === 'object' && !Array.isArray(d.v)) {
+        const serialized = JSON.stringify(d.v);
+        if (serialized.length <= 100000) await this.ctx.storage.put('save', d.v);
+      } // 방 상태 저장 (방장만)
       else if (d.sys === 'sethost' && from === this.host) { const peers = this.peers(); if (peers.has(d.id)) { this.host = d.id; await this.ctx.storage.put('host', d.id); for (const w of peers.values()) this.send(w, { sys: 'host', id: d.id }); } } // 관리자에게 방장 넘기기
       return;
     }
+    if (!d || typeof d !== 'object' || Array.isArray(d) || !d.m || typeof d.m !== 'object' || Array.isArray(d.m)) return;
     const peers = this.peers(); const out = JSON.stringify({ from, m: d.m });
     if (d.to === '*') { for (const [id, w] of peers) if (id !== from && id !== d.ex) this.send(w, out); }
     else if (d.to === 'host') { const h = peers.get(this.host); if (h && this.host !== from) this.send(h, out); }
