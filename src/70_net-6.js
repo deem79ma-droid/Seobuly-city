@@ -1,10 +1,11 @@
-// @v 2026101218
+// @v 2026101220
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
 const ROOM_PREFIX = 'sbc3d-v1-';
 const PUBLIC_ROOMS = ['PUB01','PUB02','PUB03','PUB04','PUB05','PUB06','PUB07','PUB08','PUB09','PUB10','PUB11','PUB12','PUB13','PUB14','PUB15','PUB16','PUB17','PUB18','PUB19','PUB20'];
 const NET_ERR = {
+  namelock: '이 닉네임은 가입된 계정이에요 — 비밀번호로 로그인하거나 다른 닉네임을 써 주세요',
   'peer-unavailable': '방을 찾을 수 없어요 — 친구가 게임 화면을 켜 두었는지 확인해 주세요',
   'unavailable-id': '이미 사용 중인 방 코드예요', full: `방이 가득 찼어요 (최대 ${MAX_PLAYERS}명)`, allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
   network: '매칭 서버에 연결할 수 없어요 (인터넷 연결 확인)', 'server-error': '매칭 서버 오류 — 잠시 후 다시 시도해 주세요', 'socket-error': '매칭 서버 연결 오류 — 다시 시도해 주세요', 'socket-closed': '매칭 서버 연결이 끊겼어요',
@@ -56,13 +57,14 @@ const NET = {
     const base = this.server(); if (!base || typeof WebSocket === 'undefined') return Promise.reject(netErr('network'));
     try { this.ws && this.ws.close(); } catch (e) { }
     return new Promise((res, rej) => {
-      const url = base.replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(room) + '&id=' + encodeURIComponent(ME.id);
+      const url = base.replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(room) + '&id=' + encodeURIComponent(ME.id) + '&n=' + encodeURIComponent(ME.name) + (ACCT.on ? '&tok=' + encodeURIComponent(ACCT.tok) : '');
       let done = false; const ws = new WebSocket(url); this.ws = ws;
       const fail = code => { if (done) return; done = true; clearTimeout(to); try { ws.close(); } catch (e) { } rej(netErr(code)); };
       const to = setTimeout(() => fail('timeout'), ms);
       ws.onmessage = ev => {
         let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
         if (d.sys === 'full') { fail('full'); return; }
+        if (d.sys === 'namelock') { fail('namelock'); return; }
         if (d.sys === 'init') {
           this.wsMode = true; this.wsUp = true; this.wsRoom = room; this.wsHost = d.host; this.wsSave = d.save || null; this.conns = []; this.hostConn = null;
           if (d.host !== ME.id) { this.hostConn = this.wsConn(d.host); this.conns.push(this.hostConn); }
