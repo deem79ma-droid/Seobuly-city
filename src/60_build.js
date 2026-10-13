@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 
 // ================= CONSTRUCTION (건축 의뢰) =================
 const BUILD_DESIGNS = {
@@ -142,7 +142,7 @@ function updateConstruction(dt, cam) {
 }
 function onBuildDone(p) {
   FX.confetti(p.x, p.y + 8, p.z); sfx('levelup');
-  if (p.owner === ME.id) { announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} ${plotFloors(p)}층 — ${REGIONS[p.region].name} · 문으로 들어가 볼 수 있다`); }
+  if (p.owner === ME.id) { setTimeout(() => CINE_EV.built(p), 200); announce('🏠 건축 완료!', `${BUILD_DESIGNS[p.design].name} ${plotFloors(p)}층 — ${REGIONS[p.region].name} · 문으로 들어가 볼 수 있다`); }
   else toast(`🏗️ ${p.ownerName}의 ${BUILD_DESIGNS[p.design].name} 완공`);
 }
 function plotState(p) { return { id: p.id, o: p.owner, on: p.ownerName, d: p.design, fl: p.fl || 0, pr: +p.progress.toFixed(4), s: p.state, b: Math.floor(p.bank || 0) }; }

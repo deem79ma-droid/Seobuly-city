@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 // ================= 도시: 경제 · 대통령 선거 · 정책 · 뉴스 · 법원 · NPC 기억 =================
 // 공유 상태(대통령·정책·집값·뉴스)는 방장이 관리하고 모두에게 보낸다. 서버가 있으면 방 저장에 같이 남는다.
 
@@ -61,7 +61,7 @@ const ECON = {
     E.termEnd = Date.now() + TERM_MS;
   },
   news(s) { const E = this.E; E.news.unshift({ s: String(s).slice(0, 120), t: Date.now() }); E.news = E.news.slice(0, 25); if (G.isHost) { this.show(s); this.broadcast(); } },
-  show(s) { toast('📰 ' + s, 4200); },
+  show(s) { toast('📰 ' + s, 4200); CINE_EV.news(s); },
   broadcast() { if (G.online && G.isHost) NET.send({ t: 'econ', s: this.E }); },
   apply(s) { if (!s) return; const old = this.E.news[0] && this.E.news[0].t; this.E = Object.assign(this.E, s); const n = this.E.news[0]; if (n && n.t !== old && Date.now() - n.t < 15000) this.show(n.s); },
   // ---- 정치 요청 (게스트 → 방장) ----
@@ -183,11 +183,11 @@ const COURT = {
   verdict(L, playerLawyer) {
     const P = this.pending; if (!P) return; const ev = this.evidence();
     const free = (playerLawyer ? 0.35 : L.free) * (1 - ev); const cut = playerLawyer ? rnd(0.5, 0.8) : rnd(L.cut[0], L.cut[1]) * (1 - ev * 0.5);
-    if (Math.random() < free) { announce('⚖️ 무죄!', `${playerLawyer ? '플레이어 변호사' : L.name}의 변론으로 무죄 판결`); ECON.req({ a: 'news', s: `⚖️ ${ME.name} 무죄 판결 (${playerLawyer ? '플레이어 변호사' : L.name})` }); JOBS.record = 0; this.done(); sfx('levelup'); return; }
+    if (Math.random() < free) { CINE_EV.court(false, `${playerLawyer ? '플레이어 변호사' : L.name}의 변론`); announce('⚖️ 무죄!', `${playerLawyer ? '플레이어 변호사' : L.name}의 변론으로 무죄 판결`); ECON.req({ a: 'news', s: `⚖️ ${ME.name} 무죄 판결 (${playerLawyer ? '플레이어 변호사' : L.name})` }); JOBS.record = 0; this.done(); sfx('levelup'); return; }
     this.finish(Math.max(20, Math.round(P.s * (1 - cut))), `${playerLawyer ? '플레이어 변호사' : L.name} 변론으로 -${Math.round(cut * 100)}%`);
   },
   finish(s, why) {
-    const P = this.pending; if (!P) return; ECON.req({ a: 'news', s: `⚖️ ${ME.name} 징역 ${s}초 선고 (${why})` });
+    const P = this.pending; if (!P) return; CINE_EV.court(true, `징역 ${s}초 · ${why}`); ECON.req({ a: 'news', s: `⚖️ ${ME.name} 징역 ${s}초 선고 (${why})` });
     this.done(); LAW._courtS = s; LAW.arrest(); LAW._courtS = undefined; toast(`⚖️ 판결: 징역 ${s}초 — ${why}`, 4000);
   },
   done() { clearTimeout(this._wait); this.pending = null; ME.trial = false; G.godT = G.t + 2; UI.closeMenu(); },

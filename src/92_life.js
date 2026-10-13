@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 
 // ================= 생활: NPC 강도 반응 · 집에서 잠자기 =================
 
@@ -52,10 +52,10 @@ const SLEEP = {
     ME.sleep = true; ME.dance = -1; ME.sitBench = null; if (JOBS.stall) JOBS.closeStall(true);
     if (!this.hud) { const h = document.createElement('div'); h.id = 'sleepHud'; h.style.cssText = 'position:fixed;inset:0;z-index:15;pointer-events:none;background:radial-gradient(ellipse at center,rgba(5,8,20,.35),rgba(2,3,10,.88));display:flex;align-items:flex-end;justify-content:center;padding-bottom:16vh;transition:opacity .6s;opacity:0'; h.innerHTML = '<div class="panel" style="padding:12px 18px;border-radius:14px;text-align:center;font-size:15px;line-height:1.6"></div>'; document.body.appendChild(h); this.hud = h; }
     this.hud.style.display = 'flex'; requestAnimationFrame(() => { if (this.hud) this.hud.style.opacity = 1; });
-    toast(`😴 잠자리에 들었다 — ${this.fmt(wake)} 기상 예약`); sfx('ui');
+    toast(`😴 잠자리에 들었다 — ${this.fmt(wake)} 기상 예약`); sfx('ui'); CINE_EV.sleep();
   },
   wake(why) {
-    const s = this.on; if (!s) return; this.on = null; ME.sleep = false;
+    const s = this.on; if (!s) return; this.on = null; ME.sleep = false; CINE_EV.wake(why === 'alarm');
     ME.x = s.back.x; ME.z = s.back.z; ME.y = s.back.y + 0.05; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null;
     if (this.hud) { this.hud.style.opacity = 0; setTimeout(() => { if (!this.on && this.hud) this.hud.style.display = 'none'; }, 650); }
     if (why === 'alarm' && (!G.online || G.isHost) && (G.timeScale || 1) > 2) G.time = s.wake; // 빨리 감기로 지나친 만큼 맞춘다

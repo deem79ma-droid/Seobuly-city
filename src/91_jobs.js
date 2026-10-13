@@ -1,4 +1,4 @@
-// @v 2026101219
+// @v 2026101221
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -152,7 +152,7 @@ const JOBS = {
     announce('🦹 범죄 기록', `${c.name} · 형량 +${c.s}초 (총 ${Math.ceil(this.record)}초)`);
     NET.send({ t: 'chat', m: `🚨 ${ME.name} — ${c.name}`, sys: 1 });
     if (this.cur.clean) { const old = this.cur.name; this.set('none', true); toast(`💼 범죄 기록 때문에 ${old}에서 해고됐다`, 4000); }
-    if (!was) toast('🦹 이제 범죄자 신분이다 — 경찰이 알아보면 쫓아온다 (경찰서에서 자수 가능)', 4500);
+    if (kind === 'army') CINE_EV.army(); if (!was) CINE_EV.criminal(c.name); if (!was) toast('🦹 이제 범죄자 신분이다 — 경찰이 알아보면 쫓아온다 (경찰서에서 자수 가능)', 4500);
     this.updateHud(); saveGame();
   },
   witness(sev) { if (G.isHost) NPCMEM.witness(anchorOf(ME).x, anchorOf(ME).z, ME.id, sev); else NET.send({ t: 'pol', o: { a: 'wit', sev } }); },
@@ -182,7 +182,7 @@ const JOBS = {
     if (ME.jail) { toast('🔒 수감 중에는 직업을 바꿀 수 없다'); return; }
     this.closeStall(true); this.id = id; this.task = null; this.payT = 0;
     if (!ADMIN.on) WARDROBE.apply(); this.newTask();
-    if (!silent) { announce(`${j.icon} ${j.name}`, id === 'none' ? '직업을 그만뒀다' : j.d); sfx('levelup'); NET.send({ t: 'chat', m: `💼 ${ME.name} → ${j.icon} ${j.name}`, sys: 1 }); }
+    if (!silent) { if (id !== 'none') setTimeout(() => CINE_EV.job(Object.assign({}, j, { id })), 150); announce(`${j.icon} ${j.name}`, id === 'none' ? '직업을 그만뒀다' : j.d); sfx('levelup'); NET.send({ t: 'chat', m: `💼 ${ME.name} → ${j.icon} ${j.name}`, sys: 1 }); }
     this.updateHud(); saveGame();
   },
   openMenu() {

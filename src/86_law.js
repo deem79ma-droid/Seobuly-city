@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 
 // ================= LAW (체포/감옥/출소카드) + ADMIN 특권 =================
 const BANS = new Set(); try { for (const b of JSON.parse(localStorage.getItem('sbc3d_bans') || '[]')) BANS.add(b); } catch (e) { }
@@ -12,7 +12,7 @@ Object.assign(ADMIN, {
   async preAuth() { try { const el = $('#admIn'); const pw = el && el.value; if (el) el.value = ''; if (!pw) return; const r = await this.tryPw(pw); if (r.sk) { this.sk = r.sk; this.pre = true; } else { const t = r.locked ? this.lockText() : `❌ 비밀번호가 틀렸어요 (남은 시도 ${r.left}회)`; this.lobbyMsg('err', t); toastLater(t); this.lockUI(); } } catch (e) { } },
   autoLogin() { if (this.pre && this.sk && !this.on) this.enter(); },
   enter() {
-    this.on = true; this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
+    this.on = true; CINE_EV.admin(); this.prev = { outfit: Object.assign({}, ME.outfit), money: ME.money };
     if (ME.char) { ME.outfit = Object.assign({}, ME.outfit, ADMIN_SUIT); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); }
     for (const w of WEAPON_ORDER) ME.weapons[w] = 1; ME.money = 999999999999; UI.updateWeapon && UI.updateWeapon();
     this.announce(); this.beginProgress();
@@ -140,13 +140,13 @@ const LAW = {
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
     ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
-    this.putInCell(pr.cells[ci]);
+    this.putInCell(pr.cells[ci]); setTimeout(() => CINE_EV.jail(pr, s), 120);
     announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초${wr ? ' (신고 사건 · ' + wr.v + ')' : ''}`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
   },
   release(msg) {
     if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;
     const r = pr ? pr.release : { x: 30, z: 30 }; ME.x = r.x + rnd(-1.2, 1.2); ME.z = r.z; ME.y = groundHeight(ME.x, ME.z) + 0.1; ME.vx = ME.vz = ME.vy = 0; ME.fallTop = null; ME.wanted = 0; UI.updateStars(); ME.yaw = Math.PI; CAM.yaw = Math.PI;
-    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', pr ? pr.name + ' 정문' : ''); sfx('levelup');
+    const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', pr ? pr.name + ' 정문' : ''); setTimeout(() => CINE_EV.release(pr), 150); sfx('levelup');
     NET.send({ t: 'chat', m: `🔓 ${ME.name} 출소`, sys: 1 });
   },
   // 감방 문 앞에서 E: 탈옥 시도 (3초, 약 35% 성공) — 성공하면 내 화면에서만 감방 문·정문이 열리고 수배 ★3
@@ -165,7 +165,7 @@ const LAW = {
     if (Math.random() < 0.35 || ME.forceEscape) {
       ME.jail = null; removeCollider(c.doorCol); removeCollider(pr.gateCol); pr.gateMesh.visible = false;
       this.esc = { pr, c, until: G.t + 75 };
-      addWanted(3); JOBS.crime('escape'); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
+      addWanted(3); JOBS.crime('escape'); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); CINE_EV.escape(); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
     } else { j.t += 30; j.escCool = G.t + 20; toast('❌ 탈옥 실패 — 교도관에게 들켰다! 형량 +30초', 2600); sfx('error'); CAM.shake = 0.3; }
   },
   restoreDoors() {

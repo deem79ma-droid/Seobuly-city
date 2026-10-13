@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -19,7 +19,7 @@ function uid() {
   ME.id = id; uidBeat(); if (!uid._iv) { uid._iv = setInterval(() => uidBeat(), 2000); addEventListener('pagehide', () => uidBeat(true)); }
   return id;
 }
-function loadSave() { try { return JSON.parse(localStorage.getItem('sbc3d_save') || 'null'); } catch (e) { return null; } }
+function loadSave() { if (ACCT.on) return ACCT.data; try { return JSON.parse(localStorage.getItem('sbc3d_save') || 'null'); } catch (e) { return null; } }
 function leaveServer() {
   try { saveGame(); savePlots(); } catch (e) { }
   try { NET.send({ t: 'bye' }); } catch (e) { }
@@ -31,7 +31,9 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  try { localStorage.setItem('sbc3d_save', JSON.stringify({ name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() })); } catch (e) { }
+  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() }; } catch (e) { return; }
+  if (ACCT.on) { ACCT.data = o; ACCT.push(o); return; } // 로그인: 서버에 저장
+  try { localStorage.setItem('sbc3d_save', JSON.stringify(o)); } catch (e) { }
 }
 function onResize() {
   if (!renderer) return; const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -81,6 +83,7 @@ function initLobby() {
     tickCd(); LOBBY.cd = setInterval(tickCd, 1000);
     for (const el of ['#nameIn', '#qualIn', '#cust', '#randBtn', '#admIn', '#admBtn', '#codeIn']) { const e = $(el); if (e) e.addEventListener('pointerdown', () => LOBBY.cd && stop()); }
   } else if (URLP.get('quick')) { setTimeout(() => startGame('quick'), 300); }
+  ACCT.initLobby();
   if (IS_TOUCH) mobileTip();
 }
 // 폰으로 링크를 열면: 가로모드 + 데스크톱 사이트 안내 (확인 누르면 닫힘)
@@ -120,6 +123,7 @@ async function refreshPubList(manual) {
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
   AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
+  if (ACCT.on) { ME.name = ACCT.nick; await ACCT.refresh(); } // 계정 닉네임 고정 · 최신 저장 불러오기
   if (NET.badName(ME.name)) { $('#lobbyMsg').textContent = '❌ "관리자"가 들어간 닉네임은 쓸 수 없어요'; $('#nameIn').focus(); return; } // 관리자는 이름표에 자동으로 붙는다
   ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); if (mode !== 'solo') await Promise.race([prepTurn(), sleep(2500)]); // 중계 서버 인증 준비 clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
   const msg = t => { $('#lobbyMsg').textContent = t; };
@@ -132,7 +136,7 @@ async function startGame(mode, code) {
       const room = mode === 'quick' ? await NET.wsPickPublic() : mode === 'host' ? (code || NET.code()) : code;
       if (mode === 'quick') msg(`⚡ 공개방 ${PUBLIC_ROOMS.indexOf(room) + 1} 접속 중…`);
       const r = await NET.wsConnect(room); G.online = true; G.room = r.room; G.isHost = r.mode === 'host'; viaServer = true;
-    } catch (e) { if (e.code === 'full') { msg('❌ ' + e.message); LOBBY.lock(false); return; } console.warn('서버 접속 실패 → P2P', e); NET.wsMode = false; msg('서버 연결 실패 — P2P로 시도 중…'); }
+    } catch (e) { if (e.code === 'full' || e.code === 'namelock') { msg('❌ ' + e.message); LOBBY.lock(false); return; } console.warn('서버 접속 실패 → P2P', e); NET.wsMode = false; msg('서버 연결 실패 — P2P로 시도 중…'); }
   }
   if (!viaServer) try {
     if (mode === 'host') {
@@ -192,7 +196,9 @@ async function loadWorld() {
   if (IS_TOUCH) toast('🕹️ 왼쪽 조이스틱 이동 · 오른쪽 드래그로 시점', 4000); else toast('🖱️ 화면 클릭 → 마우스 시점 · WASD 이동 · F1 조작법', 5000);
   requestAnimationFrame(loop);
   setInterval(() => { saveGame(); savePlots(); }, 30000);
-  addEventListener('beforeunload', () => { saveGame(); savePlots(); });
+  addEventListener('beforeunload', () => { saveGame(); savePlots(); ACCT.beacon(); });
+  setTimeout(() => CINE_EV.intro(), 900); // 처음 한 번: 도시 소개 30초
+  setTimeout(() => ACCT.on && toast(`계정 ${ACCT.nick} — 진행 상황이 서버에 저장된다${ACCT.busyWarn ? ' (다른 기기에서 플레이 중이면 저장 안 됨)' : ''}`, 4500), 2500);
 }
 function spawnParked() {
   const r = mulberry32(999); const pk = (a) => a[Math.floor(r() * a.length)];
@@ -230,7 +236,7 @@ function frame(dt, noRender) {
   renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
-  updateCamera(dt);
+  updateCamera(dt); CINE.update(dt); // 컷신이 있으면 카메라를 덮어쓴다
   const fx = ME.vehicle ? ME.vehicle : ME; updateEnv(dt, { x: fx.x, y: fx.y, z: fx.z }); updateGrass(camera.position.x, camera.position.z);
   // headlight spot for my car
   const cl = ENV.carLight; if (ME.vehicle && ENV.night > 0.3 && ME.vehicle.kind !== 'horse') { const v = ME.vehicle; cl.intensity = 220; cl.position.set(v.x + Math.sin(v.yaw) * 2, v.y + 1, v.z + Math.cos(v.yaw) * 2); cl.target.position.set(v.x + Math.sin(v.yaw) * 25, v.y - 1, v.z + Math.cos(v.yaw) * 25); } else cl.intensity = 0;

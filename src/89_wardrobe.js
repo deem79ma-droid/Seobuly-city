@@ -1,3 +1,4 @@
+// @v 2026101221
 // ================= 옷가게 · 옷장 =================
 // 로비 꾸미기는 그대로(기본 외형). 게임 안에서는 옷가게에서 옷을 "사서" 옷장에 모으고 갈아입는다.
 // 기본 외형(base) 위에 입은 옷(worn)을 덮어써서 실제 외형을 만든다 → NET 'outfit' 으로 상대에게 동기화.
@@ -54,7 +55,7 @@ const WARDROBE = {
   buy(it) {
     if (this.own.includes(it.id)) return this.wear(it); const p = this.priceOf(it);
     if (ME.money < p) { toast('💸 돈이 부족하다'); sfx('error'); return; }
-    ME.money -= p; this.own.push(it.id); this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('cash'); toast(`🛍️ ${it.name} 구매 · 착용!`); saveGame(); this.render();
+    ME.money -= p; this.own.push(it.id); this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('cash'); toast(`🛍️ ${it.name} 구매 · 착용!`); saveGame(); this.render(); CINE.big('새 옷', it.name, '#ff7ad0', 1800);
   },
   wear(it) { this.worn[it.slot] = it.id; this.prev = null; this.apply(); sfx('ui'); toast(`👕 ${it.name} 착용`); saveGame(); this.render(); },
   takeOff(slot) { delete this.worn[slot]; this.prev = null; this.apply(); sfx('ui'); toast('기본 옷으로 돌아왔다'); saveGame(); this.render(); },

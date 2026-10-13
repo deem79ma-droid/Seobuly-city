@@ -1,4 +1,4 @@
-// @v 2026101219
+// @v 2026101221
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -126,7 +126,7 @@ const UI = {
   openDealer(f) {
     const list = ['hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike'];
     this.openMenu('🚗 자동차 판매점', `구매한 차는 차고에 저장되고 휴대폰으로 언제든 부를 수 있다 · 보유 ${ME.garage.length}대`, list.map(k => {
-      const M = VMODELS[k]; return { ic: M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); saveGame(); } };
+      const M = VMODELS[k]; return { ic: M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
     }));
   },
   openGarage(x, z) {
@@ -135,7 +135,7 @@ const UI = {
   },
   openGun() {
     const items = [];
-    for (const w of WEAPON_ORDER) { const W = WEAPONS[w]; if (!W.price) continue; if (!ME.weapons[w]) items.push({ ic: W.icon, t: W.name, p: W.price, d: W.melee ? '근접 무기' : `탄창 ${W.mag}발 포함`, fn: () => { ME.weapons[w] = 1; if (!W.melee) { ME.mag[w] = W.mag; ME.ammo[w] = (ME.ammo[w] || 0) + W.mag; } selectWeapon(w); this.buildHotbar(); saveGame(); } }); else if (!W.melee) items.push({ ic: '📦', t: `${W.name} 탄약`, p: W.ammoPrice, d: `+${W.mag * 2}발 (보유 ${ME.ammo[w] || 0})`, stay: true, fn: () => { ME.ammo[w] = (ME.ammo[w] || 0) + W.mag * 2; UI.updateWeapon(); this.openGun(); return true; } }); }
+    for (const w of WEAPON_ORDER) { const W = WEAPONS[w]; if (!W.price) continue; if (!ME.weapons[w]) items.push({ ic: W.icon, t: W.name, p: W.price, d: W.melee ? '근접 무기' : `탄창 ${W.mag}발 포함`, fn: () => { ME.weapons[w] = 1; if (!W.melee) { ME.mag[w] = W.mag; ME.ammo[w] = (ME.ammo[w] || 0) + W.mag; } selectWeapon(w); this.buildHotbar(); saveGame(); setTimeout(() => CINE_EV.gun(W.name), 150); } }); else if (!W.melee) items.push({ ic: '📦', t: `${W.name} 탄약`, p: W.ammoPrice, d: `+${W.mag * 2}발 (보유 ${ME.ammo[w] || 0})`, stay: true, fn: () => { ME.ammo[w] = (ME.ammo[w] || 0) + W.mag * 2; UI.updateWeapon(); this.openGun(); return true; } }); }
     items.push({ ic: '🦺', t: '방탄복', p: 2500, d: '아머 100', fn: () => { ME.armor = 100; } });
     this.openMenu('🔫 총포사', '무기와 탄약 · 경찰 앞에서 쏘면 수배된다', items);
   },
@@ -144,7 +144,7 @@ const UI = {
     this.menuOpen = true; const o = Object.assign({}, ME.outfit);
     const box = $('#menuBox'); box.innerHTML = `<h2>👕 옷가게</h2><div class="desc">변경 비용 ₩1,500 · 실시간 미리보기</div><div class="cust" id="cust2" style="max-height:52vh"></div><div class="row" style="margin-top:12px"><button class="btn" id="buyCl">구매 (₩1,500)</button><button class="btn b3" id="cancelCl">취소</button></div>`;
     buildCustomizer($('#cust2'), o, (no) => { ME.char.setOutfit(no); });
-    $('#buyCl').onclick = () => { if (ME.money < 1500) { toast('💸 돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('👕 새 옷!'); saveGame(); this.closeMenu(); };
+    $('#buyCl').onclick = () => { if (ME.money < 1500) { toast('💸 돈이 부족하다'); return; } ME.money -= 1500; ME.outfit = Object.assign({}, o); ME.char.setOutfit(ME.outfit); NET.send({ t: 'outfit', o: ME.outfit }); sfx('cash'); toast('👕 새 옷!'); saveGame(); this.closeMenu(); setTimeout(() => CINE_EV.outfit('맞춤 옷'), 150); };
     $('#cancelCl').onclick = () => { ME.char.setOutfit(ME.outfit); this.closeMenu(); };
     $('#menu').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock();
   },
@@ -253,6 +253,8 @@ const UI = {
       { ic: '💃', t: '춤', p: 0, fn: () => setTimeout(() => this.openDance(), 30) },
       { ic: '🎥', t: CAM.fp ? '3인칭 시점' : '1인칭 시점', p: 0, fn: () => { CAM.fp = !CAM.fp; } },
       { ic: '⚙️', t: '그래픽 품질', p: 0, d: ['낮음', '보통', '높음', '최고'][G.quality], fn: () => { setTimeout(() => this.openMenu('⚙️ 그래픽', '변경 후 새로고침하면 완전 적용', [0, 1, 2, 3].map(q => ({ t: ['낮음', '보통', '높음', '최고'][q], p: 0, fn: () => { try { localStorage.setItem('sbc3d_q', q); } catch (e) { } G.quality = q; applyQualityLive(); toast('품질 변경'); } }))), 30); } },
+      { ic: '', t: '연출 (컷신)', p: 0, d: CINE.enabled() ? '켜짐 — 눌러서 끄기' : '꺼짐 — 눌러서 켜기', fn: () => { CINE.setEnabled(!CINE.enabled()); toast('연출 ' + (CINE.enabled() ? '켜짐' : '꺼짐')); } },
+      { ic: '', t: '인트로 다시 보기', p: 0, d: '도시 소개 30초', fn: () => setTimeout(() => CINE_EV.intro(true), 150) },
       { ic: '💾', t: '저장', p: 0, fn: () => { saveGame(); savePlots(); toast('💾 저장 완료'); } },
       { ic: '🚪', t: G.online ? '서버 나가기' : '메인 화면으로', p: 0, d: G.online ? (G.isHost ? '방장이 나가면 방이 닫히거나 방장이 넘어가요' : '저장하고 로비로 돌아가요') : '저장하고 로비로 돌아가요', fn: () => setTimeout(() => this.confirmLeave(), 30) },
       { ic: '🎯', t: '쉬운 조작 · 끼임 탈출', p: 0, d: '사격 보정 · 자동 달리기 · 끼임 탈출', fn: () => setTimeout(() => this.openEasy(), 30) },

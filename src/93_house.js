@@ -1,4 +1,4 @@
-// @v 2026101218
+// @v 2026101221
 // ================= 집: 사기 · 열쇠 · 남의 집 자물쇠 따기 · 털기 · 가이드 =================
 // 집(주택·빌라·아파트)마다 열쇠가 하나. 산 집의 열쇠는 그 집만 열고, 죽어도 잃지 않는다.
 // 열쇠가 없는 집은 잠겨 있다 → 문 앞 E: 자물쇠 따기(확률) 또는 집 사기.
@@ -30,7 +30,7 @@ const HOUSE = {
   buy(b) {
     // 메뉴가 가격만큼 이미 뺐다
     if (this.mine(b)) return; if (this.ownerName(b)) { ME.money += this.price(b); toast('다른 사람이 먼저 샀다 (환불)'); return; }
-    this.keys().push(b.id); sfx('levelup'); announce('🔑 내 집 마련!', `${b.name} 열쇠를 받았다 · 죽어도 잃지 않는다`);
+    this.keys().push(b.id); sfx('levelup'); announce('🔑 내 집 마련!', `${b.name} 열쇠를 받았다 · 죽어도 잃지 않는다`); setTimeout(() => CINE_EV.house(b), 150);
     NET.send({ t: 'chat', m: `🏠 ${ME.name} — ${b.name} 구입`, sys: 1 }); this._hkT = 0; saveGame(); UI.updateInv();
   },
   sell(b) {
@@ -44,7 +44,7 @@ const HOUSE = {
   resolvePick() {
     const p = this.picking; this.picking = null; const b = p.b;
     if (Math.random() < this.chance()) {
-      toast('🔓 딸깍! 문이 열렸다'); sfx('door');
+      toast('🔓 딸깍! 문이 열렸다'); sfx('door'); CINE_EV.burgle(b.name);
       const oid = this.ownerId(b); if (oid && oid !== ME.id) NET.send({ t: 'burgle', to: oid, n: b.name });
       INTERIOR.enter(b, { picked: 1 });
     } else {
