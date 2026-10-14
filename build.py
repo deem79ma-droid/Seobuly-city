@@ -156,9 +156,10 @@ for f in ('og.png', 'robots.txt', 'sitemap.xml'):
     s_, d_ = os.path.join(root, f), os.path.join(out_dir, f)
     if os.path.exists(s_) and os.path.abspath(s_) != os.path.abspath(d_): shutil.copyfile(s_, d_)
 # ---- 사람 3D 모델 (models/*.glb) → 배포 폴더로 복사 ----
-_md = os.path.join(root, 'models')
-if os.path.isdir(_md) and os.path.abspath(_md) != os.path.abspath(os.path.join(out_dir, 'models')):
-    os.makedirs(os.path.join(out_dir, 'models'), exist_ok=True)
-    for f in os.listdir(_md):
-        if f.endswith('.glb'): shutil.copyfile(os.path.join(_md, f), os.path.join(out_dir, 'models', f))
+for _dn, _ext in (('models', '.glb'), ('music', '.mp3')):  # 3D 모델 · 배경음악 파일 복사
+    _md = os.path.join(root, _dn)
+    if os.path.isdir(_md) and os.path.abspath(_md) != os.path.abspath(os.path.join(out_dir, _dn)):
+        os.makedirs(os.path.join(out_dir, _dn), exist_ok=True)
+        for f in os.listdir(_md):
+            if f.endswith(_ext): shutil.copyfile(os.path.join(_md, f), os.path.join(out_dir, _dn, f))
 print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF', '| server:', srv or 'P2P')
