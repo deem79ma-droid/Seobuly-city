@@ -1,4 +1,4 @@
-// @v 2026101418
+// @v 2026101420
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -257,7 +257,7 @@ class Vehicle {
     this.steer = damp(this.steer, steerTarget, 10, dt);
     const air = this.y > this.groundY + 0.25;
     if (!air) {
-      if (inp.throttle > 0) { if (this.speed < -0.5) this.speed += 22 * dt; else this.speed += M.acc * inp.throttle * dt * Math.max(0.05, 1 - this.speed / M.max); }
+      if (inp.throttle > 0) { const top = inp.pedal ? M.max * (0.3 + 0.7 * inp.throttle) : M.max; /* 액셀을 살살 밟으면 최고속도도 낮다 */ if (this.speed < -0.5) this.speed += 22 * dt; else if (this.speed <= top) this.speed += M.acc * inp.throttle * dt * Math.max(0.05, 1 - this.speed / top); else this.speed = Math.max(top, this.speed - 4 * dt); }
       else if (inp.throttle < 0) { if (this.speed > 0.5) this.speed -= 22 * dt; else this.speed -= M.acc * 0.6 * dt * Math.max(0, 1 + this.speed / (this.kind === 'horse' ? 3 : 12)); }
       else this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (1.2 + Math.abs(this.speed) * 0.04) * dt);
       if (inp.brake) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 30 * dt);

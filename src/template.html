@@ -66,6 +66,22 @@ body.photoMode>:not(canvas):not(#photoUI):not(#touch):not(.photoFlash):not(scrip
 #photoUI button[data-a=shot]{width:64px;height:64px;font-size:26px;background:rgba(255,255,255,.2)}
 .photoFlash{position:fixed;inset:0;background:#fff;z-index:70;pointer-events:none;animation:phf .4s ease-out forwards}@keyframes phf{from{opacity:.85}to{opacity:0}}
 #smsBox{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:65;display:flex;flex-direction:column;gap:8px;padding:14px;width:min(92vw,360px);pointer-events:auto}
+body.driving #touch>:not(#look){display:none!important}
+#driveUI{position:fixed;inset:0;z-index:31;pointer-events:none}
+#driveUI button{position:absolute;pointer-events:auto;border:2px solid rgba(255,255,255,.55);background:rgba(10,14,24,.45);color:#fff;font:700 22px/1.1 inherit;border-radius:18px;touch-action:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+#driveUI button small{font-size:11px;font-weight:600;opacity:.85}
+#driveUI button.on{background:rgba(255,211,74,.55);border-color:#ffd34a}
+#driveUI .dl{left:18px;bottom:26px;width:84px;height:84px}#driveUI .dr{left:112px;bottom:26px;width:84px;height:84px}
+#driveUI .da{right:18px;bottom:26px;width:88px;height:150px;--p:0;border-radius:14px 14px 22px 22px;background:linear-gradient(180deg,#3a3f48,#1c1f25);border-color:rgba(255,255,255,.4);transform:perspective(300px) rotateX(calc(var(--p) * 22deg));transform-origin:50% 100%;transition:transform .06s;justify-content:space-between;padding:12px 0 8px;overflow:hidden}
+#driveUI .da .pd{display:flex;flex-direction:column;gap:9px;width:62%}#driveUI .da .pd i{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.28)}
+#driveUI .da .pv{position:absolute;left:0;right:0;bottom:0;height:calc(var(--p) * 100%);background:linear-gradient(0deg,rgba(255,211,74,.55),rgba(255,120,40,.25));pointer-events:none;z-index:-1}
+#driveUI .da.on{background:linear-gradient(180deg,#4a4f58,#2a2d33);border-color:#ffd34a}#driveUI .db{right:120px;bottom:26px;width:92px;height:84px;font-size:15px}
+#driveUI .dout{right:18px;top:96px;width:78px;height:44px;font-size:14px;border-radius:12px}
+#driveUI .dhorn,#driveUI .dph,#driveUI .dmap{right:18px;width:78px;height:40px;font-size:14px;border-radius:12px}#driveUI .dhorn{top:148px}#driveUI .dph{top:196px}#driveUI .dmap{top:244px}
+#breath{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:30;pointer-events:none;text-align:center;color:#fff;font:700 13px/1 inherit;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+#breath .bt{margin-bottom:5px;letter-spacing:1px}#breath .bb{width:180px;height:12px;border-radius:7px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.7);overflow:hidden}
+#breath .bf{height:100%;width:0;background:linear-gradient(90deg,#7fd6ff,#ffd34a 60%,#ff4a3a);transition:width .15s linear}#breath.low{animation:brl .4s infinite alternate}#breath.low .bt{color:#ff6a5a}@keyframes brl{from{opacity:1}to{opacity:.35}}
+body.photoMode #breath{display:none!important}
 .cust input[type=range]{width:100%;height:34px;accent-color:#ff4fd8;margin:0}
 .cust select,.cust input[type=color]{background:#0d1020;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:7px;font-family:inherit;font-size:13px;width:100%;height:34px}
 .tip{font-size:11.5px;color:var(--dim);line-height:1.6;margin-top:12px}
