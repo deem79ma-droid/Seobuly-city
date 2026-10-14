@@ -1,4 +1,4 @@
-// @v 2026101412
+// @v 2026101418
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -86,6 +86,7 @@ const VMODELS = {
   suv: { name: 'SUV', kind: 'car', price: 55000, L: 4.85, W: 1.96, clear: 0.45, hood: 1.24, deck: 1.6, roof: 1.9, cabF: 1.15, cabR: -2.2, roofF: 0.45, roofR: -2.15, wb: [1.5, -1.45], wr: 0.4, max: 44, acc: 9, steer: 0.52, grip: 9, hp: 1400, seats: 2 },
   pickup: { name: '픽업트럭', kind: 'car', price: 42000, L: 5.3, W: 1.98, clear: 0.48, hood: 1.28, deck: 1.3, roof: 1.95, cabF: 1.35, cabR: -0.45, roofF: 0.7, roofR: -0.4, wb: [1.75, -1.6], wr: 0.42, max: 40, acc: 8, steer: 0.5, grip: 8, hp: 1500, seats: 2, bed: true },
   van: { name: '승합차', kind: 'car', price: 30000, L: 5.0, W: 1.96, clear: 0.36, hood: 1.15, deck: 2.1, roof: 2.15, cabF: 1.65, cabR: -2.48, roofF: 1.05, roofR: -2.48, wb: [1.55, -1.6], wr: 0.36, max: 36, acc: 6.5, steer: 0.5, grip: 7, hp: 1400, seats: 2 },
+  bicycle: { name: '자전거', kind: 'bike', bicycle: true, seats: 1, price: 4000, max: 9, acc: 3.6, steer: 0.7, grip: 9, hp: 160, wr: 0.34, L: 1.75, W: 0.55 },
   scooter: { name: '스쿠터', kind: 'bike', price: 6000, max: 24, acc: 7, steer: 0.6, grip: 8, hp: 300, wr: 0.24, L: 1.7, W: 0.6 },
   bike: { name: '오토바이', kind: 'bike', price: 28000, max: 62, acc: 15, steer: 0.5, grip: 10, hp: 450, wr: 0.32, L: 2.1, W: 0.7 },
   superbike: { name: '슈퍼바이크', kind: 'bike', price: 95000, max: 88, acc: 22, steer: 0.45, grip: 12, hp: 450, wr: 0.33, L: 2.1, W: 0.7, fairing: true },
@@ -204,7 +205,16 @@ function buildBikeMesh(Mo, color, v) {
   v.wheels = [];
   const tireG = new THREE.TorusGeometry(wr - 0.05, 0.065, 8, 22); const rimG = new THREE.CylinderGeometry(wr - 0.08, wr - 0.08, 0.03, 12); rimG.rotateX(Math.PI / 2);
   for (const [x, front] of [[wb, true], [-wb, false]]) { const pivot = new THREE.Group(); pivot.position.set(x, wr, 0); inner.add(pivot); const spin = new THREE.Group(); pivot.add(spin); spin.add(new THREE.Mesh(tireG, dark)); spin.add(new THREE.Mesh(rimG, chrome)); v.wheels.push({ pivot, spin, front }); }
-  if (Mo.name === '스쿠터') {
+  if (Mo.bicycle) { // 🚲 자전거: 가는 바퀴 · 살 · 프레임 · 안장 · 핸들 · 페달 (엔진 없음)
+    v.wheels.forEach(w => { w.spin.clear(); w.spin.add(new THREE.Mesh(new THREE.TorusGeometry(wr - 0.02, 0.022, 6, 28), dark)); w.spin.add(new THREE.Mesh(new THREE.TorusGeometry(wr - 0.05, 0.008, 4, 28), chrome)); for (let i = 0; i < 6; i++) { const sp = new THREE.Mesh(CG.box, chrome); sp.scale.set(0.006, (wr - 0.05) * 2, 0.006); sp.rotation.z = i / 6 * Math.PI; w.spin.add(sp); } const hub = new THREE.Mesh(CG.cyl, chrome); hub.scale.set(0.03, 0.06, 0.03); hub.rotation.x = Math.PI / 2; w.spin.add(hub); });
+    const T = (x0, y0, x1, y1, z = 0, r = 0.022, mat = body) => { const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy); const m = new THREE.Mesh(CG.cyl, mat); m.scale.set(r, L, r); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z); m.rotation.z = Math.atan2(-dx, dy); inner.add(m); return m; };
+    const bb = [0, wr + 0.02], seat = [-0.18, wr + 0.62], head = [wb - 0.18, wr + 0.6];
+    T(bb[0], bb[1], seat[0], seat[1]); T(seat[0] + 0.02, seat[1] - 0.05, head[0], head[1]); T(bb[0], bb[1], head[0], head[1] - 0.08, 0, 0.026);
+    for (const z of [0.05, -0.05]) { T(bb[0], bb[1], -wb, wr, z, 0.013); T(seat[0], seat[1] - 0.04, -wb, wr, z, 0.012); T(head[0], head[1], wb, wr, z, 0.015, chrome); }
+    T(head[0], head[1], head[0] - 0.04, head[1] + 0.22, 0, 0.016, chrome); B(dark, head[0] - 0.05, head[1] + 0.23, 0, 0.04, 0.03, 0.56);
+    B(dark, seat[0] - 0.02, seat[1] + 0.05, 0, 0.24, 0.05, 0.12); const crank = new THREE.Mesh(CG.cyl, chrome); crank.scale.set(0.07, 0.03, 0.07); crank.rotation.x = Math.PI / 2; crank.position.set(bb[0], bb[1], 0.04); inner.add(crank);
+    for (const s of [1, -1]) B(dark, bb[0] + 0.08 * s, bb[1] - 0.06 * s, 0.11 * s, 0.1, 0.02, 0.06);
+  } else if (Mo.name === '스쿠터') {
     B(body, -0.1, wr + 0.25, 0, 0.9, 0.3, 0.42); B(body, wb - 0.15, wr + 0.5, 0, 0.18, 0.9, 0.4, -0.3); B(dark, -0.25, wr + 0.48, 0, 0.6, 0.12, 0.34); B(chrome, wb - 0.25, wr + 0.98, 0, 0.06, 0.06, 0.6);
   } else {
     const tank = new THREE.Mesh(CG.sph, body); tank.scale.set(0.38, 0.17, 0.2); tank.position.set(0.18, wr + 0.55, 0); inner.add(tank);

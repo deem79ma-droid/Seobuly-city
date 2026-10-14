@@ -2,7 +2,7 @@
 // 주차장 정산기(🅿️)에서 E → 차종 선택 → 빈 주차면에 내 차가 나온다. 한 사람당 소환 차는 1대(다시 부르면 이전 차는 사라진다).
 const PARKING = {
   cur: null, // 지금 소환해 둔 차 id
-  MODELS: ['hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike'],
+  MODELS: ['bicycle', 'hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike'],
   fee(k) { if (ADMIN.on) return 0; const M = VMODELS[k]; return Math.max(500, Math.round(M.price * 0.02 / 100) * 100); },
   icon(k) { const M = VMODELS[k]; return M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : k === 'van' ? '🚐' : '🚗'; },
   freeBay(lot) {

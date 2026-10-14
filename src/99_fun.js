@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101419
 
 // ================= 🎣 낚시 · 📸 사진 모드 · 💬 휴대폰 문자 =================
 
@@ -234,5 +234,94 @@ const LAWX = {
   hostAnimalKilled(a, from) {
     if (!from || String(from).startsWith('n') || a.wild) return; const w = this.witness(a.x, a.z, 30, from); if (!w) return;
     if (PEDS[w.id] === w && w.char) w.char.say('동물을 죽이다니!! 신고할 거예요!', 3); notifyPlayer(from, { t: 'wanted', add: 1, c: 'animal' });
+  },
+};
+
+// ---------- 🚗 운전 조작: 왼쪽 · 오른쪽 · 가속 · 브레이크(드리프트) + 내리기 ----------
+// 차·오토바이·자전거를 직접 몰 때는 이것만 쓴다 (무기 등 다른 키는 막힘 · 경적 H · 지도 M · 폰 P는 된다).
+// PC: W/↑ 가속 · A/D(←/→) 방향 · Space/S/↓ 브레이크 (달리는 중이면 드리프트, 멈췄을 때 누르고 있으면 후진) · E/F 내리기
+const DRIVE = {
+  on() { const v = ME.vehicle; return !!(v && ME.seat === 'd' && !v.taxiCab && (v.kind === 'car' || v.kind === 'bike')); },
+  input(v) {
+    const K = KEYS; const acc = !!(K['w'] || K['arrowup'] || INP.dAcc), L = !!(K['a'] || K['arrowleft'] || INP.dL), R = !!(K['d'] || K['arrowright'] || INP.dR), brk = !!(K[' '] || K['s'] || K['arrowdown'] || INP.dBrk);
+    const inp = { throttle: acc ? 1 : 0, steer: (L ? 1 : 0) - (R ? 1 : 0), brake: false, hand: false, up: false, down: false };
+    if (brk) { if (v.speed > 2.5) { inp.brake = true; inp.hand = v.speed > 6 && (L || R); inp.throttle = 0; } else if (v.speed < -2.5) inp.brake = true; else inp.throttle = -1; } // 멈췄을 때 브레이크를 누르고 있으면 천천히 후진
+    return inp;
+  },
+  ui() {
+    let el = $('#driveUI'); if (el) return el;
+    el = document.createElement('div'); el.id = 'driveUI';
+    el.innerHTML = '<button type="button" data-k="dL" class="dl">◀</button><button type="button" data-k="dR" class="dr">▶</button><button type="button" data-k="dBrk" class="db">브레이크<small>드리프트</small></button><button type="button" data-k="dAcc" class="da">▲<small>가속</small></button><button type="button" data-k="out" class="dout">내리기</button><button type="button" data-k="horn" class="dhorn">경적</button><button type="button" data-k="phone" class="dph">폰</button><button type="button" data-k="map" class="dmap">지도</button>';
+    for (const b of el.querySelectorAll('button')) {
+      const k = b.dataset.k;
+      const on = e => { e.preventDefault(); e.stopPropagation(); AU.init && AU.init(); if (k === 'out') { doInteract(); return; } if (k === 'horn') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); b.classList.add('on'); return; } if (k === 'phone') { UI.openPhone(); return; } if (k === 'map') { UI.openMap(); return; } INP[k] = true; b.classList.add('on'); };
+      const off = e => { e.preventDefault(); if (k.startsWith('d')) INP[k] = false; b.classList.remove('on'); };
+      b.addEventListener('touchstart', on, { passive: false }); b.addEventListener('touchend', off, { passive: false }); b.addEventListener('touchcancel', off);
+    }
+    document.body.appendChild(el); return el;
+  },
+  tick() {
+    const on = this.on() && G.started; document.body.classList.toggle('driving', on);
+    if (IS_TOUCH) { const el = this.ui(); el.style.display = on && !UI.menuOpen ? '' : 'none'; }
+    if (!on) INP.dAcc = INP.dL = INP.dR = INP.dBrk = false;
+  },
+};
+
+// ---------- 💼 사망 가방: 죽으면 현금·무기·탄약·아이템·방탄복을 그 자리에 떨군다 ----------
+// 누구든 (본인 포함) 먼저 주우면 가진다. 10분 지나면 사라진다. 산 옷은 떨구지 않고 잃는다.
+const LOOT = {
+  LIFE: 600, lastBy: {},
+  take() {
+    if (adminGod()) return null;
+    const l = { m: Math.max(0, Math.floor(ME.money || 0)), w: [], a: {}, i: {}, ar: Math.round(ME.armor || 0) };
+    for (const w in ME.weapons || {}) if (w !== 'fist' && ME.weapons[w] && WEAPONS[w]) l.w.push(w);
+    for (const src of [ME.ammo || {}, ME.mag || {}]) for (const k in src) { const n = +src[k] | 0; if (n > 0) l.a[k] = (l.a[k] || 0) + n; }
+    for (const k in ME.inv || {}) { const n = ME.inv[k] | 0; if (n > 0) l.i[k] = n; }
+    return this.clean(l);
+  },
+  // 네트워크로 받은 가방은 모양·크기를 검사한다 (이상한 값이면 버림)
+  clean(l) {
+    if (!l || typeof l !== 'object') return null; const ok = k => typeof k === 'string' && /^[a-z0-9_]{1,20}$/i.test(k);
+    const o = { m: Math.min(1e9, Math.max(0, Math.floor(+l.m || 0))), w: [], a: {}, i: {}, ar: Math.min(100, Math.max(0, Math.round(+l.ar || 0))) };
+    if (Array.isArray(l.w)) for (const w of l.w.slice(0, 20)) if (ok(w) && WEAPONS[w] && w !== 'fist' && !o.w.includes(w)) o.w.push(w);
+    for (const [src, dst, max] of [[l.a, o.a, 9999], [l.i, o.i, 999]]) if (src && typeof src === 'object') for (const k of Object.keys(src).slice(0, 30)) { const n = Math.min(max, Math.floor(+src[k] || 0)); if (ok(k) && n > 0) dst[k] = n; }
+    return o.m || o.w.length || o.ar || Object.keys(o.a).length || Object.keys(o.i).length ? o : null;
+  },
+  drop(x, z, l) { if (G.isHost) spawnPickup(x, z, 0, null, l); else NET.send({ t: 'dropLoot', x, z, l }); },
+  apply(l) {
+    const got = [];
+    if (l.m) { ME.money += l.m; got.push(fmtMoney(l.m)); }
+    for (const w of l.w) { ME.weapons[w] = 1; got.push(WEAPONS[w].name); }
+    for (const k in l.a) ME.ammo[k] = (ME.ammo[k] || 0) + l.a[k];
+    for (const k in l.i) { ME.inv[k] = (ME.inv[k] || 0) + l.i[k]; got.push(`${(INV_NAME[k] || k)} ×${l.i[k]}`); }
+    if (l.ar) { ME.armor = Math.max(ME.armor || 0, l.ar); got.push('방탄복'); }
+    sfx('cash'); toast('💼 가방을 주웠다 — ' + (got.join(' · ') || '탄약'), 4000);
+    UI.buildHotbar && UI.buildHotbar(); UI.updateWeapon && UI.updateWeapon(); UI.updateInv && UI.updateInv(); saveGame();
+  },
+  // 방장: 오래된 가방 치우기
+  tick() {
+    if (!G.isHost || (this._t = (this._t || 0) + 1) % 60) return;
+    for (const [id, p] of PICKUPS) if (p.loot && G.t - p.t > this.LIFE) { removePickup(id); NET.send({ t: 'pickRm', id }); }
+  },
+};
+
+// ---------- 🫧 숨 (물속) · 수영장 물 움직임 ----------
+// 물에 빠지면(바다·호수·수영장) 공기방울이 점점 줄어든다 (약 20초). 다 떨어지면 그 자리에서 익사. 물 밖으로 나오면 다시 찬다.
+WILD_DEATH.drown = '물에 빠져 숨이 막혔다';
+const BREATH = {
+  MAX: 100, SEC: 20, shown: -1,
+  tick(dt) {
+    POOL_U.uT.value = G.t; POOL_U.uLight.value = 1 - 0.68 * (ENV.night || 0); POOL_U.uSun.value.copy(ENV.sunDir);
+    if (!G.started) return;
+    if (ME.dead) ME.breath = this.MAX;
+    else if (ME.swim && !ME.vehicle && !(ME.god || ADMIN.on)) {
+      ME.breath = (ME.breath ?? this.MAX) - dt * this.MAX / this.SEC;
+      if (ME.breath <= 0) { ME.breath = 0; ME.lastW = 'drown'; ME.hp = 0; ME.die('drown'); toast('🫧 숨을 못 쉬어 익사했다', 4000); } // 즉시 사망 (조끼·체력 무시)
+    } else ME.breath = Math.min(this.MAX, (ME.breath ?? this.MAX) + dt * 40);
+    // 화면: '숨참기' 게이지가 점점 차오른다 → 끝까지 차면 익사
+    const fill = Math.round(100 - (ME.breath ?? this.MAX)), show = fill > 0 && !ME.dead;
+    let el = $('#breath'); if (!el) { el = document.createElement('div'); el.id = 'breath'; el.innerHTML = '<div class="bt">숨참기</div><div class="bb"><div class="bf"></div></div>'; document.body.appendChild(el); }
+    const key = show ? fill : -1; if (key === this.shown) return; this.shown = key;
+    el.style.display = show ? '' : 'none'; if (show) { el.querySelector('.bf').style.width = fill + '%'; el.classList.toggle('low', fill >= 70); }
   },
 };

@@ -1,4 +1,4 @@
-// @v 2026101416
+// @v 2026101419
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -419,7 +419,7 @@ const NET = {
         const banned = BANS.has(m.id);
         if (banned && !m.adm) { this.kick(conn, true); break; } // 관리자라고 주장하면 서명 검증 후 판단
         const rp = getRemote(m.id); rp.name = m.n; setRemoteOutfit(rp, m.o); rp._nk = null; refreshRemoteName(rp);
-        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) }); ECON.broadcast();
+        conn.send({ t: 'welcome', id: ME.id, n: ME.name, o: ME.outfit, time: G.time, wt: G.weather, plots: PLOTS.filter(p => p.state !== 'empty').map(plotState), trees: TREES.filter(t => t.cutAt && !t.alive).map(t => t.idx), dyn: [...vehicles.values()].filter(v => v.dyn).map(v => [v.id, v.model, v.color, v.x, v.z, v.yaw, v.owner]), picks: [...PICKUPS.values()].map(p => [p.id, p.x, p.z, p.amount, p.loot || 0]), seats: [...vehicles.values()].filter(v => v.driver && !v.taxiCab).map(v => [v.id, v.driver, v.passenger]) }); ECON.broadcast();
         for (const c of this.conns) { if (c === conn || !c.pid) continue; const o = G.players.get(c.pid); if (o) try { conn.send({ t: 'peer', f: ME.id, id: c.pid, n: o.name, o: o.char.outfit }); } catch (e) { } }
         this.relay({ t: 'peer', f: ME.id, id: m.id, n: m.n, o: m.o, join: 1 }, conn);
         if (m.adm && ADMIN.enabled()) ADMIN.challenge(conn, banned); // nonce 발급 → 관리자가 서명으로 증명하면 자동 방장 이전
@@ -446,7 +446,7 @@ const NET = {
         G.time = m.time; G.weather = m.wt; for (const s of m.plots) applyPlotState(s);
         for (const i of m.trees) if (TREES[i] && TREES[i].alive) setTreeVisible(TREES[i], false);
         for (const d of m.dyn) if (!vehicles.has(d[0])) { const v = new Vehicle(d[0], d[1], d[2], d[3], d[4], d[5], { owner: d[6] }); v.dyn = true; }
-        for (const p of m.picks) if (!PICKUPS.has(p[0])) spawnPickup(p[1], p[2], p[3], p[0]);
+        for (const p of m.picks) if (!PICKUPS.has(p[0])) spawnPickup(p[1], p[2], p[3], p[0], LOOT.clean(p[4]));
         for (const s of m.seats) { const v = vehicles.get(s[0]); if (v) { v.driver = s[1]; v.passenger = s[2]; } }
         toast(`✅ ${m.n}의 서불리 시티에 접속!`); UI.chatLine(null, `${m.n}님의 방에 접속했습니다`); this.updateRoomInfo(); break;
       }
@@ -530,9 +530,10 @@ const NET = {
       case 'vspawn': { if (!VMODELS[m.model] || typeof m.id !== 'string') break; let v = vehicles.get(m.id); if (v && v.model !== m.model) { if (ME.vehicle === v) exitVehicle(true); v.remove(); v = null; } if (!v) { v = new Vehicle(m.id, m.model, m.color, m.x, m.z, m.yaw, { owner: m.owner }); v.dyn = true; } else { v.x = m.x; v.z = m.z; v.yaw = m.yaw; v.y = groundHeight(m.x, m.z); v.reset && (v.hp = v.M.hp, v.dead = false, v.burnT = 0); } v.ctrl = 'remote'; break; }
       case 'tree': { const t = TREES[m.i]; if (t && t.alive) fellTree(t, m.y); if (G.isHost && t) t.cutAt = G.t; break; }
       case 'treeGrow': { const t = TREES[m.i]; if (t && !t.alive) setTreeVisible(t, true); break; }
-      case 'pick': { if (!G.isHost) break; const p = PICKUPS.get(m.id); if (!p) break; removePickup(m.id); this.send({ t: 'pickRm', id: m.id, by: f, a: p.amount }); break; }
-      case 'pickRm': { removePickup(m.id); if (m.by === ME.id) { ME.money += m.a; sfx('cash'); toast(`💵 +${fmtMoney(m.a)}`); } break; }
-      case 'pickAdd': if (!G.isHost && !PICKUPS.has(m.id)) spawnPickup(m.x, m.z, m.a, m.id); break;
+      case 'pick': { if (!G.isHost) break; const p = PICKUPS.get(m.id); if (!p) break; removePickup(m.id); this.send({ t: 'pickRm', id: m.id, by: f, a: p.amount, l: p.loot || undefined }); break; }
+      case 'pickRm': { removePickup(m.id); if (m.by === ME.id) { const l = LOOT.clean(m.l); if (l) LOOT.apply(l); else { ME.money += m.a; sfx('cash'); toast(`💵 +${fmtMoney(m.a)}`); } } break; }
+      case 'dropLoot': { if (!G.isHost) break; const pl = G.players.get(f); const l = LOOT.clean(m.l); if (!pl || !l || G.t < (LOOT.lastBy[f] || 0)) break; LOOT.lastBy[f] = G.t + 8; spawnPickup(+m.x || pl.x, +m.z || pl.z, 0, null, l); break; }
+      case 'pickAdd': if (!G.isHost && !PICKUPS.has(m.id)) spawnPickup(m.x, m.z, m.a, m.id, LOOT.clean(m.l)); break;
       case 'buyLand': case 'build': case 'collect': if (G.isHost) { const rp = G.players.get(f); hostPlotRequest(m, f, rp ? rp.name : '?'); } break;
       case 'plot': applyPlotState(m.p); break;
       case 'plots': for (const s of m.ps) applyPlotState(s); break;

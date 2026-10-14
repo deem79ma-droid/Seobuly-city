@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101418
 
 // ================= PLAYER =================
 const ME = {
@@ -41,10 +41,7 @@ const ME = {
     if ((wasWanted > 0 || this.warrant) && !ADMIN.on) { this.wanted = Math.max(wasWanted, this.warrant ? 2 : 0); UI.updateStars(); toast('🚔 병원 앞에 경찰이 기다리고 있었다…', 3200); setTimeout(() => { if (!this.jail && !this.dead && !ADMIN.on && !COURT.pending) { announce('🚔 체포', '죽는다고 수배가 풀리지 않는다'); LAW.arrest(); } }, 3600); }
   },
 };
-const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45, zoom: 1 };
-// 🔍 확대/축소: 마우스 휠 · 폰은 두 손가락 핀치 (0.35 = 가깝게 ~ 2.6 = 멀리)
-function camZoom(f) { CAM.zoom = clamp(CAM.zoom * f, 0.35, 2.6); try { localStorage.setItem('sbc3d_zoom', CAM.zoom.toFixed(2)); } catch (e) { } }
-try { const z = +localStorage.getItem('sbc3d_zoom'); if (z) CAM.zoom = clamp(z, 0.35, 2.6); } catch (e) { }
+const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
 const KEYS = {}; const INP = { mx: 0, mz: 0, run: false, fire: false, aim: false, touchRun: false, joyMag: 0 };
 let pointerLocked = false;
 // 한글 입력 상태(ㅈㄴㅁㅇ… 또는 IME 'Process')에서도 WASD·단축키가 동작하도록, 글자키는 물리 키(e.code)로 맞춘다
@@ -55,7 +52,8 @@ function initInput() {
     if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { if (e.isComposing || e.keyCode === 229) { const ci = document.activeElement; if (!ci._imeWait) { ci._imeWait = true; ci.addEventListener('compositionend', () => setTimeout(() => { ci._imeWait = false; if (!ci.classList.contains('hidden')) UI.sendChat(); }, 0), { once: true }); } } else UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
     if (!G.started) return; const k = keyOf(e); KEYS[k] = true; KEYS[e.code] = true;
     if (PHOTO.on) { PHOTO.key(k, true); if (k === ' ' || k === 'tab' || k === 'enter') e.preventDefault(); return; } // 📸 사진 모드: 키를 가로챈다
-    if (k === 'k' && !e.repeat && !UI.menuOpen) { PHOTO.enter(); return; }
+    if (k === 'k' && !e.repeat && !UI.menuOpen && !DRIVE.on()) { PHOTO.enter(); return; }
+    if (DRIVE.on() && !UI.menuOpen) { if (!e.repeat) { if (k === 'e' || k === 'f') doInteract(); else if (k === 'h') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else if (k === 'm') UI.openMap(); else if (k === 'p' || k === 'escape' || k === 'tab') { e.preventDefault(); UI.openPhone(); } } if (k === ' ' || k.startsWith('arrow')) e.preventDefault(); return; } // 🚗 운전 중: 방향·가속·브레이크(드리프트)·내리기 + 경적(H)·지도(M)·폰(P)
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
     if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
@@ -78,14 +76,14 @@ function initInput() {
   cv.addEventListener('mousedown', e => {
     if (!G.started || IS_TOUCH) return; AU.init();
     if (!pointerLocked) { cv.requestPointerLock && cv.requestPointerLock(); return; }
-    if (PHOTO.on) return;
+    if (PHOTO.on || DRIVE.on()) return;
     if (e.button === 0) INP.fire = true; if (e.button === 2) INP.aim = true;
   });
   addEventListener('mouseup', e => { if (e.button === 0) INP.fire = false; if (e.button === 2) INP.aim = false; });
   cv.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement === cv; });
   addEventListener('mousemove', e => { if (!pointerLocked || UI.menuOpen) return; const s = (INP.aim ? 0.0011 : 0.0022) * (G.sens || 1); CAM.yaw -= e.movementX * s; CAM.pitch = clamp(CAM.pitch + e.movementY * s, -1.25, 1.3); CAM.lookT = G.t; });
-  addEventListener('wheel', e => { if (!G.started || winOpen()) return; if (PHOTO.on) { PHOTO.wheel(e.deltaY); return; } if (e.shiftKey && !ME.vehicle) { cycleWeapon(e.deltaY > 0 ? 1 : -1); return; } camZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: true }); // 휠 = 확대/축소 · Shift+휠 = 무기 바꾸기
+  addEventListener('wheel', e => { if (!G.started || winOpen()) return; if (PHOTO.on) { PHOTO.wheel(e.deltaY); return; } if (ME.vehicle) return; cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
 }
 function winOpen() { return !!(UI.menuOpen || UI.mapOpen || SHARE.isOpen() || CINE.locked()); }
 function readMoveInput() {
@@ -389,8 +387,8 @@ function updatePlayer(dt) {
   let dx = fwdX * mi.z + rX * mi.x, dz = fwdZ * mi.z + rZ * mi.x; const dl = Math.hypot(dx, dz); if (dl > 0) { dx /= dl; dz /= dl; }
   ME.aiming = INP.aim && !WEAPONS[ME.weapon].melee;
   if (ME.fly) { ADMIN.flyStep(dt, dx, dz, mag); placeChar(); return; }
-  const water = terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1);
-  ME.swim = water;
+  const pool = poolAt(ME.x, ME.z); const water = (terrainH(ME.x, ME.z) < LAND - 1.6 && ME.y < 0.5 && !(deckY(ME.x, ME.z) !== null && ME.y > 1)) || (pool && ME.y < pool.wy + 0.05);
+  ME.swim = !!water; ME.waterY = pool && water ? pool.wy : 0;
   let sprint = (KEYS['shift'] || KEYS['ShiftLeft'] || INP.touchRun || (G.opt.autoRun && mag > 0.1) || (IS_TOUCH && INP.joyMag > 0.92)) && ME.stamina > 1 && !ME.aiming;
   let speed = ME.swim ? (sprint ? 3.6 : 2.4) : ME.aiming ? 2.8 : sprint ? 9.2 + ME.skills.fit * 0.35 : (IS_TOUCH && mag < 0.5 ? 2.2 : 4.8);
   speed *= ME.speedMul || 1;
@@ -415,7 +413,7 @@ function updatePlayer(dt) {
   // vertical
   const gy = floorAt(ME.x, ME.z, ME.y);
   if (ME.swim) { ME.fallTop = null; }
-  if (ME.swim) { ME.y = damp(ME.y, -0.32, 4, dt); ME.vy = 0; ME.grounded = false; if (Math.random() < dt * ME.spd * 0.5) FX.impact({ x: ME.x, y: -0.1, z: ME.z }, 'water'); }
+  if (ME.swim) { ME.y = damp(ME.y, ME.waterY - 0.32, 4, dt); ME.vy = 0; ME.grounded = false; if (Math.random() < dt * ME.spd * 0.5) FX.impact({ x: ME.x, y: ME.waterY - 0.1, z: ME.z }, 'water'); }
   else {
     const jh = KEYS[' '] || INP.jump; ME.coyote = ME.grounded ? 0.12 : (ME.coyote || 0) - dt; ME.jumpBuf = jh ? 0.14 : (ME.jumpBuf || 0) - dt;
     if (ME.jumpBuf > 0 && ME.coyote > 0 && ME.knockT <= 0 && !ME.sitBench) { ME.vy = 5.8; ME.grounded = false; ME.coyote = 0; ME.jumpBuf = 0; INP.jump = false; ME.dance = -1; }
@@ -455,14 +453,14 @@ function updateDriving(dt) {
   if (v.driver !== ME.id) { ME.vehicle = null; return; }
   const mi = readMoveInput();
   const shift = !!(KEYS['shift'] || KEYS['ShiftLeft'] || KEYS['ShiftRight']);
-  const inp = { throttle: mi.z, steer: -mi.x, brake: !!(KEYS[' '] || INP.brake) && v.kind !== 'horse', hand: (shift || INP.drift) && v.kind === 'car' && Math.abs(v.speed) > 6, up: !!(KEYS[' '] || INP.jump || INP.brake), down: shift || !!INP.touchRun };
+  const inp = DRIVE.on() ? DRIVE.input(v) : { throttle: mi.z, steer: -mi.x, brake: !!(KEYS[' '] || INP.brake) && v.kind !== 'horse', hand: (shift || INP.drift) && v.kind === 'car' && Math.abs(v.speed) > 6, up: !!(KEYS[' '] || INP.jump || INP.brake), down: shift || !!INP.touchRun };
   if (v.kind === 'heli') { inp.brake = false; }
   if (v.kind === 'horse' && (KEYS[' '] || INP.jump) && v.y <= v.groundY + 0.05) { v.vy = 6.5; v.y += 0.1; INP.jump = false; }
   if (v.kind === 'horse' && (KEYS['shift'] || INP.touchRun)) inp.throttle *= 1; else if (v.kind === 'horse') inp.throttle *= 0.55;
-  if (IS_TOUCH && INP.joyMag > 0.05) { inp.throttle = clamp(mi.z * 1.4, -1, 1); inp.steer = clamp(-mi.x * 1.2, -1, 1); }
+  if (IS_TOUCH && INP.joyMag > 0.05 && !DRIVE.on()) { inp.throttle = clamp(mi.z * 1.4, -1, 1); inp.steer = clamp(-mi.x * 1.2, -1, 1); }
   v.drive(dt, inp); v.ctrl = 'local';
   if (Math.abs(v.speed) > 4 && (v.kind !== 'heli' || v.y - (v.groundY ?? v.y) < 1.5)) runOverCheck(v, 'me');
-  ENG.set(!v.dead, clamp(Math.abs(v.speed) / v.M.max, 0, 1), v.kind);
+  ENG.set(!v.dead && !v.M.bicycle, clamp(Math.abs(v.speed) / v.M.max, 0, 1), v.kind); // 자전거는 엔진 소리 없음
   if (v.kind === 'bike' && v.lastImpact > 10) { }
   if (v.waterT > 2.5 && v.kind !== 'horse') { exitVehicle(true); toast('🌊 차가 물에 빠졌다!'); }
   if (v.dead && v.burnT === 0) { exitVehicle(true); }
@@ -482,7 +480,6 @@ function updateCamera(dt) {
     tx = ME.x; ty = ME.y + (ME.swim ? 0.9 : ME.sitBench ? 1.2 : 1.6); tz = ME.z; dist = ME.aiming ? 2.0 : 4.3; sh = ME.aiming ? 0.62 : 0.38;
     if (ME.dead) { CAM.yaw += dt * 0.3; dist = 6; CAM.pitch = damp(CAM.pitch, 0.6, 2, dt); }
   }
-  if (!ME.aiming && !ME.dead) dist *= CAM.zoom;
   if (CAM.fp || scope) { dist = 0; sh = 0; }
   CAM.dist = damp(CAM.dist, dist, 10, dt); CAM.sh = damp(CAM.sh, sh, 10, dt);
   const cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch);

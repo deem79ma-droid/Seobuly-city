@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101418
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
@@ -405,7 +405,7 @@ function resolveCircle(x, z, r, y = 0, h = 1.8) {
   _res.hit = false; _res.c = null;
   const list = collidersNear(x, z, r + 2);
   for (let it = 0; it < 2; it++) for (const c of list) {
-    if (y > c.y1 - 0.08 || y + h < c.y0) continue; // 윗면에 서 있으면 충돌 아님 (옥상·바닥 위)
+    if (c.type === 'step' || y > c.y1 - 0.08 || y + h < c.y0) continue; // 윗면에 서 있으면 충돌 아님 (옥상·바닥 위) · step = 낮은 바닥(데크)은 걸어서 올라간다
     if (c.circle) {
       const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), m = r + c.r;
       if (d < m && d > 1e-4) { const k = (m - d); x += dx / d * k; z += dz / d * k; _res.hit = true; _res.nx = dx / d; _res.nz = dz / d; _res.c = c; }
@@ -801,10 +801,46 @@ function buildParkBlock(b) {
   for (let i = 0; i < 18; i++) { const tx = wr(b.ix0 + 4, b.ix1 - 4), tz = wr(b.iz0 + 4, b.iz1 - 4); if (Math.abs(tx - cx) < 5 || Math.abs(tz - cz) < 5) continue; TREES.push({ type: b.region === 'simone' ? 'palm' : wpick(['oak', 'oak', 'birch']), x: tx, z: tz, s: wr(0.8, 1.2) }); }
   for (let i = 0; i < 6; i++) { const bx = cx + wr(-w / 3, w / 3), bz = cz + (i % 2 ? 3.2 : -3.2); BENCHES.push({ x: bx, z: bz, yaw: i % 2 ? Math.PI : 0 }); }
 }
+// ---- 🏊 수영장 물: 물결 · 굴절된 타일 바닥 · 레인 · 빛 무늬(코스틱) · 하늘 반사 · 깊이감 · 들어가면 수영 ----
+const POOLS = []; // { x0, x1, z0, z1, wy (수면 높이), bot (바닥) }
+const POOL_U = { uT: { value: 0 }, uLight: { value: 1 }, uSun: { value: new THREE.Vector3(0.4, 0.8, 0.3) } };
+function makePoolWater(w, d, indoor) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uT: POOL_U.uT, uSun: POOL_U.uSun, uLight: indoor ? { value: 0.95 } : POOL_U.uLight, uSize: { value: new THREE.Vector2(w, d) } },
+    vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `uniform float uT; uniform vec2 uSize; uniform float uLight; uniform vec3 uSun; varying vec2 vUv; varying vec3 vW;
+      float grout(vec2 p){ vec2 g = abs(fract(p / 0.25) - 0.5); return smoothstep(0.44, 0.5, max(g.x, g.y)); }
+      void main(){
+        vec2 p = vUv * uSize; vec3 V = normalize(cameraPosition - vW);
+        vec2 n = vec2(cos(p.x * 1.7 + uT * 1.3), cos(p.y * 1.9 - uT * 1.1)) * 0.05 + vec2(cos((p.x + p.y) * 3.1 + uT * 2.3), cos((p.x - p.y) * 2.7 - uT * 1.9)) * 0.03 + vec2(sin(p.y * 5.3 + uT * 3.1), sin(p.x * 4.7 + uT * 2.6)) * 0.015;
+        vec3 N = normalize(vec3(n.x, 1.0, n.y));
+        float D = 1.6; vec2 b = p - V.xz / max(V.y, 0.25) * D * 0.45 + n * 0.5; b = clamp(b, vec2(0.0), uSize);
+        vec2 e = min(b, uSize - b); float edge = min(e.x, e.y);
+        vec3 bottom = mix(vec3(0.66, 0.88, 0.95), vec3(0.42, 0.62, 0.72), grout(b) * 0.6);
+        float lane = (1.0 - smoothstep(0.035, 0.05, abs(fract(b.y / 2.5) - 0.5))) * step(1.2, b.x) * step(1.2, uSize.x - b.x);
+        bottom = mix(bottom, vec3(0.07, 0.18, 0.42), clamp(lane, 0.0, 1.0) * 0.8);
+        vec2 q = b * 1.3; float c = abs(sin(q.x * 2.0 + sin(q.y * 1.7 + uT * 1.4) + uT * 0.9)) + abs(sin(q.y * 2.3 + sin(q.x * 1.5 - uT * 1.2) - uT * 0.8));
+        c = pow(clamp(1.0 - c * 0.5, 0.0, 1.0), 4.0); bottom += c * 0.5 * uLight;
+        float path = D / max(V.y, 0.2); vec3 ab = exp(-vec3(0.42, 0.11, 0.055) * path);
+        vec3 under = (bottom * ab + vec3(0.0, 0.2, 0.33) * (1.0 - ab)) * uLight * mix(0.6, 1.0, smoothstep(0.0, 0.7, edge));
+        vec3 R = reflect(-V, N); vec3 sky = mix(vec3(0.55, 0.7, 0.86), vec3(0.88, 0.94, 1.0), clamp(R.y, 0.0, 1.0)) * uLight;
+        float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+        vec3 col = mix(under, sky, fres * 0.85) + pow(max(dot(R, normalize(uSun)), 0.0), 600.0) * 0.9 * uLight;
+        gl_FragColor = vec4(col, 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; return m;
+}
+function addPool(cx, cz, w, d, wy) { POOLS.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, wy, bot: wy - 1.8 }); }
+function poolAt(x, z) { for (const p of POOLS) if (x > p.x0 + 0.25 && x < p.x1 - 0.25 && z > p.z0 + 0.25 && z < p.z1 - 0.25) return p; return null; }
 function buildOutdoorPool(lot) {
   const cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2, w = lot.x1 - lot.x0 - 6, d = lot.z1 - lot.z0 - 6;
-  const m = mbAt('plain', cx, cz); m.box(cx, LAND - 0.2, cz, w, 0.6, d, C(0xe8eef0));
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, d * 0.6), MAT.poolWater); p.rotation.x = -Math.PI / 2; p.position.set(cx, LAND + 0.42, cz); scene.add(p);
+  const m = mbAt('plain', cx, cz); const pw = w * 0.7, pd = d * 0.6;
+  // 데크: 물 자리를 비워 둔 테두리 4조각 (올라설 수 있다)
+  for (const [bx0, bz0, bx1, bz1] of [[cx - w / 2, cz - d / 2, cx + w / 2, cz - pd / 2], [cx - w / 2, cz + pd / 2, cx + w / 2, cz + d / 2], [cx - w / 2, cz - pd / 2, cx - pw / 2, cz + pd / 2], [cx + pw / 2, cz - pd / 2, cx + w / 2, cz + pd / 2]]) { m.box((bx0 + bx1) / 2, LAND - 0.2, (bz0 + bz1) / 2, bx1 - bx0, 0.6, bz1 - bz0, C(0xe8eef0)); addCollider(bx0, bz0, bx1, bz1, LAND + 0.4, 'step'); }
+  const p = makePoolWater(pw, pd, false); p.position.set(cx, LAND + 0.38, cz); scene.add(p); addPool(cx, cz, pw, pd, LAND + 0.38);
+  for (const [sx, sz, ww, dd] of [[0, -1, pw + 0.6, 0.3], [0, 1, pw + 0.6, 0.3], [-1, 0, 0.3, pd], [1, 0, 0.3, pd]]) m.box(cx + sx * (pw / 2 + 0.15), LAND + 0.38, cz + sz * (pd / 2 + 0.15), ww, 0.06, dd, C(0xf6f6f2)); // 테두리 (코핑)
   for (let i = 0; i < 6; i++) m.box(cx - w * 0.3 + i * w * 0.12, LAND + 0.4, cz + d * 0.4, 0.9, 0.35, 2, C(0xffffff));
 }
 function makePlot(lot, side, R) {
@@ -1157,22 +1193,22 @@ function buildPlaza() {
   addCircleCollider(0, 0, 11, 'prop', null, LAND + 1);
   SMOKERS.push({ x: 0, y: LAND + 3.9, z: 0, fountain: true, rate: 0.01, big: true });
   // club (open-air)
-  const c = CLUB; m.box(c.x, LAND - 0.2, c.z, c.w, 0.8, c.d, C(0x15121c));
+  const c = CLUB; m.box(c.x, LAND - 0.2, c.z, c.w, 0.24, c.d, C(0x15121c)); // 바닥은 땅 높이 (예전엔 0.6m 높아서 사람이 바닥·조명 속에 빠져 보였다)
   const tiles = new MB(); const tw = 2.4;
-  for (let i = -6; i < 6; i++) for (let j = -5; j < 4; j++) tiles.box(c.x + i * tw + tw / 2, LAND + 0.61, c.z + j * tw + tw / 2 + 2, tw - 0.15, 0.05, tw - 0.15, CS(Math.random(), Math.random(), Math.random()));
+  for (let i = -6; i < 6; i++) for (let j = -5; j < 4; j++) tiles.box(c.x + i * tw + tw / 2, LAND + 0.045, c.z + j * tw + tw / 2 + 2, tw - 0.15, 0.03, tw - 0.15, CS(Math.random(), Math.random(), Math.random()));
   danceFloor = new THREE.Mesh(tiles.geo(), new THREE.MeshBasicMaterial({ vertexColors: true })); scene.add(danceFloor);
   // stage / dj
-  m.box(c.x, LAND + 0.6, c.z - c.d / 2 + 5, 18, 1.4, 7, C(0x222230)); m.box(c.x, LAND + 2, c.z - c.d / 2 + 5, 6, 1.2, 1.6, C(0x111111));
+  m.box(c.x, LAND + 0.04, c.z - c.d / 2 + 5, 18, 1.96, 7, C(0x222230)); m.box(c.x, LAND + 2, c.z - c.d / 2 + 5, 6, 1.2, 1.6, C(0x111111));
   addCollider(c.x - 9, c.z - c.d / 2 + 1.5, c.x + 9, c.z - c.d / 2 + 8.5, LAND + 2, 'prop');
-  for (const sx of [-1, 1]) { m.box(c.x + sx * 12, LAND + 0.6, c.z - c.d / 2 + 4, 3, 7, 3, C(0x0d0d0d)); addCollider(c.x + sx * 12 - 1.5, c.z - c.d / 2 + 2.5, c.x + sx * 12 + 1.5, c.z - c.d / 2 + 5.5, LAND + 8); }
+  for (const sx of [-1, 1]) { m.box(c.x + sx * 12, LAND + 0.04, c.z - c.d / 2 + 4, 3, 7.56, 3, C(0x0d0d0d)); addCollider(c.x + sx * 12 - 1.5, c.z - c.d / 2 + 2.5, c.x + sx * 12 + 1.5, c.z - c.d / 2 + 5.5, LAND + 8); }
   // truss frame
   const mm = mbAt('metalPlain', c.x, c.z);
-  for (const [px, pz] of [[-c.w / 2 + 1, -c.d / 2 + 1], [c.w / 2 - 1, -c.d / 2 + 1], [-c.w / 2 + 1, c.d / 2 - 1], [c.w / 2 - 1, c.d / 2 - 1]]) { mm.box(c.x + px, LAND + 0.6, c.z + pz, 0.6, 12, 0.6, C(0x444444)); addCollider(c.x + px - 0.3, c.z + pz - 0.3, c.x + px + 0.3, c.z + pz + 0.3); }
+  for (const [px, pz] of [[-c.w / 2 + 1, -c.d / 2 + 1], [c.w / 2 - 1, -c.d / 2 + 1], [-c.w / 2 + 1, c.d / 2 - 1], [c.w / 2 - 1, c.d / 2 - 1]]) { mm.box(c.x + px, LAND + 0.04, c.z + pz, 0.6, 12.56, 0.6, C(0x444444)); addCollider(c.x + px - 0.3, c.z + pz - 0.3, c.x + px + 0.3, c.z + pz + 0.3); }
   mm.box(c.x, LAND + 12.6, c.z - c.d / 2 + 1, c.w, 0.6, 0.6, C(0x444444)); mm.box(c.x, LAND + 12.6, c.z + c.d / 2 - 1, c.w, 0.6, 0.6, C(0x444444));
   mm.box(c.x - c.w / 2 + 1, LAND + 12.6, c.z, 0.6, 0.6, c.d, C(0x444444)); mm.box(c.x + c.w / 2 - 1, LAND + 12.6, c.z, 0.6, 0.6, c.d, C(0x444444));
   addSign('DJ BOOTH', '클럽 네온 메인 스테이지', '#2a0a4a', c.x, LAND + 7.5, c.z - c.d / 2 + 1.0, 14, 3.5, 0, '#ff6af0');
   const fc = { id: FACILITIES.length, type: 'club', name: '클럽 네온 (바)', icon: '🪩', region: 'plaza', x: c.x + c.w / 2 - 5, z: c.z + c.d / 2 - 5, cx: c.x, cz: c.z, side: 's' }; fc.ring = addDoorRing(fc.x, fc.z, 0xff4fd8); FACILITIES.push(fc);
-  m.box(fc.x, LAND + 0.6, fc.z - 1.6, 6, 1.1, 1, C(0x5a2a6a));
+  m.box(fc.x, LAND + 0.04, fc.z - 1.6, 6, 1.1, 1, C(0x5a2a6a)); addCollider(fc.x - 3, fc.z - 2.1, fc.x + 3, fc.z - 1.1, LAND + 1.14, 'prop'); // 바 카운터 (부딪힌다)
   // ---- 클럽 건물: 벽 · 지붕 · 네온 외관 · 입구(남쪽) ----
   { const H = 11, T = 0.8, wc = C(0x1c1428), y0 = LAND - 0.2, x0 = c.x - c.w / 2, x1 = c.x + c.w / 2, z0 = c.z - c.d / 2, z1 = c.z + c.d / 2, gap = 10;
     const wm = mbAt('plain', c.x, c.z), gl = mbAt('glow', c.x, c.z);

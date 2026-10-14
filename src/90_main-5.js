@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101419
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -237,7 +237,7 @@ function frame(dt, noRender) {
   renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
-  if (PHOTO.on) PHOTO.update(dt); else { updateCamera(dt); CINE.update(dt); } FISH.tick(dt); LAWX.tick(dt); CAREER.tick(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
+  if (PHOTO.on) PHOTO.update(dt); else { updateCamera(dt); CINE.update(dt); } FISH.tick(dt); LAWX.tick(dt); CAREER.tick(dt); DRIVE.tick(); BREATH.tick(dt); LOOT.tick(); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
   const fx = ME.vehicle ? ME.vehicle : ME; updateEnv(dt, { x: fx.x, y: fx.y, z: fx.z }); updateGrass(camera.position.x, camera.position.z);
   // headlight spot for my car
   const cl = ENV.carLight; if (ME.vehicle && ENV.night > 0.3 && ME.vehicle.kind !== 'horse') { const v = ME.vehicle; cl.intensity = 220; cl.position.set(v.x + Math.sin(v.yaw) * 2, v.y + 1, v.z + Math.cos(v.yaw) * 2); cl.target.position.set(v.x + Math.sin(v.yaw) * 25, v.y - 1, v.z + Math.cos(v.yaw) * 25); } else cl.intensity = 0;

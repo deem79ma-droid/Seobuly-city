@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101418
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -127,9 +127,9 @@ const UI = {
     }
   },
   openDealer(f) {
-    const list = ['hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike', 'heli'];
+    const list = ['bicycle', 'hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike', 'heli'];
     this.openMenu('🚗 자동차 판매점', `구매한 차는 차고에 저장되고 휴대폰으로 언제든 부를 수 있다 · 보유 ${ME.garage.length}대`, list.map(k => {
-      const M = VMODELS[k]; return { ic: M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h · ${M.seats || 4}인승${M.kind === 'heli' ? ' · 하늘을 난다' : ''}`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
+      const M = VMODELS[k]; return { ic: M.bicycle ? '🚲' : M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h · ${M.seats || 4}인승${M.kind === 'heli' ? ' · 하늘을 난다' : ''}`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
     }));
   },
   openGarage(x, z) {
@@ -417,10 +417,9 @@ const UI = {
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
     // look
     const look = $('#look'); let lid = null, lx = 0, ly = 0;
-    let pin = 0; const pinD = e => { const a = e.touches[0], b = e.touches[1]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }; // 🔍 두 손가락 핀치 = 확대/축소
-    look.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); if (e.touches.length >= 2) { pin = pinD(e); lid = null; return; } const t = e.changedTouches[0]; lid = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
-    look.addEventListener('touchmove', e => { e.preventDefault(); if (pin && e.touches.length >= 2) { const d = pinD(e); if (d > 10) { camZoom(pin / d); pin = d; } return; } for (const t of e.changedTouches) if (t.identifier === lid) { const s = INP.aim ? 0.0035 : 0.0062; CAM.yaw -= (t.clientX - lx) * s; CAM.pitch = clamp(CAM.pitch + (t.clientY - ly) * s, -1.25, 1.3); lx = t.clientX; ly = t.clientY; CAM.lookT = G.t; } }, { passive: false });
-    const lend = e => { if (e.touches.length < 2) pin = 0; for (const t of e.changedTouches) if (t.identifier === lid) lid = null; }; look.addEventListener('touchend', lend); look.addEventListener('touchcancel', lend);
+    look.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); const t = e.changedTouches[0]; lid = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
+    look.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === lid) { const s = INP.aim ? 0.0035 : 0.0062; CAM.yaw -= (t.clientX - lx) * s; CAM.pitch = clamp(CAM.pitch + (t.clientY - ly) * s, -1.25, 1.3); lx = t.clientX; ly = t.clientY; CAM.lookT = G.t; } }, { passive: false });
+    const lend = e => { for (const t of e.changedTouches) if (t.identifier === lid) lid = null; }; look.addEventListener('touchend', lend); look.addEventListener('touchcancel', lend);
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;

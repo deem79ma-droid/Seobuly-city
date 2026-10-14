@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101419
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -73,7 +73,7 @@ function spawnPedNear(p, px, pz) {
   if (!p.identityPlaced) { pedSetIdentity(p, pedKindFor(R), (Math.random() * 1e9) | 0); p.identityPlaced = true; }
   if (p.kind === 'civ' && isNight() && Math.random() < 0.45) { p.state = 'parked'; p.nextTry = G.t + rnd(6, 15); return false; } // 밤에는 거리에 사람이 적다
   if (!p.homeAssigned) { p.homeX = p.x; p.homeZ = p.z; p.homeAssigned = true; } pedStartRoutine(p);
-  if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.62; p.dance = Math.floor(Math.random() * 8); }
+  if (R === 'plaza' && p.kind === 'civ' && Math.random() < 0.3) { p.state = 'club'; p.x = CLUB.x + rnd(-12, 12); p.z = CLUB.z + rnd(-8, 8); p.y = LAND + 0.06; p.dance = Math.floor(Math.random() * 8); }
   p.fallGroundY = p.y; p.spawnT = G.t; return true;
 }
 function initPeds() { for (let i = 0; i < N_PED; i++) { const p = makePed(i); pedSetIdentity(p, 'civ', i * 7919 + 13); p.state = 'parked'; p.x = 0; p.z = 0; } }
@@ -276,12 +276,20 @@ function panicAround(x, z, r) {
   for (const q of PEDS) if ((q.kind === 'civ' || q.kind === 'worker' || q.kind === 'medic') && (q.state === 'walk' || q.state === 'idle' || q.state === 'talk' || q.state === 'club' || q.state === 'sit' || q.state === 'goto') && Math.abs(q.x - x) < r && Math.abs(q.z - z) < r) { q.state = 'flee'; q.timer = rnd(6, 12); q.fx = x; q.fz = z; q.dance = -1; }
   for (const an of ANIMALS) if (!an.S.predator && an.state !== 'dead' && an.state !== 'follow' && Math.abs(an.x - x) < r && Math.abs(an.z - z) < r) { an.state = 'flee'; an.timer = 6; an.fx = x; an.fz = z; }
 }
-function spawnPickup(x, z, amount, id) {
-  id = id || 'k' + (pickupSeq++) + '_' + (typeof ME !== 'undefined' ? String(ME.id).slice(-5) : ''); const y = groundHeight(x, z) + 0.4;
-  const m = new THREE.Group(); const bill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.18), new THREE.MeshStandardMaterial({ color: 0x3aa04a, emissive: 0x1a6a2a, emissiveIntensity: 0.8 })); m.add(bill);
-  const b2 = bill.clone(); b2.position.y = 0.07; b2.rotation.y = 0.4; m.add(b2); m.position.set(x, y, z); scene.add(m);
-  PICKUPS.set(id, { id, x, y, z, amount, mesh: m });
-  if (G.isHost && G.online) NET.send({ t: 'pickAdd', id, x, z, a: amount });
+function spawnPickup(x, z, amount, id, loot) {
+  id = id || 'k' + (pickupSeq++) + '_' + (typeof ME !== 'undefined' ? String(ME.id).slice(-5) : ''); const y = (loot ? Math.max(groundHeight(x, z), 0) : groundHeight(x, z)) + 0.4; // 가방은 물에 뜬다
+  const m = new THREE.Group();
+  if (loot) { // 💼 죽은 사람이 떨군 가방
+    const bm = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8, emissive: 0x2a1408, emissiveIntensity: 0.6 });
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.28), bm); m.add(bag);
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.06, 0.3), new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.8 })); flap.position.y = 0.2; m.add(flap);
+    const hd = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.025, 6, 12, Math.PI), bm); hd.position.y = 0.22; m.add(hd);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 24), new THREE.MeshBasicMaterial({ color: 0xffd34a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = -0.36; m.add(ring);
+  } else { const bill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.18), new THREE.MeshStandardMaterial({ color: 0x3aa04a, emissive: 0x1a6a2a, emissiveIntensity: 0.8 })); m.add(bill);
+    const b2 = bill.clone(); b2.position.y = 0.07; b2.rotation.y = 0.4; m.add(b2); }
+  m.position.set(x, y, z); scene.add(m);
+  PICKUPS.set(id, { id, x, y, z, amount, mesh: m, loot: loot || null, t: G.t });
+  if (G.isHost && G.online) NET.send({ t: 'pickAdd', id, x, z, a: amount, l: loot || undefined });
   return id;
 }
 function removePickup(id) { const p = PICKUPS.get(id); if (!p) return; scene.remove(p.mesh); PICKUPS.delete(id); }

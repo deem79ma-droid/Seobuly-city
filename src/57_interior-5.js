@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101418
 
 // ================= 건물 실내 (모든 건물 입장 가능) =================
 // 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
@@ -60,6 +60,7 @@ function floorAt(x, z, y) {
     if (x < c.x0 || x > c.x1 || z < c.z0 || z > c.z1) continue;
     if (c.y1 <= y + 0.6 && c.y1 > g) g = c.y1;
   }
+  const pl = poolAt(x, z); if (pl && y <= pl.wy + 0.6) g = pl.bot; // 수영장 안은 깊다
   return g;
 }
 const INTERIOR = {
@@ -342,7 +343,7 @@ const INTERIOR = {
       }
       case 'pool': {
         box(0, 0.003, -1, W - 6, 0.02, D - 9, 0x9ad8f0);
-        { const p = new THREE.Mesh(new THREE.PlaneGeometry(W - 7, D - 10), MAT.poolWater); MAT.poolWater.userData.shared = true; p.rotation.x = -Math.PI / 2; p.position.set(X(0), O.y + 0.06, Z(-1)); group.add(p); }
+        { const p = makePoolWater(W - 7, D - 10, true); p.position.set(X(0), O.y + 0.06, Z(-1)); group.add(p); if (!POOLS.some(q => Math.abs(q.x0 - (X(0) - (W - 7) / 2)) < 0.01 && Math.abs(q.wy - (O.y + 0.06)) < 0.01)) addPool(X(0), Z(-1), W - 7, D - 10, O.y + 0.06); } // 실내 수영장 (들어가면 수영)
         for (let i = 0; i < 5; i++) { box(-hw + 2 + i * 2.2, 0, hd - 2.2, 0.8, 0.35, 1.8, 0xffffff); box(-hw + 2 + i * 2.2, 0.35, hd - 1.5, 0.8, 0.4, 0.3, 0xffffff); }
         facItem(hw - 2.5, hd - 2.5, fac ? '🏊 수영장 카운터' : undefined); part(hw - 2.5, hd - 4.6, title + ' 안내 데스크', 550);
         break;
