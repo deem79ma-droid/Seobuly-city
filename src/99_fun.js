@@ -1,4 +1,4 @@
-// @v 2026101420
+// @v 2026101421
 
 // ================= 🎣 낚시 · 📸 사진 모드 · 💬 휴대폰 문자 =================
 
@@ -350,7 +350,7 @@ const BREATH = {
       if (ME.breath <= 0) { ME.breath = 0; ME.lastW = 'drown'; ME.hp = 0; ME.die('drown'); toast('🫧 숨을 못 쉬어 익사했다', 4000); } // 즉시 사망 (조끼·체력 무시)
     } else ME.breath = Math.min(this.MAX, (ME.breath ?? this.MAX) + dt * 40);
     // 화면: '숨참기' 게이지가 점점 차오른다 → 끝까지 차면 익사
-    const fill = Math.round(100 - (ME.breath ?? this.MAX)), show = fill > 0 && !ME.dead;
+    const fill = Math.round(100 - (ME.breath ?? this.MAX)), show = fill > 0 && !ME.dead && !!ME.swim && !ME.vehicle; // 물속에 있을 때만 보인다 (나오면 바로 사라지고 숨은 따로 찬다)
     let el = $('#breath'); if (!el) { el = document.createElement('div'); el.id = 'breath'; el.innerHTML = '<div class="bt">숨참기</div><div class="bb"><div class="bf"></div></div>'; document.body.appendChild(el); }
     const key = show ? fill : -1; if (key === this.shown) return; this.shown = key;
     el.style.display = show ? '' : 'none'; if (show) { el.querySelector('.bf').style.width = fill + '%'; el.classList.toggle('low', fill >= 70); }
