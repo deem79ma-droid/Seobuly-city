@@ -1,4 +1,4 @@
-import glob, os, hashlib
+import glob, os, hashlib, json
 root = os.path.dirname(os.path.abspath(__file__))
 src = os.path.join(root, 'src')
 import re
@@ -86,10 +86,79 @@ if os.environ.get('KEEP_EMOJI') != '1':
     js = _strip(js); tpl = _strip(tpl)
     open(os.path.join(out_dir, 'game.mjs'), 'w', encoding='utf-8').write(js)
 out = tpl.replace('/*__JS__*/', js)
+# ================= 보안: CDN 파일 무결성(SRI) + 콘텐츠 보안 정책(CSP) =================
+# SRI: 빌드할 때 CDN 파일을 받아 지문(sha384)을 찍어 둔다 → CDN 파일이 바뀌거나 조작되면 브라우저가 실행을 거부한다.
+#      (빌드하는 곳이 인터넷에 못 붙으면 SRI만 빼고 정상 빌드. SRI=0 으로 끌 수 있다)
+# CSP: 이 페이지가 실행할 수 있는 스크립트(우리 코드 지문 + 허용한 CDN)와 접속할 수 있는 서버를 정해 둔다
+#      → 채팅·이름 등에 악성 코드가 섞여 들어와도 실행되지 않는다 (XSS 차단)
+import base64, urllib.request, urllib.parse
+PEER = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js'
+TROOT = 'https://cdn.jsdelivr.net/npm/three@0.160.0/'
+def _sri(data): return 'sha384-' + base64.b64encode(hashlib.sha384(data).digest()).decode()
+def _fetch(url):
+    loc = os.environ.get('SRI_LOCAL_THREE')  # 테스트용: three 파일을 로컬 폴더에서 읽는다
+    if loc and url.startswith(TROOT): return open(os.path.join(loc, url[len(TROOT):]), 'rb').read()
+    if os.environ.get('SRI_LOCAL_PEER') and url == PEER: return open(os.environ['SRI_LOCAL_PEER'], 'rb').read()
+    req = urllib.request.Request(url, headers={'User-Agent': 'seobuly-build', 'Accept-Encoding': 'identity'})
+    with urllib.request.urlopen(req, timeout=25) as r:
+        if r.status != 200: raise RuntimeError('HTTP %d' % r.status)
+        return r.read()
+sri = {}
+if os.environ.get('SRI', '1') != '0':
+    try:
+        pj = _fetch(PEER)
+        if b'Peer' not in pj or len(pj) < 20000: raise RuntimeError('peerjs 파일이 이상함')
+        sri[PEER] = _sri(pj)
+        todo = [TROOT + 'build/three.module.js'] + [TROOT + 'examples/jsm/' + m for m in re.findall(r"from 'three/addons/([^']+)'", js)]
+        seen = set()
+        while todo:
+            u = todo.pop()
+            if u in seen: continue
+            seen.add(u); data = _fetch(u)
+            if len(data) < 200: raise RuntimeError('파일이 너무 작음: ' + u)
+            sri[u] = _sri(data)
+            for rel in re.findall(r"""(?:from|import)\s*['"](\.{1,2}/[^'"]+)['"]""", data.decode('utf-8', 'replace')):
+                todo.append(urllib.parse.urljoin(u, rel))
+        print('SRI: CDN 파일', len(sri), '개 지문 등록')
+    except Exception as e:
+        print('SRI 생략 (CDN에 연결할 수 없음):', e); sri = {}
+_pa = (' integrity="%s" crossorigin="anonymous"' % sri[PEER]) if PEER in sri else ''
+out = out.replace(' __SRI_PEERJS__', _pa).replace('__SRI_PEERJS2__', _pa)
+if sri:
+    def _imap(mm):
+        o = json.loads(mm.group(1)); o['integrity'] = {u: h for u, h in sri.items() if u.startswith(TROOT)}
+        return '<script type="importmap">' + json.dumps(o, separators=(',', ':')) + '</script>'
+    out = re.sub(r'<script type="importmap">(.*?)</script>', _imap, out, count=1, flags=re.S)
+_inl = re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', out, flags=re.S)
+_hs = ' '.join("'sha256-%s'" % base64.b64encode(hashlib.sha256(x.encode('utf-8')).digest()).decode() for x in _inl)
+_conn = ["'self'", 'https://0.peerjs.com', 'wss://0.peerjs.com', 'https://cdn.jsdelivr.net']
+if srv:
+    _h = urllib.parse.urlparse(srv).netloc
+    if _h: _conn += ['https://' + _h, 'wss://' + _h]
+CSP = '; '.join([
+    "default-src 'self'",
+    "script-src 'self' " + _hs + ' https://cdn.jsdelivr.net https://unpkg.com',
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob:",
+    'connect-src ' + ' '.join(_conn),
+    "media-src 'self' data: blob:",
+    "worker-src 'self' blob:",
+    "object-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-src 'none'", "manifest-src 'self'",
+    'upgrade-insecure-requests',
+])
+if os.environ.get('CSP') == '0': CSP = ''
+out = out.replace('<meta http-equiv="Content-Security-Policy" content="__CSP__">\n', ('<meta http-equiv="Content-Security-Policy" content="%s">\n' % CSP) if CSP else '')
 open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8').write(out)
 # ---- 검색엔진/공유용 정적 파일 (og.png, robots.txt, sitemap.xml) → 배포 폴더로 복사 ----
 import shutil
 for f in ('og.png', 'robots.txt', 'sitemap.xml'):
     s_, d_ = os.path.join(root, f), os.path.join(out_dir, f)
     if os.path.exists(s_) and os.path.abspath(s_) != os.path.abspath(d_): shutil.copyfile(s_, d_)
+# ---- 사람 3D 모델 (models/*.glb) → 배포 폴더로 복사 ----
+_md = os.path.join(root, 'models')
+if os.path.isdir(_md) and os.path.abspath(_md) != os.path.abspath(os.path.join(out_dir, 'models')):
+    os.makedirs(os.path.join(out_dir, 'models'), exist_ok=True)
+    for f in os.listdir(_md):
+        if f.endswith('.glb'): shutil.copyfile(os.path.join(_md, f), os.path.join(out_dir, 'models', f))
 print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF', '| server:', srv or 'P2P')
