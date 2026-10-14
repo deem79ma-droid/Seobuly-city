@@ -160,6 +160,7 @@ for _dn, _ext in (('models', '.glb'), ('music', '.mp3')):  # 3D 모델 · 배경
     _md = os.path.join(root, _dn)
     if os.path.isdir(_md) and os.path.abspath(_md) != os.path.abspath(os.path.join(out_dir, _dn)):
         os.makedirs(os.path.join(out_dir, _dn), exist_ok=True)
-        for f in os.listdir(_md):
-            if f.endswith(_ext): shutil.copyfile(os.path.join(_md, f), os.path.join(out_dir, _dn, f))
+        for _r, _ds, _fs in os.walk(_md):  # 하위 폴더에 들어가 있어도 찾아서 music/ 바로 아래로 모은다
+            for f in _fs:
+                if f.endswith(_ext): shutil.copyfile(os.path.join(_r, f), os.path.join(out_dir, _dn, f))
 print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF', '| server:', srv or 'P2P')
