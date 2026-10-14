@@ -1,4 +1,4 @@
-// @v 2026101414
+// @v 2026101420
 
 // ================= CHARACTERS =================
 const OPT = {
@@ -367,6 +367,7 @@ class Character {
     this.nameTag = textSprite(text, color); this.nameTag.position.y = 2.15; this.root.add(this.nameTag);
   }
   say(text, dur = 5) {
+    if (this.npcVoice && typeof VOICE !== 'undefined') VOICE.chatter(this);
     if (this.bubble) disposeSprite(this.bubble);
     text = String(text ?? ''); this.bubble = textSprite(text.length > 34 ? text.slice(0, 33) + '…' : text, '#111', 'rgba(255,255,255,.92)', 40); this.bubble.position.y = this.nameTag ? 2.5 : 2.2; this.bubbleT = dur; this.root.add(this.bubble);
   }

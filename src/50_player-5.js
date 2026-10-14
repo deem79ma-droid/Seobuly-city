@@ -1,4 +1,4 @@
-// @v 2026101418
+// @v 2026101420
 
 // ================= PLAYER =================
 const ME = {
@@ -12,7 +12,7 @@ const ME = {
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
     // 방탄조끼 = 목숨 하나 더: 조끼가 남아 있는 동안은 피해를 전부 조끼가 대신 받고, 다 닳으면 부서져 사라진다 (영구 보호 아님)
     if (this.armor > 0 && amt > 0) { const a = Math.min(this.armor, amt); this.armor -= a; amt -= a; if (this.armor <= 0.05) { this.armor = 0; toast('🦺 방탄조끼가 부서졌다 — 이제 맨몸이다', 3000); sfx('hit'); FX.emoji('💥', this.x, this.y + 1.6, this.z, 0.4); } }
-    this.lastW = w; this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
+    this.lastW = w; this.hp -= amt; this.combatT = G.t + 4; if (amt > 0.5 && this.hp > 0) VOICE.pain(this.char, this.x, this.z, false); UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);
     const rec = () => { if (typeof POLICE !== 'undefined') POLICE.onHurt(from, amt, w); }; // 신고용 피해 기록
@@ -22,12 +22,13 @@ const ME = {
   },
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
-    if (this.dead || adminGod()) { if (adminGod()) this.hp = 100; return; } this.dead = true; this.deadT = 0; this.hp = 0; if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
+    if (this.dead || adminGod()) { if (adminGod()) this.hp = 100; return; } this.dead = true; this.deadT = 0; this.hp = 0; VOICE.pain(this.char, this.x, this.z, true); if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
     if (from && from !== this.id && G.players.has(from) && ECON.E.bounty && ECON.E.bounty[this.id]) ECON.req({ a: 'bhit', k: from }); // 내 목의 현상금 → 처치한 사람에게
     CINE_EV.death(); $('#death').classList.remove('hidden'); $('#deathSub').textContent = (WILD_DEATH[this.lastW] ? WILD_DEATH[this.lastW] + ' · ' : '') + '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
-    const lost = loseAllOnDeath(); const dl = $('#deathLoss'); // 사망하면 현금·무기·탄약·아이템·산 옷을 전부 잃는다
-    if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } const cd = document.createElement('div'); cd.style.color = '#9fe0ff'; cd.textContent = `💳 카드는 그대로 — 잔액 ${fmtMoney(CARD.bal)}`; dl.appendChild(cd); }
-    if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 모두 잃었다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품을 모두 잃었다', sys: 1 }); }
+    const loot = LOOT.take(); const lost = loseAllOnDeath(); const dl = $('#deathLoss'); // 사망하면 현금·무기·탄약·아이템을 그 자리에 가방으로 떨군다 (산 옷은 잃는다)
+    if (loot) LOOT.drop(this.x, this.z, loot);
+    if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = loot ? '떨어뜨린 것 — 죽은 자리 가방을 주우면 되찾는다 (남이 먼저 주울 수도)' : '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } const cd = document.createElement('div'); cd.style.color = '#9fe0ff'; cd.textContent = `💳 카드는 그대로 — 잔액 ${fmtMoney(CARD.bal)}`; dl.appendChild(cd); }
+    if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 떨어뜨렸다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품 가방을 떨어뜨렸다', sys: 1 }); }
   },
   respawn() {
     if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
@@ -427,7 +428,7 @@ function updatePlayer(dt) {
   // footsteps
   if (ME.grounded && ME.spd > 1) { ME.stepT -= dt * ME.spd; if (ME.stepT <= 0) { ME.stepT = 1.6; sfx('step'); } }
   // pickups
-  for (const [id, p] of PICKUPS) if (Math.abs(p.x - ME.x) < 1.2 && Math.abs(p.z - ME.z) < 1.2 && Math.abs(p.y - ME.y) < 2) { if (G.isHost) { removePickup(id); ME.money += p.amount; sfx('cash'); toast(`💵 +${fmtMoney(p.amount)}`); NET.send({ t: 'pickRm', id }); } else { if (!p.req) { p.req = 1; NET.send({ t: 'pick', id }); } } }
+  for (const [id, p] of PICKUPS) if (Math.abs(p.x - ME.x) < 1.2 && Math.abs(p.z - ME.z) < 1.2 && Math.abs(p.y - ME.y) < 2) { if (ME.dead) continue; if (G.isHost) { removePickup(id); if (p.loot) LOOT.apply(p.loot); else { ME.money += p.amount; sfx('cash'); toast(`💵 +${fmtMoney(p.amount)}`); } NET.send({ t: 'pickRm', id }); } else { if (!p.req) { p.req = 1; NET.send({ t: 'pick', id }); } } }
   placeChar(); ME._py = ME.y;
 }
 function placeChar() {

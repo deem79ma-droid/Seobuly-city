@@ -1,4 +1,4 @@
-// @v 2026101419
+// @v 2026101420
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -508,7 +508,7 @@ const NET = {
         if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;
       }
-      case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
+      case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; VOICE.pain(rp.char, rp.x, rp.z, !!m.dead); rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
       case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': case 'bounty': if (m.to === ME.id) handlePersonal(m); break;

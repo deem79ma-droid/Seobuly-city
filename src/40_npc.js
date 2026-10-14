@@ -1,4 +1,4 @@
-// @v 2026101419
+// @v 2026101420
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -34,7 +34,7 @@ function pedSetIdentity(p, kind, seed) {
   p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined; p.homeX = p.x; p.homeZ = p.z;
 }
 function pedEnsureChar(p) {
-  if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
+  if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); p.char.npcVoice = true; scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
 }
 function placePedOnEdge(p, e, t, side, dir) {
   const E = EDGES[e]; const a = NODES[E.a], b = NODES[E.b]; p.e = e; p.t = t; p.side = side; p.dir = dir;
@@ -242,7 +242,7 @@ function showShot(a, b, w, imp) {
 // damage to ped (host authoritative)
 function pedDamage(p, amt, from, opts = {}) {
   if (!p || p.state === 'dead' || p.state === 'parked') return;
-  p.hp -= amt; if (p.char) p.char.flash = 0.2; p.act = 'hit'; p.actT = 0;
+  p.hp -= amt; if (p.char) p.char.flash = 0.2; p.act = 'hit'; p.actT = 0; if (typeof VOICE !== 'undefined') VOICE.pain(p.char, p.x, p.z, p.hp <= 0);
   const fromPlayer = from && !String(from).startsWith('n');
   if (fromPlayer) {
     // wanted / grudge

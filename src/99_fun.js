@@ -1,4 +1,4 @@
-// @v 2026101419
+// @v 2026101420
 
 // ================= 🎣 낚시 · 📸 사진 모드 · 💬 휴대폰 문자 =================
 
@@ -243,19 +243,22 @@ const LAWX = {
 const DRIVE = {
   on() { const v = ME.vehicle; return !!(v && ME.seat === 'd' && !v.taxiCab && (v.kind === 'car' || v.kind === 'bike')); },
   input(v) {
-    const K = KEYS; const acc = !!(K['w'] || K['arrowup'] || INP.dAcc), L = !!(K['a'] || K['arrowleft'] || INP.dL), R = !!(K['d'] || K['arrowright'] || INP.dR), brk = !!(K[' '] || K['s'] || K['arrowdown'] || INP.dBrk);
-    const inp = { throttle: acc ? 1 : 0, steer: (L ? 1 : 0) - (R ? 1 : 0), brake: false, hand: false, up: false, down: false };
+    const K = KEYS; const accV = K['w'] || K['arrowup'] ? 1 : INP.dAcc ? (INP.dAccV ?? 1) : 0, acc = accV > 0, L = !!(K['a'] || K['arrowleft'] || INP.dL), R = !!(K['d'] || K['arrowright'] || INP.dR), brk = !!(K[' '] || K['s'] || K['arrowdown'] || INP.dBrk);
+    const inp = { pedal: true, throttle: accV, steer: (L ? 1 : 0) - (R ? 1 : 0), brake: false, hand: false, up: false, down: false };
     if (brk) { if (v.speed > 2.5) { inp.brake = true; inp.hand = v.speed > 6 && (L || R); inp.throttle = 0; } else if (v.speed < -2.5) inp.brake = true; else inp.throttle = -1; } // 멈췄을 때 브레이크를 누르고 있으면 천천히 후진
     return inp;
   },
   ui() {
     let el = $('#driveUI'); if (el) return el;
     el = document.createElement('div'); el.id = 'driveUI';
-    el.innerHTML = '<button type="button" data-k="dL" class="dl">◀</button><button type="button" data-k="dR" class="dr">▶</button><button type="button" data-k="dBrk" class="db">브레이크<small>드리프트</small></button><button type="button" data-k="dAcc" class="da">▲<small>가속</small></button><button type="button" data-k="out" class="dout">내리기</button><button type="button" data-k="horn" class="dhorn">경적</button><button type="button" data-k="phone" class="dph">폰</button><button type="button" data-k="map" class="dmap">지도</button>';
+    el.innerHTML = '<button type="button" data-k="dL" class="dl">◀</button><button type="button" data-k="dR" class="dr">▶</button><button type="button" data-k="dBrk" class="db">브레이크<small>드리프트</small></button><button type="button" data-k="dAcc" class="da"><span class="pd"><i></i><i></i><i></i><i></i><i></i></span><small>액셀</small><b class="pv"></b></button><button type="button" data-k="out" class="dout">내리기</button><button type="button" data-k="horn" class="dhorn">경적</button><button type="button" data-k="phone" class="dph">폰</button><button type="button" data-k="map" class="dmap">지도</button>';
     for (const b of el.querySelectorAll('button')) {
       const k = b.dataset.k;
-      const on = e => { e.preventDefault(); e.stopPropagation(); AU.init && AU.init(); if (k === 'out') { doInteract(); return; } if (k === 'horn') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); b.classList.add('on'); return; } if (k === 'phone') { UI.openPhone(); return; } if (k === 'map') { UI.openMap(); return; } INP[k] = true; b.classList.add('on'); };
-      const off = e => { e.preventDefault(); if (k.startsWith('d')) INP[k] = false; b.classList.remove('on'); };
+      // 🦶 액셀 페달: 위쪽을 누를수록 세게 밟는다 (아래 30% ~ 위 100%) · 누른 채 손가락을 위아래로 움직여 조절
+      const pedal = e => { const t = e.targetTouches && e.targetTouches[0]; if (!t) return; const r = b.getBoundingClientRect(); const v = clamp(0.3 + 0.7 * (r.bottom - t.clientY) / r.height, 0.3, 1); INP.dAccV = v; b.style.setProperty('--p', v.toFixed(2)); };
+      if (k === 'dAcc') b.addEventListener('touchmove', e => { e.preventDefault(); pedal(e); }, { passive: false });
+      const on = e => { e.preventDefault(); e.stopPropagation(); AU.init && AU.init(); if (k === 'dAcc') pedal(e); if (k === 'out') { doInteract(); return; } if (k === 'horn') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); b.classList.add('on'); return; } if (k === 'phone') { UI.openPhone(); return; } if (k === 'map') { UI.openMap(); return; } INP[k] = true; b.classList.add('on'); };
+      const off = e => { e.preventDefault(); if (k.startsWith('d')) INP[k] = false; if (k === 'dAcc') { INP.dAccV = 0; b.style.setProperty('--p', 0); } b.classList.remove('on'); };
       b.addEventListener('touchstart', on, { passive: false }); b.addEventListener('touchend', off, { passive: false }); b.addEventListener('touchcancel', off);
     }
     document.body.appendChild(el); return el;
@@ -263,7 +266,35 @@ const DRIVE = {
   tick() {
     const on = this.on() && G.started; document.body.classList.toggle('driving', on);
     if (IS_TOUCH) { const el = this.ui(); el.style.display = on && !UI.menuOpen ? '' : 'none'; }
-    if (!on) INP.dAcc = INP.dL = INP.dR = INP.dBrk = false;
+    if (!on) { INP.dAcc = INP.dL = INP.dR = INP.dBrk = false; INP.dAccV = 0; }
+  },
+};
+
+// ---------- 🔊 목소리: 맞는 소리 · 죽는 소리 (남/여) · NPC 말소리 ----------
+// 파일: music/male_hit.mp3 female_hit.mp3 male_death.mp3 female_death.mp3 villager_chatter.mp3
+const VOICE = {
+  FILES: ['male_hit', 'female_hit', 'male_death', 'female_death', 'villager_chatter'], buf: {}, loading: false, lastChat: 0,
+  load() {
+    if (this.loading || !AU.ctx) return; this.loading = true;
+    for (const n of this.FILES) fetch('music/' + n + '.mp3').then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(a => AU.ctx.decodeAudioData(a)).then(b => { this.buf[n] = b; }).catch(() => {});
+  },
+  play(n, x, z, vol, range) {
+    const b = this.buf[n], c = AU.ctx; if (!b || !c) { this.load(); return false; }
+    const s = AU.spatial(x, z, range), v = s.v * vol; if (v < 0.02) return false;
+    const src = c.createBufferSource(); src.buffer = b; const g = c.createGain(); g.gain.value = Math.min(1, v); src.connect(g); g.connect(AU.out(s.p)); src.start(); return true;
+  },
+  female(ch) { return !!(ch && ch.outfit && ch.outfit.body === 'f'); },
+  // 맞았을 때 / 죽었을 때 (dead=true)
+  pain(ch, x, z, dead) {
+    if (!ch) return; const k = this.female(ch) ? 'female' : 'male'; const t = G.t;
+    if (dead) { if (t < (ch._vd || 0)) return; ch._vd = t + 3; this.play(k + '_death', x, z, 1, 60); return; }
+    if (t < (ch._vh || 0)) return; ch._vh = t + 0.7; this.play(k + '_hit', x, z, 0.9, 45);
+  },
+  // NPC가 말풍선으로 말할 때 (나에게 말을 걸 때 포함)
+  chatter(ch) {
+    if (!ch || !ch.root || !ch.root.visible) return; const t = G.t; if (t < this.lastChat || t < (ch._vc || 0)) return;
+    const p = ch.root.position; if (Math.hypot(p.x - ME.x, p.z - ME.z) > 30) return;
+    if (this.play('villager_chatter', p.x, p.z, 0.55, 30)) { this.lastChat = t + 1.5; ch._vc = t + 6; }
   },
 };
 
