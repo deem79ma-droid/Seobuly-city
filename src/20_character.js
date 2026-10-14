@@ -1,14 +1,20 @@
-// @v 2026101322
+// @v 2026101410
 
 // ================= CHARACTERS =================
 const OPT = {
   body: [['m', '남성형'], ['f', '여성형']],
   skin: ['#f8dcc8', '#f0c6a6', '#e0aa84', '#c48a62', '#9a6644', '#6a4430'],
   eyeColor: [['#3a2a1a', '갈색'], ['#4a6a8a', '파랑'], ['#5a8a5a', '녹색'], ['#6a4a3a', '헤이즐'], ['#2a2a2a', '검정']],
-  hair: [['short', '숏컷'], ['buzz', '반삭'], ['long', '장발'], ['ponytail', '포니테일'], ['bob', '단발'], ['curly', '곱슬'], ['spiky', '스파이키'], ['mohawk', '모히칸'], ['bald', '삭발']],
-  hairColor: ['#1a1412', '#3a2418', '#6a4024', '#a87038', '#e0c070', '#c8c8c8', '#d04060', '#4060d0', '#f0f0f0'],
-  top: [['tshirt', '반팔티'], ['long', '긴팔티'], ['hoodie', '후드티'], ['jacket', '재킷'], ['tank', '나시'], ['suit', '정장'], ['police', '경찰복'], ['doctor', '의사 가운'], ['vest', '조끼(작업복)']],
-  bottom: [['jeans', '청바지'], ['slacks', '슬랙스'], ['cargo', '카고바지'], ['shorts', '반바지'], ['skirt', '치마']],
+  hair: [['short', '숏컷'], ['side', '가르마펌'], ['buzz', '반삭'], ['undercut', '투블럭'], ['slick', '올백'], ['long', '생머리 장발'], ['wavy', '웨이브 장발'], ['ponytail', '포니테일'], ['twin', '양갈래'], ['bun', '똥머리'], ['bob', '단발'], ['curly', '곱슬'], ['afro', '아프로'], ['spiky', '스파이키'], ['mohawk', '모히칸'], ['bald', '삭발']],
+  face: [['oval', '계란형'], ['round', '동그란 얼굴'], ['long', '긴 얼굴'], ['square', '각진 턱'], ['vline', 'V라인']],
+  eyes: [['normal', '보통 눈'], ['big', '큰 눈'], ['narrow', '가는 눈'], ['round', '동그란 눈'], ['droopy', '처진 눈'], ['sharp', '올라간 눈']],
+  brow: [['normal', '보통'], ['thick', '진한 눈썹'], ['thin', '얇은 눈썹'], ['arched', '아치형'], ['straight', '일자 눈썹']],
+  nose: [['normal', '보통 코'], ['small', '작은 코'], ['big', '큰 코'], ['sharp', '오똑한 코']],
+  mark: [['none', '없음'], ['freckles', '주근깨'], ['mole', '점'], ['blush', '홍조']],
+  acc: [['none', '없음'], ['necklace', '목걸이'], ['earrings', '귀걸이'], ['watch', '손목시계'], ['backpack', '백팩'], ['bag', '크로스백'], ['scarf', '목도리']],
+  hairColor: ['#1a1412', '#3a2418', '#6a4024', '#a87038', '#5a2a1a', '#2a2420', '#e0c070', '#c8c8c8', '#d04060', '#4060d0', '#f0f0f0'],
+  top: [['tshirt', '반팔티'], ['stripe', '줄무늬티'], ['long', '긴팔티'], ['shirt', '셔츠'], ['sweater', '니트'], ['hoodie', '후드티'], ['jacket', '재킷'], ['coat', '롱코트'], ['dress', '원피스'], ['tank', '나시'], ['suit', '정장'], ['police', '경찰복'], ['doctor', '의사 가운'], ['vest', '조끼(작업복)']],
+  bottom: [['jeans', '청바지'], ['slacks', '슬랙스'], ['wide', '와이드 팬츠'], ['cargo', '카고바지'], ['leggings', '레깅스'], ['shorts', '반바지'], ['skirt', '치마'], ['longskirt', '롱스커트']],
   hat: [['none', '없음'], ['cap', '야구모자'], ['beanie', '비니'], ['fedora', '중절모'], ['helmet', '안전모'], ['police', '경찰모'], ['bandana', '두건']],
   glasses: [['none', '없음'], ['glasses', '안경'], ['sunglasses', '선글라스']],
   beard: [['none', '없음'], ['stubble', '수염 자국'], ['full', '턱수염']],
@@ -18,9 +24,10 @@ function randomOutfit(r = Math.random, kind = 'civ') {
   const p = a => a[Math.floor(r() * a.length)]; const v = a => p(a)[0] ?? p(a);
   const body = r() < 0.5 ? 'm' : 'f';
   const o = {
-    body, skin: p(OPT.skin), hair: body === 'f' ? p(['long', 'ponytail', 'bob', 'curly', 'short']) : p(['short', 'buzz', 'spiky', 'curly', 'short', 'mohawk', 'bald']),
-    hairColor: p(OPT.hairColor.slice(0, 6)), top: p(['tshirt', 'long', 'hoodie', 'jacket', 'tank', 'tshirt', 'suit']), topColor: p(COLORS_CLOTH),
-    bottom: body === 'f' ? p(['jeans', 'skirt', 'slacks', 'shorts']) : p(['jeans', 'slacks', 'cargo', 'shorts']), bottomColor: p(['#2a3a5a', '#1c1c22', '#5a4a3a', '#8a8a90', '#3a4a6a', '#c8b89a']),
+    body, skin: p(OPT.skin), hair: body === 'f' ? p(['long', 'wavy', 'ponytail', 'twin', 'bun', 'bob', 'curly', 'short', 'long']) : p(['short', 'side', 'buzz', 'undercut', 'slick', 'spiky', 'curly', 'short', 'afro', 'mohawk', 'bald']),
+    hairColor: p(OPT.hairColor.slice(0, 8)), top: body === 'f' ? p(['tshirt', 'stripe', 'long', 'shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'dress', 'tank']) : p(['tshirt', 'stripe', 'long', 'shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'tank', 'suit']), topColor: p(COLORS_CLOTH),
+    bottom: body === 'f' ? p(['jeans', 'skirt', 'longskirt', 'slacks', 'wide', 'leggings', 'shorts']) : p(['jeans', 'slacks', 'wide', 'cargo', 'shorts']), bottomColor: p(['#2a3a5a', '#1c1c22', '#5a4a3a', '#8a8a90', '#3a4a6a', '#c8b89a', '#f2f2f2', '#6a2a3a']),
+    face: p(OPT.face)[0], eyes: p(OPT.eyes)[0], brow: p(OPT.brow)[0], nose: p(OPT.nose)[0], mark: r() < 0.7 ? 'none' : p(OPT.mark)[0], acc: r() < 0.55 ? 'none' : p(OPT.acc)[0], stripeColor: p(COLORS_CLOTH),
     shoes: p(['#1a1a1a', '#f0f0f0', '#6a3a1a', '#d03a3a', '#3a6ad0']), hat: r() < 0.25 ? p(['cap', 'beanie', 'fedora']) : 'none', hatColor: p(COLORS_CLOTH),
     glasses: r() < 0.2 ? p(['glasses', 'sunglasses']) : 'none', beard: body === 'm' && r() < 0.25 ? p(['stubble', 'full']) : 'none', eyeColor: p(OPT.eyeColor)[0],
   };
@@ -68,6 +75,11 @@ function initCharGeo() {
   CG.collar = new THREE.TorusGeometry(0.066, 0.016, 8, 22); CG.collar.rotateX(Math.PI / 2);
   CG.toe = new THREE.SphereGeometry(0.06, 14, 10, 0, TAU, 0, Math.PI / 2); // 신발 앞코 (둥근)
   CG.coat = new THREE.CylinderGeometry(0.19, 0.26, 0.55, 24, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
+  CG.fringe = new THREE.SphereGeometry(0.131, 22, 8, Math.PI / 2 - 1.05, 2.1, 0.08 * Math.PI, 0.27 * Math.PI); // 앞머리 (이마를 덮는 머리카락)
+  CG.fringeM = new THREE.SphereGeometry(0.13, 22, 6, Math.PI / 2 - 0.95, 1.9, 0.05 * Math.PI, 0.21 * Math.PI); // 남자 짧은 앞머리 (이마가 조금 보인다)
+  CG.lock = new THREE.CapsuleGeometry(0.028, 0.15, 4, 10); // 옆머리
+  CG.lid = new THREE.BoxGeometry(0.05, 0.008, 0.012); // 윗눈꺼풀 · 속눈썹 선
+  CG.lip = new THREE.SphereGeometry(0.02, 14, 8);
 }
 function M(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); return m; }
 // ---- weapons ----
@@ -113,7 +125,19 @@ class Character {
     this.pose = {}; this.flash = 0;
     this.buildSkeleton(); this.setOutfit(outfit || randomOutfit());
     this.shadow = opts.shadow !== false; this.setShadow(this.shadow);
+    Character.all.add(this); // 3D 모델(가까운 사람) 관리용
   }
+  // ---- 3D 모델 켜기/끄기 (21_human) ----
+  setHi(on) {
+    if (on && !this.hm) { this.hm = HUMAN.make(this); if (!this.hm) return; }
+    if (on && this.hm && this.hm.key !== (this.outfit.body === 'f' && HUMAN.base.f ? 'f' : 'm') && HUMAN.base[this.outfit.body === 'f' ? 'f' : 'm']) { this.root.remove(this.hm.root); this.hm = HUMAN.make(this); }
+    this.hiOn = !!on;
+    if (on) { HUMAN.colors(this); if (this.hm.root.parent !== this.root) this.root.add(this.hm.root); this.hm.root.visible = true; this.P.spine.scale.y = this.hm.B.spineK; }
+    else { if (this.hm) this.hm.root.visible = false; const P = this.P; P.spine.scale.y = 1; P.head.position.set(0, 0.08, 0); P.handL.position.set(0, -0.26, 0); P.handR.position.set(0, -0.26, 0); }
+    this.applyVis();
+  }
+  // 3D 모델일 때: 얼굴(머리 뼈 아래)과 장식(치마·코트·가방…)만 남기고 기본 몸은 숨긴다
+  applyVis() { if (!this.meshes) return; const hi = !!this.hiOn; for (const m of this.meshes) { const show = !hi || m.parent === this.P.head || m.userData.keep; m.visible = show && (!m.userData.det || this.detail !== false); } }
   buildSkeleton() {
     const b = this.body; const P = this.P = {};
     P.hips = new THREE.Group(); P.hips.position.y = 0.95; b.add(P.hips);
@@ -137,38 +161,50 @@ class Character {
     if (this.meshes) for (const m of this.meshes) m.parent && m.parent.remove(m);
     this.meshes = []; const add = (parent, m, shadow = true, det = false) => { parent.add(m); this.meshes.push(m); m.castShadow = shadow; if (det) m.userData.det = true; return m; };
     const addD = (parent, m) => add(parent, m, false, true); // 가까이서만 보이는 디테일 (멀면 숨겨 성능 확보)
+    const K = m => { m.userData.keep = true; return m; }; // 3D 모델 위에도 입히는 장식
     const skin = cmat(o.skin, 0.62), top = cmat(o.topColor, 0.85), bot = cmat(o.bottomColor, 0.88), shoe = cmat(o.shoes, 0.5), hairM = cmat(o.hairColor, 0.55), hatM = cmat(o.hatColor || '#333', 0.7);
     const f = o.body === 'f';
-    const longSleeve = ['long', 'hoodie', 'jacket', 'suit', 'police', 'doctor'].includes(o.top); const noSleeve = o.top === 'tank' || o.top === 'vest';
-    const longPants = !['shorts', 'skirt'].includes(o.bottom);
+    const longSleeve = ['long', 'hoodie', 'jacket', 'suit', 'police', 'doctor', 'shirt', 'sweater', 'coat'].includes(o.top); const noSleeve = o.top === 'tank' || o.top === 'vest';
+    const dress = o.top === 'dress' && f; const skirtB = dress || o.bottom === 'skirt' || o.bottom === 'longskirt';
+    const longPants = !['shorts', 'skirt', 'longskirt'].includes(o.bottom) && !dress;
+    const botM = dress ? top : bot; const legW = o.bottom === 'wide' ? 1.22 : o.bottom === 'leggings' ? 0.88 : 1;
     // torso
-    add(P.spine, M(CG.chest, top, 0, 0.27, 0, f ? 1.12 : 1.28, 1, f ? 0.74 : 0.78));
-    if (f) { // Smooth garment silhouette instead of two small spherical bumps.
-      for (const side of [-1, 1]) { const curve = add(P.spine, M(CG.sph, top, side * 0.074, 0.345, 0.067, 0.104, 0.092, 0.087)); curve.rotation.z = -side * 0.10; }
+    // 몸통: 어깨는 넓고 허리는 잘록하게 (남성 역삼각형 · 여성 잘록한 허리와 넓은 골반)
+    add(P.spine, M(CG.chest, top, 0, 0.27, 0, f ? 1.04 : 1.16, 1, f ? 0.72 : 0.76));
+    add(P.spine, M(CG.sph, top, 0, 0.41, -0.005, f ? 0.168 : 0.205, f ? 0.11 : 0.125, f ? 0.112 : 0.124)); // 가슴 · 어깨 윗부분
+    if (f) { // 가슴선: 아래쪽이 자연스럽게 처지는 물방울 모양 (가운데는 이어지게)
+      add(P.spine, M(CG.sph, top, 0, 0.336, 0.048, 0.112, 0.066, 0.07)).rotation.x = -0.38; // 하나로 이어진 부드러운 가슴선 (아래쪽이 자연스럽게 처진다)
     }
-    add(P.hips, M(CG.pelvis, o.bottom === 'skirt' ? bot : bot, 0, 0.0, 0, f ? 1.12 : 1.05, 0.62, 0.78));
-    add(P.spine, M(CG.neck, skin, 0, 0.6, 0));
-    if (o.top === 'tank' || o.top === 'tshirt') add(P.spine, M(CG.sph, skin, 0, 0.52, 0.055, 0.075, 0.045, 0.04), false);
+    add(P.hips, M(CG.pelvis, botM, 0, 0.0, 0, f ? 1.16 : 1.05, 0.62, 0.8));
+    if (o.top === 'stripe') { const sm = cmat(o.stripeColor || '#f2f2f2', 0.85); for (let i = 0; i < 5; i++) add(P.spine, M(CG.cyl, sm, 0, 0.1 + i * 0.085, 0, (f ? 0.162 : 0.18) * (i > 2 ? 1.16 : 1), 0.022, (f ? 0.112 : 0.118) * (i > 2 ? 1.1 : 1)), false); }
+    if (o.top === 'shirt') { const sc = cmat(new THREE.Color(o.topColor).multiplyScalar(0.85).getStyle(), 0.8); for (const sx of [1, -1]) add(P.spine, M(CG.box, sc, 0.04 * sx, 0.535, 0.075, 0.06, 0.025, 0.05)).rotation.set(0.5, 0, 0.5 * sx); for (let i = 0; i < 5; i++) addD(P.spine, M(CG.sph, cmat('#f2f2f2', 0.4), 0, 0.12 + i * 0.08, f ? 0.112 : 0.118, 0.007, 0.007, 0.004)); }
+    if (o.top === 'sweater') { const rib = cmat(new THREE.Color(o.topColor).multiplyScalar(0.8).getStyle(), 0.95); add(P.spine, M(CG.cyl, rib, 0, 0.02, 0, f ? 0.165 : 0.18, 0.06, f ? 0.115 : 0.12)); add(P.spine, M(CG.collar, rib, 0, 0.548, 0.004, 1.2, 1.6, 1.05)); }
+    if (o.top === 'coat') { K(add(P.hips, M(CG.coat, top, 0, -0.27, 0, 1.05, 1.55, 0.9))); for (const sx of [1, -1]) addD(P.spine, M(CG.sph, cmat('#222', 0.4, 0.3), 0.045 * sx, 0.2, 0.122, 0.01, 0.01, 0.005)); add(P.spine, M(CG.collar, top, 0, 0.55, 0.005, 1.35, 2.2, 1.15)); }
+    add(P.spine, M(CG.neck, skin, 0, 0.6, 0, f ? 0.92 : 1.12, 1, f ? 0.92 : 1.1));
+    if (o.top === 'tank') add(P.spine, M(CG.sph, skin, 0, 0.515, 0.05, 0.06, 0.036, 0.03), false); // 나시: 목 아래 살짝 드러난 피부
     if (o.top === 'suit' || o.top === 'jacket' || o.top === 'doctor') {
       add(P.spine, M(CG.box, cmat(o.top === 'suit' ? '#f4f4f4' : o.top === 'doctor' ? '#a8c8e8' : '#e8e8e8', 0.8), 0, 0.36, 0.115, 0.08, 0.32, 0.02));
       if (o.top === 'suit') add(P.spine, M(CG.box, cmat('#a01828', 0.6), 0, 0.33, 0.128, 0.03, 0.26, 0.01));
     }
     if (o.top === 'police') { add(P.spine, M(CG.box, cmat('#e8c040', 0.3, 0.8), 0.08, 0.42, 0.11, 0.035, 0.045, 0.01)); add(P.hips, M(CG.cyl, cmat('#111111', 0.6), 0, 0.06, 0, 0.19, 0.05, 0.13)); }
-    if (o.top === 'hoodie') { add(P.spine, M(CG.cap(0.5, 0.14), top, 0, 0.5, -0.08, 1.05, 0.7, 0.9)).rotation.x = -1.9; add(P.spine, M(CG.box, top, 0, 0.12, 0.115, 0.2, 0.1, 0.02)); }
+    if (o.top === 'hoodie') { K(add(P.spine, M(CG.cap(0.5, 0.14), top, 0, 0.5, -0.08, 1.05, 0.7, 0.9))).rotation.x = -1.9; add(P.spine, M(CG.box, top, 0, 0.12, 0.115, 0.2, 0.1, 0.02)); }
     if (o.top === 'vest') { add(P.spine, M(CG.chest, cmat(o.topColor, 0.7), 0, 0.28, 0, 1.33, 0.95, 0.84)); add(P.spine, M(CG.box, cmat('#e8e8e8', 0.3, 0.3), 0, 0.3, 0.128, 0.26, 0.03, 0.01)); }
-    if (o.top === 'doctor') add(P.hips, M(CG.coat, top, 0, -0.18, 0, 1, 1, 0.85)).material = cmat('#ffffff', 0.85);
+    if (o.top === 'doctor') K(add(P.hips, M(CG.coat, top, 0, -0.18, 0, 1, 1, 0.85))).material = cmat('#ffffff', 0.85);
     // arms
     for (const s of ['L', 'R']) {
       const sx = s === 'L' ? 1 : -1;
-      add(P['sh' + s], M(CG.sph, noSleeve ? skin : top, 0, -0.01, 0, 0.075, 0.07, 0.075));
+      add(P['sh' + s], M(CG.sph, noSleeve ? skin : top, 0, -0.014, 0, 0.059, 0.06, 0.06));
       add(P['sh' + s], M(CG.uarm, noSleeve ? skin : top, 0, -0.14, 0));
       add(P['el' + s], M(CG.farm, longSleeve ? top : skin, 0, -0.12, 0));
-      add(P['hand' + s], M(CG.hand, skin, 0, 0.0, 0, 1, 1.15, 0.9));
-      add(P['hip' + s], M(CG.thigh, bot, 0, -0.22, 0, f ? 1.05 : 1, 1, 1));
-      add(P['kn' + s], M(CG.shin, longPants ? bot : skin, 0, -0.21, 0));
+      add(P['hand' + s], M(CG.hand, skin, 0, -0.004, 0, 0.66, 1.12, 0.94)); // 손바닥 (옆으로 납작)
+      addD(P['hand' + s], M(CG.sph, skin, 0, -0.05, 0.006, 0.024, 0.036, 0.038)); // 모은 손가락
+      add(P['hip' + s], M(CG.thigh, skirtB && o.bottom !== 'leggings' ? (dress || o.bottom === 'longskirt' ? botM : skin) : bot, 0, -0.22, 0, (f ? 1.05 : 1) * legW, 1, legW));
+      add(P['kn' + s], M(CG.shin, longPants ? bot : skin, 0, -0.21, 0, legW, 1, legW));
       add(P['an' + s], M(CG.foot, shoe, 0, -0.005, 0.0));
     }
-    if (o.bottom === 'skirt') add(P.hips, M(CG.skirt, bot, 0, -0.17, 0));
+    if (o.bottom === 'skirt' && !dress) K(add(P.hips, M(CG.skirt, bot, 0, -0.17, 0)));
+    if (o.bottom === 'longskirt' && !dress) K(add(P.hips, M(CG.skirt, bot, 0, -0.33, 0, 1.05, 1.85, 1.05)));
+    if (dress) K(add(P.hips, M(CG.skirt, top, 0, -0.22, 0, 1.08, 1.3, 1.08)));
     if (o.bottom === 'cargo') for (const s of [1, -1]) add(P['hip' + (s > 0 ? 'L' : 'R')], M(CG.box, bot, 0.075 * s, -0.25, 0, 0.03, 0.1, 0.08));
     // ---- 옷 디테일 (가까이서만) : 신발 밑창·앞코, 벨트, 칼라/라펠, 소매·바짓단, 엄지 ----
     { const dark = new THREE.Color(o.shoes).getHSL({}).l < 0.35; const sole = cmat(dark ? '#e8e6e0' : '#2a2a2a', 0.9);
@@ -181,32 +217,39 @@ class Character {
       if (o.top === 'hoodie') for (const sx of [1, -1]) addD(P.spine, M(CG.cyl, cmat('#f2f2f2', 0.8), 0.03 * sx, 0.42, 0.122, 0.005, 0.12, 0.005));
       if (o.top === 'suit' || o.top === 'jacket') for (const sx of [1, -1]) addD(P.spine, M(CG.sph, cmat('#222', 0.4, 0.4), 0, 0.2 + sx * 0.06, 0.122, 0.011, 0.011, 0.006));
       if (longSleeve) for (const s of ['L', 'R']) addD(P['el' + s], M(CG.cyl, topD, 0, -0.215, 0, 0.05, 0.03, 0.05));
+      if (['jeans', 'cargo', 'shorts'].includes(o.bottom)) for (const sx of [1, -1]) addD(P.hips, M(CG.box, cmat(new THREE.Color(o.bottomColor).multiplyScalar(0.78).getStyle(), 0.9), 0.064 * sx, -0.03, -0.106, 0.056, 0.064, 0.008)); // 뒷주머니
+      for (const s of ['L', 'R']) addD(P['an' + s], M(CG.box, cmat(dark ? '#f2f2f2' : '#34343a', 0.6), (s === 'L' ? 1 : -1) * 0.051, -0.004, 0.035, 0.004, 0.022, 0.13)); // 신발 옆 줄
       if (longPants) for (const s of ['L', 'R']) addD(P['kn' + s], M(CG.cyl, cmat(new THREE.Color(o.bottomColor).multiplyScalar(o.bottom === 'jeans' ? 1.25 : 0.82).getStyle(), 0.9), 0, -0.395, 0, 0.064, 0.035, 0.064));
     }
     // head - higher quality with detailed eyes
+    // 얼굴: 턱선 · 큰 눈(흰자·홍채·동공·반짝임·눈꺼풀) · 눈썹 · 코 · 입술 (여성은 속눈썹·볼 홍조)
     const H = P.head;
-    add(H, M(CG.head, skin, 0, 0.1, 0, f ? 0.96 : 1.02, 1.1, 1.02));
-    add(H, M(CG.sph, skin, 0, 0.035, 0.04, 0.09, 0.065, 0.07)); // cheeks
-    // Eye color from outfit or default brown
+    const FC = { oval: [1, 1.1, 1, 1, 1], round: [1.07, 1.04, 1.03, 1.12, 0.9], long: [0.95, 1.18, 1, 0.92, 1.12], square: [1.04, 1.08, 1, 1.18, 1.05], vline: [0.97, 1.12, 1, 0.82, 1.08] }[o.face] || [1, 1.1, 1, 1, 1];
+    add(H, M(CG.head, skin, 0, 0.1, 0, (f ? 0.95 : 1.0) * FC[0], FC[1], FC[2]));
+    add(H, M(CG.sph, skin, 0, 0.045 - (FC[4] - 1) * 0.04, 0.018, (f ? 0.078 : 0.088) * FC[3], 0.07 * FC[4], 0.085)); // 턱 (얼굴형마다 다르게)
+    if (o.face === 'square') for (const sx of [1, -1]) add(H, M(CG.sph, skin, 0.055 * sx, 0.035, 0.03, 0.04, 0.035, 0.05)); // 각진 턱선
     const eyeCol = o.eyeColor || (f ? '#4a6a8a' : '#3a2a1a');
-    const irisMat = cmat(eyeCol, 0.15, 0.1);
-    const highlightMat = cmat('#ffffff', 0.05, 0.8);
+    const irisMat = cmat(eyeCol, 0.25, 0.05), highlightMat = cmat('#ffffff', 0.05, 0.8), lashM = cmat('#18100c', 0.6);
     for (const s of [1, -1]) {
-      // Sclera
-      addD(H, M(CG.eyeW, cmat('#f8f4f0', 0.2), 0.04 * s, 0.118, 0.095));
-      // Iris
-      addD(H, M(CG.iris, irisMat, 0.04 * s, 0.118, 0.108));
-      // Pupil
-      addD(H, M(CG.pupil, cmat('#111111', 0.1), 0.04 * s, 0.118, 0.112));
-      // Specular highlight
-      addD(H, M(CG.highlight, highlightMat, 0.046 * s, 0.124, 0.114));
-      // Eyebrow
-      addD(H, M(CG.brow, hairM, 0.041 * s, 0.15, 0.105)).rotation.z = -0.1 * s;
-      // Ear
-      add(H, M(CG.ear, skin, 0.11 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
+      const ES = { normal: [1, 1, 0], big: [1.18, 1.22, 0], narrow: [1.1, 0.62, 0], round: [1.02, 1.3, 0], droopy: [1.08, 0.9, -0.22], sharp: [1.1, 0.82, 0.25] }[o.eyes] || [1, 1, 0];
+      const ew = addD(H, M(CG.eyeW, cmat('#fbf8f4', 0.25), 0.042 * s, 0.112, 0.094, 1.3 * ES[0], (f ? 1.12 : 0.98) * ES[1], 0.8)); ew.rotation.z = ES[2] * s; // 흰자 (눈 모양)
+      addD(H, M(CG.iris, irisMat, 0.042 * s, 0.111, 0.1055, 1.3 * Math.min(1.1, ES[0]), 1.35 * Math.min(1.1, ES[1]), 0.6)); // 홍채
+      addD(H, M(CG.pupil, cmat('#0c0c0e', 0.2), 0.042 * s, 0.111, 0.111, 1.25, 1.35 * Math.min(1, ES[1]), 0.6)); // 동공
+      addD(H, M(CG.highlight, highlightMat, 0.047 * s, 0.1165, 0.1125)); // 눈 반짝임
+      addD(H, M(CG.lid, lashM, 0.042 * s, 0.112 + 0.0175 * (f ? 1.12 : 0.98) * ES[1], 0.1005, (f ? 1.12 : 1.0) * ES[0], f ? 1.7 : 1.0, 1)).rotation.z = 0.08 * s + ES[2] * s; // 윗눈꺼풀 · 속눈썹
+      if (f) addD(H, M(CG.box, lashM, 0.069 * s, 0.1325, 0.0935, 0.014, 0.006, 0.006)).rotation.z = -0.55 * s; // 눈꼬리 속눈썹
+      { const BR = { normal: [1, 1, 0], thick: [1.15, 1.9, 0.02], thin: [0.95, 0.55, 0], arched: [1.05, 1.0, -0.22], straight: [1.15, 1.25, 0.1] }[o.brow] || [1, 1, 0];
+        const bw = addD(H, M(CG.brow, hairM, 0.044 * s, 0.153 + (o.brow === 'arched' ? 0.003 : 0), 0.099, (f ? 1.05 : 1.2) * BR[0], (f ? 1.0 : 1.6) * BR[1], 1)); bw.rotation.z = ((f ? -0.14 : -0.06) + BR[2] * -1 + (o.brow === 'straight' ? 0.06 : 0)) * s; } // 눈썹
+      add(H, M(CG.ear, skin, 0.108 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
+      if (f) addD(H, M(CG.sph, cmat(new THREE.Color(o.skin).lerp(new THREE.Color('#ff8a9a'), 0.35).getStyle(), 0.7), 0.06 * s, 0.07, 0.083, 0.02, 0.011, 0.008)); // 볼 홍조
     }
-    addD(H, M(CG.nose, skin, 0, 0.082, 0.118));
-    addD(H, M(CG.mouth, cmat(f ? '#c05060' : '#904848', 0.4), 0, 0.045, 0.105));
+    { const NS = { normal: [0.9, 1, 0.9], small: [0.72, 0.8, 0.7], big: [1.15, 1.15, 1.1], sharp: [0.8, 1.2, 1.25] }[o.nose] || [0.9, 1, 0.9]; addD(H, M(CG.nose, cmat(new THREE.Color(o.skin).multiplyScalar(0.96).getStyle(), 0.6), 0, 0.08, 0.113, NS[0], NS[1], NS[2])); }
+    if (o.mark === 'freckles') { const fm = cmat(new THREE.Color(o.skin).multiplyScalar(0.7).getStyle(), 0.8); for (let i = 0; i < 10; i++) { const sx = i < 5 ? 1 : -1, k = i % 5; addD(H, M(CG.sph, fm, sx * (0.035 + (k % 3) * 0.01), 0.083 + Math.floor(k / 3) * 0.008 - (k % 2) * 0.004, 0.1, 0.0028, 0.0028, 0.002)); } }
+    if (o.mark === 'mole') addD(H, M(CG.sph, cmat('#3a2418', 0.8), 0.035, 0.05, 0.1, 0.0035, 0.0035, 0.002));
+    if (o.mark === 'blush') for (const sx of [1, -1]) addD(H, M(CG.sph, cmat(new THREE.Color(o.skin).lerp(new THREE.Color('#ff7a8a'), 0.4).getStyle(), 0.7), 0.06 * sx, 0.07, 0.084, 0.022, 0.012, 0.008));
+    { const lipC = f ? '#c8566a' : new THREE.Color(o.skin).lerp(new THREE.Color('#9a4a4a'), 0.45).getStyle(); const lipM = cmat(lipC, 0.45);
+      addD(H, M(CG.lip, lipM, 0, 0.047, 0.1, f ? 1.1 : 1.0, 0.3, 0.42)); addD(H, M(CG.lip, lipM, 0, 0.038, 0.099, f ? 0.95 : 0.9, 0.36, 0.42)); // 윗입술 · 아랫입술
+      addD(H, M(CG.box, cmat('#4a2222', 0.6), 0, 0.0425, 0.1075, f ? 0.036 : 0.034, 0.003, 0.004)); } // 입술 사이
     // hair
     const hh = o.hair;
     if (hh === 'short' || hh === 'spiky' || hh === 'curly' || hh === 'long' || hh === 'ponytail') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
@@ -217,6 +260,19 @@ class Character {
     if (hh === 'spiky') for (let i = 0; i < 7; i++) { const sp = add(H, M(CG.cone, hairM, Math.sin(i * 0.9) * 0.06, 0.22, Math.cos(i * 1.7) * 0.05 - 0.01, 0.03, 0.08, 0.03)); sp.rotation.set(Math.cos(i) * 0.4, 0, Math.sin(i * 0.9) * 0.5); }
     if (hh === 'curly') for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; add(H, M(CG.sph, hairM, Math.sin(a) * 0.1, 0.2 + Math.cos(a * 2) * 0.02, Math.cos(a) * 0.09 - 0.01, 0.045, 0.045, 0.045)); }
     if (hh === 'mohawk') add(H, M(CG.box, hairM, 0, 0.22, -0.01, 0.03, 0.09, 0.22));
+    if (hh === 'side' || hh === 'wavy' || hh === 'twin' || hh === 'bun') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
+    if (hh === 'side') { const fr = add(H, M(CG.fringeM, hairM, 0, 0.1, 0.004, 1.02, 1.12, 1.02)); fr.rotation.y = 0.6; fr.rotation.z = -0.12; add(H, M(CG.sph, hairM, 0.03, 0.21, 0.01, 0.1, 0.05, 0.11)).rotation.z = -0.3; add(H, M(CG.sph, hairM, -0.085, 0.16, 0.02, 0.04, 0.06, 0.08)); }
+    if (hh === 'undercut') { add(H, M(CG.cap(0.5, 0.119), hairM, 0, 0.12, -0.005, 1, 1.05, 1.04)).rotation.x = -0.3; add(H, M(CG.sph, hairM, 0, 0.215, 0.015, 0.1, 0.055, 0.115)); add(H, M(CG.sph, hairM, 0, 0.19, 0.075, 0.07, 0.04, 0.05)).rotation.x = -0.5; }
+    if (hh === 'slick') { const sl = add(H, M(CG.cap(0.55, 0.128), cmat(o.hairColor, 0.28, 0.1), 0, 0.112, -0.02, 1.02, 1.08, 1.08)); sl.rotation.x = -0.42; add(H, M(CG.sph, cmat(o.hairColor, 0.28, 0.1), 0, 0.2, -0.04, 0.105, 0.05, 0.12)); }
+    if (hh === 'afro') { add(H, M(CG.sph, hairM, 0, 0.17, -0.02, 0.17, 0.15, 0.17)); add(H, M(CG.fringe, hairM, 0, 0.1, 0.01, 1.08, 1.12, 1.05)); }
+    if (hh === 'wavy') { add(H, M(CG.fringe, hairM, 0, 0.1, 0.004, f ? 0.97 : 1.0, 1.1, 1.0)); for (let i = 0; i < 6; i++) { const y = 0.08 - i * 0.05, w = 0.11 - Math.abs(i - 2) * 0.004; add(H, M(CG.sph, hairM, Math.sin(i * 1.7) * 0.012, y, -0.07 - Math.sin(i) * 0.01, w, 0.045, 0.06)); } for (const sx of [1, -1]) for (let i = 0; i < 3; i++) add(H, M(CG.sph, hairM, (0.098 + (i % 2) * 0.01) * sx, 0.05 - i * 0.06, 0.01, 0.03, 0.045, 0.035)); }
+    if (hh === 'twin') { add(H, M(CG.fringe, hairM, 0, 0.1, 0.004, 0.97, 1.1, 1.0)); for (const sx of [1, -1]) { add(H, M(CG.sph, cmat('#e85a8a', 0.5), 0.1 * sx, 0.14, -0.06, 0.02, 0.02, 0.02)); const t = add(H, M(CG.farm, hairM, 0.12 * sx, 0.02, -0.08, 0.95, 1.05, 0.95)); t.rotation.set(0.25, 0, 0.3 * sx); } }
+    if (hh === 'bun') { add(H, M(CG.fringe, hairM, 0, 0.1, 0.004, 0.97, 1.1, 1.0)); add(H, M(CG.sph, hairM, 0, 0.245, -0.06, 0.06, 0.055, 0.06)); add(H, M(CG.cyl, cmat('#222', 0.5), 0, 0.2, -0.05, 0.035, 0.012, 0.035)).rotation.x = -0.5; }
+    // 앞머리 · 옆머리 (예전엔 이마가 훤히 드러나 대머리처럼 보였다)
+    if (['long', 'ponytail', 'bob'].includes(hh) || (hh === 'short' && f)) add(H, M(CG.fringe, hairM, 0, 0.1, 0.004, f ? 0.97 : 1.0, 1.1, 1.0));
+    else if (hh === 'short') { const fr = add(H, M(CG.fringeM, hairM, 0, 0.1, 0.003, 1.0, 1.1, 1.0)); fr.rotation.y = 0.32; fr.rotation.z = -0.08; add(H, M(CG.sph, hairM, -0.012, 0.205, 0.0, 0.11, 0.045, 0.118)).rotation.z = 0.12; } // 남자 짧은 머리: 옆으로 넘긴 앞머리 + 윗머리 볼륨
+    if (hh === 'long' || hh === 'bob') for (const sx of [1, -1]) add(H, M(CG.lock, hairM, 0.1 * sx, hh === 'long' ? 0 : 0.045, 0.012, 1, hh === 'long' ? 1.35 : 0.8, 0.9)).rotation.z = 0.08 * sx;
+    if (hh === 'ponytail') add(H, M(CG.sph, cmat('#c8303a', 0.5), 0, 0.125, -0.135, 0.022, 0.022, 0.022)); // 머리끈
     if (o.beard === 'stubble') add(H, M(CG.cap(0.42, 0.118), cmat(new THREE.Color(o.skin).multiplyScalar(0.72).getStyle(), 0.9), 0, 0.085, 0.006, 1.0, 1, 1.03), false).rotation.x = Math.PI * 0.86;
     if (o.beard === 'full') add(H, M(CG.cap(0.42, 0.122), hairM, 0, 0.085, 0.008, 1.0, 1.05, 1.05)).rotation.x = Math.PI * 0.86;
     // hats
@@ -231,15 +287,23 @@ class Character {
       for (const s of [1, -1]) add(H, M(CG.box, gm, 0.043 * s, 0.115, 0.123, 0.05, 0.035, o.glasses === 'sunglasses' ? 0.01 : 0.004), false);
       add(H, M(CG.box, gm, 0, 0.12, 0.124, 0.03, 0.006, 0.006), false);
     }
+    // 액세서리
+    if (o.acc === 'necklace') { K(addD(P.spine, M(CG.collar, cmat('#e8c040', 0.25, 0.9), 0, 0.53, 0.02, 1.25, 0.5, 1.2))); K(addD(P.spine, M(CG.sph, cmat('#e8c040', 0.25, 0.9), 0, 0.47, f ? 0.105 : 0.115, 0.012, 0.014, 0.006))); }
+    if (o.acc === 'earrings') for (const sx of [1, -1]) K(addD(H, M(CG.sph, cmat('#e8e0d0', 0.2, 0.9), 0.112 * sx, 0.07, 0.0, 0.008, 0.008, 0.008)));
+    if (o.acc === 'watch') { K(addD(P.elL, M(CG.cyl, cmat('#1a1a1a', 0.5), 0, -0.235, 0, 0.05, 0.022, 0.05))); K(addD(P.elL, M(CG.box, cmat('#c8ccd2', 0.3, 0.8), 0.045, -0.235, 0, 0.012, 0.03, 0.03))); }
+    if (o.acc === 'backpack') { const bp = cmat(o.hatColor || '#2a3a5a', 0.75); K(add(P.spine, M(CG.box, bp, 0, 0.3, -0.17, 0.26, 0.32, 0.12))); K(add(P.spine, M(CG.box, bp, 0, 0.2, -0.235, 0.2, 0.13, 0.04))); for (const sx of [1, -1]) K(add(P.spine, M(CG.box, cmat('#1a1a1a', 0.7), 0.09 * sx, 0.38, 0.0, 0.03, 0.3, 0.26))); }
+    if (o.acc === 'bag') { const bm = cmat(o.hatColor || '#6a3a1a', 0.6); const st = K(add(P.spine, M(CG.box, cmat('#2a1a10', 0.6), 0, 0.3, 0.0, 0.03, 0.62, 0.25))); st.rotation.z = 0.75; K(add(P.hips, M(CG.box, bm, -0.17, 0.02, 0.04, 0.06, 0.15, 0.2))); }
+    if (o.acc === 'scarf') { const sc = cmat(o.hatColor || '#c83a3a', 0.9); K(add(P.spine, M(CG.collar, sc, 0, 0.56, 0.0, 1.45, 2.4, 1.3))); K(add(P.spine, M(CG.box, sc, 0.04, 0.45, f ? 0.105 : 0.115, 0.05, 0.18, 0.02))); }
     if (o.mask === 'admin') { // 관리자 마스크: 얼굴 앞을 덮는 검은 가면 + 빨간 눈 + 금색 문양
       const mk = add(H, M(CG.cap(0.5, 0.128), cmat('#0d0d10', 0.35, 0.6), 0, 0.1, 0.004, 1.02, 1.08, 1.04), false); mk.rotation.x = Math.PI / 2;
       for (const s of [1, -1]) add(H, M(CG.box, cmat('#ff2a2a', 0.3, 0, 'emis'), 0.043 * s, 0.118, 0.135, 0.046, 0.013, 0.008), false);
       add(H, M(CG.box, cmat('#e8c040', 0.3, 0.8), 0, 0.172, 0.118, 0.042, 0.022, 0.008), false);
     }
     this.setShadow(this.shadow !== false); this.setDetail(this.detail !== false, true);
+    if (this.hiOn) { if (this.hm && this.hm.key !== (o.body === 'f' && HUMAN.base.f ? 'f' : 'm')) this.setHi(true); else HUMAN.colors(this); this.applyVis(); }
   }
-  setDetail(v, force) { if (!force && this.detail === v) return; this.detail = v; if (this.meshes) for (const m of this.meshes) if (m.userData.det) m.visible = v; }
-  setShadow(v) { this.shadow = v; if (this.meshes) for (const m of this.meshes) if (m.castShadow !== undefined && m.geometry !== CG.eyeW && m.geometry !== CG.pupil) m.castShadow = v; }
+  setDetail(v, force) { if (!force && this.detail === v) return; this.detail = v; if (this.hiOn) { this.applyVis(); return; } if (this.meshes) for (const m of this.meshes) if (m.userData.det) m.visible = v; }
+  setShadow(v) { this.shadow = v; if (this.meshes) for (const m of this.meshes) if (m.castShadow !== undefined && m.geometry !== CG.eyeW && m.geometry !== CG.pupil) m.castShadow = v; if (this.hm) this.hm.root.traverse(o => { if (o.isSkinnedMesh) o.castShadow = v; }); }
   setWeapon(w) {
     if (this.weapon === w) return; this.weapon = w;
     for (const k in this.weaponMeshes) this.weaponMeshes[k].visible = false;
@@ -352,12 +416,13 @@ class Character {
     // apply with damping
     const k = 1 - Math.exp(-dt * (s.snap ? 60 : 18)); const c = this.pose;
     for (const key in p) { if (c[key] === undefined) c[key] = p[key]; c[key] += (p[key] - c[key]) * k; }
-    P.hips.position.y = c.hipsY; P.hips.rotation.set(c.pitch, 0, c.roll);
+    P.hips.position.y = c.hipsY + (this.hiOn && this.hm ? this.hm.B.dy : 0); /* 3D 모델이면 모델 골반 높이로 */ P.hips.rotation.set(c.pitch, 0, c.roll);
     P.spine.rotation.set(c.spX, c.spY, c.spZ); P.head.rotation.set(c.hdX, c.hdY, 0); P.neck.rotation.set(0, 0, 0);
     P.shL.rotation.set(c.lSx, c.lSy, c.lSz); P.shR.rotation.set(c.rSx, c.rSy, c.rSz); P.elL.rotation.x = c.lE; P.elR.rotation.x = c.rE;
     P.hipL.rotation.set(c.lHx, 0, c.lHz); P.hipR.rotation.set(c.rHx, 0, c.rHz); P.knL.rotation.x = c.lK; P.knR.rotation.x = c.rK; P.anL.rotation.x = c.lA; P.anR.rotation.x = c.rA;
     this.body.rotation.x = c.bodyX; this.body.position.y = c.bodyY; this.body.rotation.y = (s.spin || 0);
     if (st === 'swim') this.body.position.y = 0;
+    if (this.hiOn) { this._rk = (this._rk || 0) + 1; if (!this._far || this._rk % 3 === 0) HUMAN.retarget(this); }
   }
   dancePose(p, d, t, s) {
     const b = s.beat ?? t * 2.07 * TAU / 2; // ~124bpm
@@ -396,6 +461,7 @@ class Character {
     }
   }
 }
+Character.all = new Set();
 const DANCES = ['셔플', '웨이브', '힙합', '디스코', '회전', '로봇', '말춤', '플로스'];
 
 // ================= ANIMALS =================

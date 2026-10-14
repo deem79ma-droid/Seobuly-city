@@ -1,4 +1,4 @@
-// @v 2026101323
+// @v 2026101410
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -31,7 +31,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), keys: HOUSE.keys() }; } catch (e) { return; }
+  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), law: LAW.save(), card: CARD.bal, phone: PHONE.id, keys: HOUSE.keys(), ...QUEST.save() }; } catch (e) { return; }
   if (ACCT.on) { ACCT.data = o; ACCT.push(o); return; } // 로그인: 서버에 저장
   try { localStorage.setItem('sbc3d_save', JSON.stringify(o)); } catch (e) { }
 }
@@ -50,7 +50,7 @@ function initThree() {
   if (q.bloom) {
     const rt = new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 ? 4 : 0 });
     composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera));
-    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.45, 0.9); composer.addPass(bloomPass); composer.addPass(new OutputPass());
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.45, 0.9); composer.addPass(bloomPass); composer.addPass(new ShaderPass(GRADE_SHADER)); composer.addPass(new OutputPass());
   }
   addEventListener('resize', onResize);
 }
@@ -122,7 +122,7 @@ async function refreshPubList(manual) {
 }
 function setLoad(p, t) { $('#loadBar').style.width = Math.round(p * 100) + '%'; $('#loadTxt').textContent = t; }
 async function startGame(mode, code) {
-  AU.init(); ME.name = ($('#nameIn').value.trim() || '플레이어').slice(0, 12); ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
+  AU.init(); ME.name = cleanName($('#nameIn').value.trim() || '플레이어'); if (ME.name === '???') ME.name = '플레이어'; ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
   if (ACCT.on) { ME.name = ACCT.nick; await ACCT.refresh(); } // 계정 닉네임 고정 · 최신 저장 불러오기
   if (NET.badName(ME.name)) { $('#lobbyMsg').textContent = '❌ "관리자"가 들어간 닉네임은 쓸 수 없어요'; $('#nameIn').focus(); return; } // 관리자는 이름표에 자동으로 붙는다
   ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); if (mode !== 'solo') await Promise.race([prepTurn(), sleep(2500)]); // 중계 서버 인증 준비 clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
@@ -176,14 +176,15 @@ async function loadWorld() {
   // player
   const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, debt: Math.max(0, Number(sv.debt) || 0), weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
-  JOBS.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
+  JOBS.load(sv); QUEST.load(sv); CARD.load(sv); PHONE.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
   const sx = G.isHost ? 10 : -10; ME.x = sx; ME.z = 52; ME.y = groundHeight(ME.x, ME.z); ME.yaw = Math.PI; CAM.yaw = Math.PI;
   setLoad(1, '완료!'); await tick();
   // warm up: compile shaders
   updateEnv(0.01, { x: ME.x, y: ME.y, z: ME.z }); updateCamera(0.016); try { renderer.compile(scene, camera); } catch (e) { }
   $('#loading').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); NAV.init(); HELI.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  G.started = true; UI.init(); SHARE.init(); POLICE.initUI(); JOBS.initWorld(); NAV.init(); HELI.init(); QUEST.init(); initInput(); UI.updateWeapon(); UI.updateStars(); ADMIN.autoLogin();
+  LAW.restore(sv && sv.law); // 수배·남은 형기는 새로고침해도 그대로
   NET.updateRoomInfo(); setInterval(() => NET.heartbeat(), 2000);
   NET.flush(); if (G.online && !G.isHost) NET.hello();
   announce('서불리 시티', '이벤트광장 · ' + (G.online && G.isHost ? `방 코드 ${G.room}` : 'P 휴대폰 · E 상호작용'));
@@ -233,10 +234,10 @@ function frame(dt, noRender) {
     v.mesh.visible = vis; if (vis && v.small) { const far = d2 > lod2; if (far !== v.lodFar) { v.lodFar = far; for (const m of v.small) m.visible = !far; } }
     if (vis) { v.visual(dt); if (v.npcDriver && v.npcDriver.root.visible && d2 < 80 * 80) v.npcDriver.update(dt, { state: 'drive', steer: v.steer / (v.M.steer || 0.5), speed: 0 }); }
   }
-  renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
+  renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt); HUMAN.tick(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
-  updateCamera(dt); CINE.update(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
+  updateCamera(dt); CINE.update(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
   const fx = ME.vehicle ? ME.vehicle : ME; updateEnv(dt, { x: fx.x, y: fx.y, z: fx.z }); updateGrass(camera.position.x, camera.position.z);
   // headlight spot for my car
   const cl = ENV.carLight; if (ME.vehicle && ENV.night > 0.3 && ME.vehicle.kind !== 'horse') { const v = ME.vehicle; cl.intensity = 220; cl.position.set(v.x + Math.sin(v.yaw) * 2, v.y + 1, v.z + Math.cos(v.yaw) * 2); cl.target.position.set(v.x + Math.sin(v.yaw) * 25, v.y - 1, v.z + Math.cos(v.yaw) * 25); } else cl.intensity = 0;
@@ -252,4 +253,5 @@ function frame(dt, noRender) {
 }
 window.addEventListener('error', e => { if (G.started && !G._errShown) { G._errShown = true; toast('⚠ ' + e.message, 6000); } });
 initLobby();
-if (URLP.get("debug")) window.__SBC = { PARKING, PARKING_LOTS, WARDROBE, CLOTH, saveGame, winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };
+// 디버그 창은 내 컴퓨터에서만 (공개 사이트에서 치트 도구로 쓰지 못하게)
+if (DEV && URLP.get("debug")) window.__SBC = { PARKING, PARKING_LOTS, WARDROBE, CLOTH, saveGame, winOpen, leaveServer, FX, TAXI, ROUTE, DISTRICTS, districtAt, ACRYPTO, COMFORT, LAW, ADMIN, POLICE, BENCHES, simulate, MAT, ENV, get bloomPass() { return bloomPass; }, G, ME, CAM, PEDS, vehicles, TRAFFIC, ANIMALS, PLOTS, FACILITIES, TREES, EDGES, NODES, BLOCKS, enterVehicle, exitVehicle, toggleVehicle, UI, NET, get camera() { return camera; }, get scene() { return scene; }, get renderer() { return renderer; }, groundHeight, startGame, INP, KEYS, tryAttack, selectWeapon, plotRequest, fastTravel, spawnOwned, setTreeVisible, chopTree, updateCamera, Q, regionAt, COLLIDERS, INTERIOR, BUILDINGS, PRISONS, getBuilding, floorAt, dealDamage, plotFloors, clampFloors, designPrice, MAX_FLOORS, anchorOf, sameSpace, fallDamageFor, meleeResolve, terrainH, hillsAt, DESIGN_FLOORS, BUILD_DESIGNS, applyPlotState, hostPlotRequest };

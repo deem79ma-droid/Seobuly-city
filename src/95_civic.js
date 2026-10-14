@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101410
 // ================= 도시: 경제 · 대통령 선거 · 정책 · 뉴스 · 법원 · NPC 기억 =================
 // 공유 상태(대통령·정책·집값·뉴스)는 방장이 관리하고 모두에게 보낸다. 서버가 있으면 방 저장에 같이 남는다.
 
@@ -17,7 +17,7 @@ const PUBLIC_JOBS = ['police', 'soldier', 'doctor'], BIZ_JOBS = ['delivery', 'se
 const TERM_MS = 30 * 60 * 1000, ELECTION_MS = 3 * 60 * 1000, AI_SHUFFLE_MS = 12 * 60 * 1000;
 
 const ECON = {
-  E: { pres: null, pol: [], hidx: 1, elec: null, news: [], polT: 0, imp: null, aiT: 0, termEnd: 0 },
+  E: { pres: null, pol: [], hidx: 1, elec: null, news: [], polT: 0, imp: null, aiT: 0, termEnd: 0, bounty: {} },
   _dayLast: null, _hostT: 0, _bcT: 0, hud: null,
   // ---- 계산 ----
   P() { return this.E.pol.map(k => POLICIES[k]).filter(Boolean); },
@@ -74,7 +74,19 @@ const ECON = {
     else if (o.a === 'policy' && E.pres && E.pres.id === fid && POLICIES[o.p] && now > E.polT) { if (E.pol.includes(o.p)) E.pol = E.pol.filter(k => k !== o.p); else { E.pol.push(o.p); if (E.pol.length > 2) E.pol.shift(); } E.polT = now + 60000; this.news(`🏛️ ${fname} 대통령 정책 발표: ${E.pol.map(k => POLICIES[k].ic + ' ' + POLICIES[k].name).join(', ') || '정책 없음'}`); }
     else if (o.a === 'impeach' && E.pres && !E.pres.ai && !E.imp) { E.imp = { until: now + 120000, v: { [fid]: 1 } }; this.news(`⚖️ ${fname}, ${E.pres.name} 대통령 탄핵 투표 발의 (2분)`); }
     else if (o.a === 'impvote' && E.imp) { E.imp.v[fid] = o.y ? 1 : 0; }
-    else if (o.a === 'news' && typeof o.s === 'string') { this.news(o.s); return; }
+    else if (o.a === 'news' && typeof o.s === 'string') { if (NET.rate('nw' + fid, 4, 60)) this.news(cleanText(o.s, 120)); return; }
+    // ---- 현상금: 걸기 · 처치되면 처치한 사람에게 지급 ----
+    else if (o.a === 'bounty' && BOUNTY_AMTS.includes(o.amt) && o.t && o.t !== fid && NET.rate('bt' + fid, 5, 60)) {
+      const B = E.bounty || (E.bounty = {}); for (const k in B) if (!B[k] || now - B[k].t > BOUNTY_MS) delete B[k];
+      const tn = o.t === ME.id ? ME.name : (G.players.get(o.t) || {}).name; if (!tn) return;
+      const b = B[o.t] || { n: tn, amt: 0, t: now }; b.amt += o.amt; b.t = now; b.n = tn; B[o.t] = b;
+      this.news(`현상금: ${tn}에게 ${fmtMoney(o.amt)} (총 ${fmtMoney(b.amt)}) — 처치하면 받는다`);
+    }
+    else if (o.a === 'bhit' && E.bounty && E.bounty[fid] && o.k && o.k !== fid) {
+      const b = E.bounty[fid]; delete E.bounty[fid]; if (now - b.t > BOUNTY_MS) { this.broadcast(); return; }
+      notifyPlayer(o.k, { t: 'bounty', amt: b.amt, n: b.n }); const kn = o.k === ME.id ? ME.name : (G.players.get(o.k) || {}).name || '누군가';
+      this.news(`${kn}, ${b.n}의 현상금 ${fmtMoney(b.amt)} 획득`);
+    }
     else if (o.a === 'evq') { NET.send({ t: 'ev', to: fid, v: NPCMEM.rep[fid] || 0 }); return; }
     else if (o.a === 'wit') { const rp = G.players.get(fid); if (rp) { const a = anchorOf(rp); NPCMEM.witness(a.x, a.z, fid, Math.min(8, +o.sev || 1)); } return; }
     this.broadcast();
@@ -193,9 +205,9 @@ const COURT = {
   done() { clearTimeout(this._wait); this.pending = null; ME.trial = false; G.godT = G.t + 2; UI.closeMenu(); },
   tick() { const P = this.pending; if (!P) return; ME.x = P.pos.x; ME.z = P.pos.z; ME.vx = ME.vz = 0; if (!UI.menuOpen && !this._wait) this.menu(); },
   onNet(m, f) {
-    if (m.t === 'lawReq' && m.to === ME.id && JOBS.id === 'lawyer') { UI.openMenu('⚖️ 변론 의뢰', `<b>${m.n}</b>이(가) 재판 변론을 요청했다 (구형 ${m.s}초) · 수임료 ₩20,000`, [{ ic: '✅', t: '수락', p: '', fn: () => { NET.send({ t: 'lawAns', to: f, ok: 1 }); } }, { ic: '❌', t: '거절', p: '', fn: () => NET.send({ t: 'lawAns', to: f, ok: 0 }) }]); }
+    if (m.t === 'lawReq' && m.to === ME.id && JOBS.id === 'lawyer' && NET.rate('lr' + f, 2, 60)) { UI.openMenu('⚖️ 변론 의뢰', `<b>${m.n}</b>이(가) 재판 변론을 요청했다 (구형 ${m.s}초) · 수임료 ₩20,000`, [{ ic: '✅', t: '수락', p: '', fn: () => { this._feeFrom = { f, until: G.t + 120 }; NET.send({ t: 'lawAns', to: f, ok: 1 }); } }, { ic: '❌', t: '거절', p: '', fn: () => NET.send({ t: 'lawAns', to: f, ok: 0 }) }]); }
     if (m.t === 'lawAns' && m.to === ME.id && this.pending) { clearTimeout(this._wait); this._wait = null; if (m.ok) { const fee = Math.min(ME.money, 20000); ME.money -= fee; NET.send({ t: 'lawFee', to: f, amt: fee }); this.verdict(null, true); } else { toast('변호사가 거절했다'); this.menu(); } }
-    if (m.t === 'lawFee' && m.to === ME.id) JOBS.pay(m.amt / ECON.payMul('lawyer') / (1 - ECON.taxRate()), '변론 수임료');
+    if (m.t === 'lawFee' && m.to === ME.id && this._feeFrom && this._feeFrom.f === f && G.t < this._feeFrom.until && !(this._feeFrom = null)) JOBS.pay(Math.min(20000, Math.max(0, +m.amt || 0)) / ECON.payMul('lawyer') / (1 - ECON.taxRate()), '변론 수임료');
   },
 };
 // 법원 건물 (이벤트광장 서쪽)

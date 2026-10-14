@@ -1,4 +1,4 @@
-// @v 2026101322
+// @v 2026101410
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -244,9 +244,12 @@ function pedDamage(p, amt, from, opts = {}) {
   const fromPlayer = from && !String(from).startsWith('n');
   if (fromPlayer) {
     // wanted / grudge
+    // 법: 시민·노동자·의료진을 때리면 목격자가 무조건 신고(처음 때릴 때 ★1 + 폭행 기록), 죽이면 ★ 하나 더 · 경찰은 때릴 때마다 ★1, 죽이면 ★3
     const policeNear = PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - p.x, q.z - p.z) < 45);
-    if (p.kind === 'police') notifyPlayer(from, { t: 'wanted', add: p.hp <= 0 ? 2 : 1 });
-    else if (policeNear || p.kind === 'civ' && Math.random() < 0.25) notifyPlayer(from, { t: 'wanted', add: 1 });
+    if (p._asK !== p.seed) { p._asK = p.seed; p._as = {}; } const first = !p._as[from]; p._as[from] = 1;
+    if (p.kind === 'police') notifyPlayer(from, { t: 'wanted', add: p.hp <= 0 ? 3 : 1, c: first ? 'assault' : undefined });
+    else if (p.kind === 'civ' || p.kind === 'worker' || p.kind === 'medic') { const add = (first ? 1 : 0) + (p.hp <= 0 ? 1 : 0); if (add) notifyPlayer(from, { t: 'wanted', add, c: first && p.hp > 0 ? 'assault' : undefined }); }
+    else if (policeNear) notifyPlayer(from, { t: 'wanted', add: 1 });
     if (p.kind.startsWith('gang')) notifyPlayer(from, { t: 'grudge', g: p.kind });
     const tg = { kind: from === ME.id ? 'me' : 'player', id: from };
     if (p.kind !== 'civ' && p.kind !== 'medic' && p.kind !== 'worker') { p.target = tg; p.state = 'fight'; if (p.char) p.char.setWeapon(p.weapon); }
@@ -378,7 +381,7 @@ function hostUpdateTraffic(dt) {
     // police chase
     let targetSpeed = E.bridge ? 20 : (E.region === 'disanbay' ? 17 : 12.5);
     if (v.model === 'police') {
-      let wantedP = null; for (const pl of players) if (pl.wanted >= 2 && Math.hypot(pl.x - v.x, pl.z - v.z) < 160) wantedP = pl;
+      let wantedP = null; for (const pl of players) if (pl.wanted >= 1 && Math.hypot(pl.x - v.x, pl.z - v.z) < 160) wantedP = pl; // ★1부터 순찰차가 쫓아온다
       v.siren = !!wantedP;
       if (wantedP) { tgt = { x: wantedP.x, z: wantedP.z }; targetSpeed = Math.hypot(wantedP.x - v.x, wantedP.z - v.z) < 12 ? 0 : 26; }
     }
@@ -420,29 +423,40 @@ function initAnimals() {
   for (const zoo of ZOOS) for (const pen of zoo.pens) for (const k of pen.kind.split('+')) { const n = k === 'elephant' || k === 'giraffe' || k === 'hippo' || k === 'rhino' ? 2 : k === 'penguin' ? 5 : k === 'panda' || k === 'polarbear' ? 1 : 2; for (let i = 0; i < n; i++) add(k, pen, { zoo: true }); }
   for (const f of FARMS) for (const k of f.kinds) if (k !== 'horse') add(k, { x0: f.x0 + 2, x1: f.x1 - 2, z0: f.z0 + 2, z1: f.z1 - 2 }, { farm: true });
   // wild deer in disanbay forests
-  for (let i = 0; i < 14; i++) { const cx = lerp(-1450, -760, r()), cz = lerp(-1000, 1000, r()); if (terrainH(cx, cz) < LAND + 1) continue; add('deer', { x0: cx - 60, x1: cx + 60, z0: cz - 60, z1: cz + 60, wild: true }, { wild: true }); }
+  for (let i = 0; i < 14; i++) { const cx = lerp(-1450, -760, r()), cz = lerp(-1000, 1000, r()); if (terrainH(cx, cz) < LAND + 1) continue; add('deer', { x0: cx - 60, x1: cx + 60, z0: cz - 60, z1: cz + 60, wild: true }, { wild: true, amb: 'wild' }); }
   // strays in cities / parks
   for (let i = 0; i < 18; i++) {
     const kind = r() < 0.55 ? 'dog' : 'cat'; const b = BLOCKS[Math.floor(r() * BLOCKS.length)]; const e = 3;
-    const bounds = { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 - e, z1: b.z0 + 2.5, stray: true }; add(kind, bounds, { stray: true });
+    const bounds = { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 - e, z1: b.z0 + 2.5, stray: true }; add(kind, bounds, { stray: true, amb: 'city' });
   }
-  for (let i = 0; i < 6; i++) add(r() < 0.5 ? 'dog' : 'cat', { x0: -150, x1: 150, z0: -150, z1: 150 }, { stray: true });
+  for (let i = 0; i < 6; i++) add(r() < 0.5 ? 'dog' : 'cat', { x0: -150, x1: 150, z0: -150, z1: 150 }, { stray: true, amb: 'city' });
   for (let i = 0; i < 5; i++) add('chicken', { x0: -1100, x1: -1000, z0: 20, z1: 60 }, { farm: true });
   // ---- 디산베이 야생: 늑대 무리 · 멧돼지 · 곰 (사냥 가능, 잘못하면 잡아먹힌다) ----
-  const w = mulberry32(7171); const spot = (xa, xb) => { for (let k = 0; k < 30; k++) { const x = lerp(xa, xb, w()), z = lerp(-980, 980, w()); if (terrainH(x, z) > LAND + 1 && roadDistAt(x, z) > 25 && Math.hypot(x + 1100, z) > 110) return [x, z]; } return [lerp(xa, xb, 0.5), -600]; };
+  const w = mulberry32(7171); const spot = (xa, xb) => { for (let k = 0; k < 30; k++) { const x = lerp(xa, xb, w()), z = lerp(-980, 980, w()); if (terrainH(x, z) > LAND + 1 && roadDistAt(x, z) > 25 && coastDist(x, z) > 60 && Math.hypot(x + 1100, z) > 110) return [x, z]; } return [lerp(xa, xb, 0.5), -600]; };
   const B = (x, z, r) => ({ x0: x - r, x1: x + r, z0: z - r, z1: z + r, wild: true });
   for (let p = 0; p < 6; p++) { const [x, z] = spot(-1520, -780); const n = 3 + (p % 2); for (let i = 0; i < n; i++) add('wolf', B(x, z, 70), { wild: true, pack: p }); }
   for (let i = 0; i < 12; i++) { const [x, z] = spot(-1520, -760); add('boar', B(x, z, 60), { wild: true }); }
   for (let i = 0; i < 3; i++) { const [x, z] = spot(-1560, -1300); add('bear', B(x, z, 80), { wild: true }); }
   // ---- 순한 동물들: 숲 · 호수 · 농장 · 광장 · 공원 · 시모느 바닷가 ----
   const v = mulberry32(9393);
-  for (const [k, n, r] of [['fox', 6, 60], ['rabbit', 12, 40], ['squirrel', 10, 30], ['raccoon', 5, 40], ['badger', 4, 40], ['moose', 4, 90], ['pheasant', 7, 40], ['crow', 6, 50]]) for (let i = 0; i < n; i++) { const [x, z] = spot(-1500, -770); add(k, B(x, z, r), { wild: true }); }
+  for (const [k, n, r] of [['fox', 6, 60], ['rabbit', 12, 40], ['squirrel', 10, 30], ['raccoon', 5, 40], ['badger', 4, 40], ['moose', 4, 90], ['pheasant', 7, 40], ['crow', 6, 50]]) for (let i = 0; i < n; i++) { const [x, z] = spot(-1500, -770); add(k, B(x, z, r), { wild: true, amb: 'wild' }); }
   for (const [k, n] of [['duck', 7], ['goose', 4], ['flamingo', 6], ['otter', 3]]) for (let i = 0; i < n; i++) { const a = v() * TAU, rr = LAKE.r + 6 + v() * 14; const x = LAKE.x + Math.cos(a) * rr, z = LAKE.z + Math.sin(a) * rr; add(k, { x0: x - 10, x1: x + 10, z0: z - 10, z1: z + 10 }); }
   const F0 = FARMS[0]; if (F0) for (const [k, n] of [['goat', 4], ['duck', 3], ['goose', 3]]) for (let i = 0; i < n; i++) add(k, { x0: F0.x0 + 2, x1: F0.x1 - 2, z0: F0.z0 + 2, z1: F0.z1 - 2 }, { farm: true });
   for (let i = 0; i < 12; i++) add('pigeon', { x0: -40, x1: 40, z0: -40, z1: 40 });
   for (let i = 0; i < 8; i++) { const b = BLOCKS[Math.floor(v() * BLOCKS.length)]; add(v() < 0.5 ? 'crow' : 'squirrel', { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 - 3, z1: b.z0 + 2.5 }); }
   for (const [k, n] of [['seagull', 10], ['crab', 10], ['turtle', 6]]) for (let i = 0; i < n; i++) { for (let t = 0; t < 20; t++) { const a = v() * TAU; const x = 2000 + Math.cos(a) * 395, z = 560 + Math.sin(a) * 485; if (terrainH(x, z) > LAND - 1.2 && terrainH(x, z) < LAND + 3) { add(k, { x0: x - 12, x1: x + 12, z0: z - 12, z1: z + 12 }); break; } } }
   for (let i = 0; i < 4; i++) add('peacock', { x0: 1960, x1: 2040, z0: 520, z1: 600 });
+  // ---- 사람이 다니는 곳에도 동물이 보이게 (예전엔 숲 깊은 곳·동물원에 몰려 있어 길에서는 거의 안 보였다) ----
+  const u = mulberry32(5151);
+  for (let i = 0; i < 26; i++) { const b = BLOCKS[Math.floor(u() * BLOCKS.length)]; add(u() < 0.55 ? 'dog' : 'cat', { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 - 3, z1: b.z0 + 2.5, stray: true }, { stray: true, amb: 'city' }); } // 도시 길고양이·떠돌이 개
+  for (let i = 0; i < 8; i++) add('pigeon', { x0: -60, x1: 60, z0: -60, z1: 60 });
+  for (let f = 0; f < 6; f++) { const b = BLOCKS[Math.floor(u() * BLOCKS.length)]; const cx = lerp(b.x0 + 8, b.x1 - 8, u()); for (let i = 0; i < 6; i++) add('pigeon', { x0: cx - 8, x1: cx + 8, z0: b.z0 - 3, z1: b.z0 + 2 }); } // 도시 인도 비둘기 떼
+  // 디산베이 길가 (도로에서 6~45m — 차를 타고 지나가도 보인다): 사슴 무리 · 토끼 · 여우 · 꿩 · 다람쥐
+  const nearRoad = (dmin, dmax) => { for (let k = 0; k < 80; k++) { const x = lerp(-1500, -760, u()), z = lerp(-980, 980, u()); const rd = roadDistAt(x, z); if (rd > dmin && rd < dmax && terrainH(x, z) > LAND + 1 && coastDist(x, z) > 40) return [x, z]; } return null; };
+  for (let h = 0; h < 9; h++) { const sp = nearRoad(10, 45); if (!sp) continue; for (let i = 0; i < 2 + (h % 3); i++) add('deer', B(sp[0], sp[1], 25), { wild: true, amb: 'wild' }); }
+  for (const [k, n, r] of [['rabbit', 12, 15], ['fox', 5, 25], ['pheasant', 8, 15], ['squirrel', 6, 12]]) for (let i = 0; i < n; i++) { const sp = nearRoad(6, 35); if (sp) add(k, B(sp[0], sp[1], r), { wild: true, amb: 'wild' }); }
+  for (let i = 0; i < 4; i++) add('deer', B(HUNT.x + 70, HUNT.z + 30, 30), { wild: true }); // 사냥꾼 오두막 앞 들판
+  for (let i = 0; i < 4; i++) add('rabbit', B(HUNT.x + 30, HUNT.z - 40, 20), { wild: true });
 }
 // 야생 동물 공격 성향: r 감지 거리(밤에 rn) · dmg 한 번 피해 · kill 즉사 확률 · cool 공격 간격
 const WILD = { wolf: { r: 18, rn: 32, dmg: 13, kill: 0, cool: 0.9, eat: true }, boar: { r: 9, rn: 11, dmg: 30, kill: 0.18, cool: 1.7 }, bear: { r: 13, rn: 16, dmg: 28, kill: 0.15, cool: 1.3 } };
@@ -452,7 +466,41 @@ function wildAggro(a, pl) {
   if (a.kind === 'wolf') for (const o of ANIMALS) if (o !== a && o.pack === a.pack && o.kind === 'wolf' && o.state !== 'dead' && o.state !== 'attack' && Math.hypot(o.x - a.x, o.z - a.z) < 50) { o.state = 'attack'; o.timer = 14; o.target = a.target; }
   if (Math.random() < 0.5) sfx(a.kind === 'wolf' ? 'bark' : 'roar', a.x, a.z, a.kind === 'boar' ? 0.5 : 0.8);
 }
+// ---- 주변 동물: 모든 플레이어에게서 멀어진 길동물(개·고양이)과 디산베이 초식동물(사슴·토끼·여우…)은
+//      플레이어 근처의 자기 서식지로 옮겨 온다 (NPC처럼) → 도시를 걸어도, 디산베이 길을 달려도 늘 근처에 동물이 있다.
+//      늑대·멧돼지·곰은 자기 영역에 그대로 있다. 한 사람 근처에 너무 몰리지 않게 상한(도시 8 · 디산베이 10).
+const AMB_CAP = { city: 8, wild: 10 }, AMB_R = { city: 170, wild: 220 }; let _ambT = 0;
+function ambientSpot(kind, pl) {
+  for (let k = 0; k < 12; k++) {
+    const ang = Math.random() * TAU, r = kind === 'city' ? rnd(35, 120) : rnd(60, 180); const x = pl.x + Math.sin(ang) * r, z = pl.z + Math.cos(ang) * r;
+    if (kind === 'city') {
+      insideAnyBlock(0, 0); const L = _blockGrid.get(Math.floor(x / 100) * 1000 + Math.floor(z / 100)); if (!L || !L.length) continue;
+      const b = L[Math.floor(Math.random() * L.length)]; if (regionAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) === 'sea') continue;
+      // 고른 지점에서 가장 가까운 블록 변의 인도 (그 근처 ±12m 안에서만 돌아다닌다)
+      const dN = Math.abs(z - b.z0), dS = Math.abs(z - b.z1), dW = Math.abs(x - b.x0), dE = Math.abs(x - b.x1), m = Math.min(dN, dS, dW, dE);
+      const st = m === dN ? { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z0 + 0.5, z1: b.z0 + 3.5 } : m === dS ? { x0: b.x0 + 1, x1: b.x1 - 1, z0: b.z1 - 3.5, z1: b.z1 - 0.5 } : m === dW ? { x0: b.x0 + 0.5, x1: b.x0 + 3.5, z0: b.z0 + 1, z1: b.z1 - 1 } : { x0: b.x1 - 3.5, x1: b.x1 - 0.5, z0: b.z0 + 1, z1: b.z1 - 1 };
+      const px = clamp(x, st.x0, st.x1), pz = clamp(z, st.z0, st.z1); const dd = Math.hypot(px - pl.x, pz - pl.z); if (dd < 25 || dd > 140) continue;
+      return { x: px, z: pz, b: { x0: Math.max(st.x0, px - 12), x1: Math.min(st.x1, px + 12), z0: Math.max(st.z0, pz - 12), z1: Math.min(st.z1, pz + 12), stray: true } };
+    }
+    if (regionAt(x, z) !== 'disanbay' || terrainH(x, z) < LAND + 1 || coastDist(x, z) < 30 || roadDistAt(x, z) < 5) continue;
+    return { x, z, b: { x0: x - 30, x1: x + 30, z0: z - 30, z1: z + 30, wild: true } };
+  }
+  return null;
+}
+function ambientAnimals() {
+  const pls = playersList().filter(p => !p.inside); if (!pls.length) return;
+  const near = pls.map(pl => { const c = { city: 0, wild: 0 }; for (const a of ANIMALS) if (a.amb && a.state !== 'dead' && Math.abs(a.x - pl.x) < AMB_R[a.amb] && Math.abs(a.z - pl.z) < AMB_R[a.amb]) c[a.amb]++; return c; });
+  let moved = 0;
+  for (const a of ANIMALS) {
+    if (!a.amb || a.owner || a.state === 'follow' || a.state === 'attack' || nearestPlayerDist(a.x, a.z) < 300) continue;
+    const i = Math.floor(Math.random() * pls.length); if (near[i][a.amb] >= AMB_CAP[a.amb]) continue;
+    const sp = ambientSpot(a.amb, pls[i]); if (!sp) continue;
+    a.x = sp.x; a.z = sp.z; a.y = groundHeight(a.x, a.z); a.bounds = sp.b; a.state = 'idle'; a.timer = rnd(1, 6); a.hp = a.maxHp; a.tx = a.x; a.tz = a.z; near[i][a.amb]++;
+    if (++moved >= 3) break; // 1초에 최대 3마리씩
+  }
+}
 function hostUpdateAnimals(dt) {
+  if ((_ambT -= dt) <= 0) { _ambT = 1; ambientAnimals(); }
   const players = playersList();
   for (const a of ANIMALS) {
     a.timer -= dt; a.atkT = (a.atkT || 0) - dt;
@@ -469,11 +517,11 @@ function hostUpdateAnimals(dt) {
     } else if (a.state === 'attack') {
       const tp = targetPos(a.target); const WD = a.wild && WILD[a.kind]; const bcx = (a.bounds.x0 + a.bounds.x1) / 2, bcz = (a.bounds.z0 + a.bounds.z1) / 2;
       if (!tp || a.timer <= 0 || (WD && (Math.hypot(a.x - bcx, a.z - bcz) > 170 || a.hp < a.maxHp * 0.3 || tp.veh))) { a.state = WD && a.hp < a.maxHp * 0.3 ? 'flee' : 'walk'; a.timer = 6; a.tx = bcx; a.tz = bcz; if (tp) { a.fx = tp.x; a.fz = tp.z; } }
-      else { tx = tp.x; tz = tp.z; const d = Math.hypot(tp.x - a.x, tp.z - a.z); sp = d > 2 ? S.speed * (WD && a.kind === 'boar' && d > 5 ? 1.35 : 1) : 0; a.timer = Math.max(a.timer, d < 25 ? 6 : 0);
-        if (d < (a.kind === 'boar' ? 2.8 : 2.4) && a.atkT <= 0) {
+      else { tx = tp.x; tz = tp.z; const d = Math.hypot(tp.x - a.x, tp.z - a.z); sp = d > 1.5 ? Math.min(S.speed * (WD && a.kind === 'boar' && d > 5 ? 1.35 : 1), 1.5 + d * 2.2) : 0; a.timer = Math.max(a.timer, d < 25 ? 6 : 0);
+        if (d < (a.kind === 'boar' ? 3 : 2.7) && a.atkT <= 0) {
           if (WD) { a.atkT = WD.cool; const inst = Math.random() < WD.kill; const hp = a.target.kind === 'me' ? ME.hp : (G.players.get(a.target.id) || {}).hp; const eat = WD.eat && hp !== undefined && hp < 30;
             dealDamage(a.target, inst || eat ? 999 : WD.dmg, 'n', { kind: 'melee', w: a.kind }); sfx(a.kind === 'wolf' ? 'bark' : 'roar', a.x, a.z, 0.7);
-            if (a.kind === 'boar') { a.atkT += 0.8; a.yaw += Math.PI * 0.8; } }
+            if (a.kind === 'boar') { a.atkT += 0.8; a.yaw += Math.PI * 0.8; a.chargeT = G.t + 0.7; } }
           else { a.atkT = 1.1; dealDamage(a.target, a.kind === 'bear' ? 22 : 18, 'n', { kind: 'melee' }); sfx('roar', a.x, a.z, 0.6); } } }
     } else {
       if (a.timer <= 0) { if (a.state === 'walk') { a.state = 'idle'; a.timer = rnd(2, 8); } else { a.state = 'walk'; a.timer = rnd(3, 9); a.tx = lerp(a.bounds.x0, a.bounds.x1, Math.random()); a.tz = lerp(a.bounds.z0, a.bounds.z1, Math.random()); } }
@@ -487,13 +535,15 @@ function hostUpdateAnimals(dt) {
       }
       if (Math.random() < dt * 0.02 && S.sfx) sfx(S.sfx, a.x, a.z, 0.5);
     }
+    const px0 = a.x, pz0 = a.z;
     if (sp > 0 && tx !== undefined) {
-      const dx = tx - a.x, dz = tz - a.z; const d = Math.hypot(dx, dz); if (d > 0.3) { a.yaw = dampAng(a.yaw, Math.atan2(dx, dz), 5, dt); a.x += Math.sin(a.yaw) * sp * dt; a.z += Math.cos(a.yaw) * sp * dt; }
+      const dx = tx - a.x, dz = tz - a.z; const d = Math.hypot(dx, dz); if (d > 0.3) { if (!(a.chargeT > G.t)) a.yaw = dampAng(a.yaw, Math.atan2(dx, dz), a.state === 'attack' ? (d < 12 ? 30 : 10) : 5, dt); a.x += Math.sin(a.yaw) * sp * dt; a.z += Math.cos(a.yaw) * sp * dt; }
     }
     a.spd = sp;
     if (a.state !== 'follow') { const b = a.bounds; const m = a.stray || a.wild ? 0 : 0; if ((!a.wild && !a.stray || a.state !== 'flee') && !(a.wild && a.state === 'attack')) { a.x = clamp(a.x, b.x0, b.x1); a.z = clamp(a.z, b.z0, b.z1); } }
     const r = resolveCircle(a.x, a.z, Math.min(0.8, (S.body ? S.body[2] : 0.3) * 0.6), a.y, 1); a.x = r.x; a.z = r.z; a.y = groundHeight(a.x, a.z, a.y + 1);
-    if (terrainH(a.x, a.z) < LAND - 1.5 && a.state !== 'follow') { a.x -= Math.sin(a.yaw) * 2; a.z -= Math.cos(a.yaw) * 2; a.yaw += Math.PI; }
+    if (a.wild && terrainH(a.x, a.z) < LAND - 1.2) { a.x = px0; a.z = pz0; if (a.state !== 'attack') { a.tx = (a.bounds.x0 + a.bounds.x1) / 2; a.tz = (a.bounds.z0 + a.bounds.z1) / 2; } } // 야생 동물은 물에 들어가지 않는다 (예전엔 물가에서 빙빙 돌다 바다로 떠내려갔다)
+    else if (terrainH(a.x, a.z) < LAND - 1.5 && a.state !== 'follow') { a.x -= Math.sin(a.yaw) * 2; a.z -= Math.cos(a.yaw) * 2; a.yaw += Math.PI; }
   }
 }
 function animalDamage(a, amt, from, opts = {}) {
@@ -503,10 +553,12 @@ function animalDamage(a, amt, from, opts = {}) {
   else if (a.state !== 'follow') { a.state = 'flee'; a.timer = 6; const tp = from === ME.id ? ME : G.players.get(from); if (tp) { a.fx = tp.x; a.fz = tp.z; } else { a.fx = a.x + 1; a.fz = a.z; } }
 }
 function renderAnimals(dt, cam) {
-  const view = Math.max(125, Q().npcView * 2.2);
+  // 표시 거리: 작은 동물 170m 이상 · 큰 동물(사슴·소·곰·늑대…) 260m 이상 (예전엔 108~216m라 조금만 멀어도 사라졌다)
+  const nv = Q().npcView, vSmall = Math.max(nv * 1.5, 170), vBig = Math.max(nv * 2.2, 260);
   for (const a of ANIMALS) {
+    if (a._big === undefined) { const S = a.S; a._big = S.biped ? (S.h || 0) >= 1.2 : (S.body[0] >= 0.9 || S.leg + S.body[1] >= 0.9); }
     const d = Math.hypot(a.x - cam.x, a.z - cam.z);
-    if (d > view) { if (a.obj) a.obj.root.visible = false; continue; }
+    if (d > (a._big ? vBig : vSmall)) { if (a.obj) a.obj.root.visible = false; continue; }
     if (!a.obj) { a.obj = new Animal(a.kind, a.seed); scene.add(a.obj.root); }
     if (!G.isHost && a.tx2 !== undefined) { a.x = damp(a.x, a.tx2, 8, dt); a.z = damp(a.z, a.tz2, 8, dt); a.y = damp(a.y, a.ty2, 8, dt); a.yaw = dampAng(a.yaw, a.tyaw, 8, dt); }
     a.obj.root.visible = true; a.obj.root.position.set(a.x, a.y, a.z); a.obj.root.rotation.y = a.yaw;

@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101410
 
 // ================= 생활: NPC 강도 반응 · 집에서 잠자기 =================
 
@@ -29,8 +29,8 @@ function onRobResult(m) {
   const p = PEDS[m.id]; const say = (s, d = 3) => { if (p && p.char && p.state !== 'dead') p.char.say(s, d); };
   const again = (lines, n) => { for (let i = 1; i <= n; i++) setTimeout(() => say(pick(lines), 2.2), i * 1800); };
   if (m.r === 'broke') { const L = ['살려주세요!! 돈 없어요!!', '제발요… 진짜 한 푼도 없어요!', '살려주세요!!', '때리지 마세요!!']; say(pick(L)); again(L, 3); toast('😰 돈이 한 푼도 없다…'); }
-  else if (m.r === 'pay') { const a = m.amt * JOBS.robMul(); ME.money += a; sfx('cash'); say('가, 가져가세요! 살려주세요!'); toast(`💵 뺏은 돈 ${fmtMoney(a)}`); if (Math.random() < 0.3) addWanted(1); }
-  else if (m.r === 'report') { const a = m.amt * JOBS.robMul(); ME.money += a; sfx('cash'); const L = ['경찰 아저씨!! 강도예요!!', '여보세요 112죠?! 강도가…!', '도와주세요!! 강도야!!']; say(pick(L)); again(L, 2); toast(`💵 ${fmtMoney(a)} — 📞 도망치면서 신고하고 있다!`, 3200); }
+  else if (m.r === 'pay') { const a = m.amt * JOBS.robMul(); ME.money += a; sfx('cash'); say('가, 가져가세요! 살려주세요!'); toast(`💵 뺏은 돈 ${fmtMoney(a)}`); if (Math.random() < 0.6) addWanted(1); JOBS.crime('rob'); }
+  else if (m.r === 'report') { const a = m.amt * JOBS.robMul(); ME.money += a; sfx('cash'); const L = ['경찰 아저씨!! 강도예요!!', '여보세요 112죠?! 강도가…!', '도와주세요!! 강도야!!']; say(pick(L)); again(L, 2); toast(`💵 ${fmtMoney(a)} — 📞 도망치면서 신고하고 있다!`, 3200); JOBS.crime('rob'); }
   else if (m.r === 'fight') { say(pick(['이게 미쳤나?!', '한번 해보자 이거야!', '어디서 감히!'])); toast('👊 상대가 반격한다!'); }
   else if (m.r === 'gun') { say(pick(['총 맞고 싶냐?!', '꺼져, 쏜다!'])); toast('🔫 상대가 총을 꺼냈다!'); sfx('error'); }
 }

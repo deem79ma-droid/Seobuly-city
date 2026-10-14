@@ -1,3 +1,5 @@
+// @v 2026101410
+
 
 // ================= 경찰 신고 · 수사 · 판결 =================
 // 피해자: 나를 공격한 상대(플레이어·갱단원)를 기록 → 🚨 신고(J / 폰 112 / 터치 🚨)
@@ -128,7 +130,7 @@ const POLICE = {
     if (m.r === 'player' && !m.adm) {
       if (meA) {
         const my = this.loadMy();
-        if (m.act === '체포') { my.c++; ME.warrant = { s: m.s, until: G.t + 240, v: m.vn }; if (ME.wanted < 2) { ME.wanted = 2; ME.wantedCool = 0; UI.updateStars(true); } announce('🚨 체포 영장 발부', `${m.vn}님 신고 · 형량 ${m.s}초 — 경찰이 출동했다`); sfx('error'); }
+        if (m.act === '체포') { my.c++; ME.warrant = { s: m.s, until: G.t + 600, v: m.vn }; if (ME.wanted < 2) { ME.wanted = 2; ME.wantedCool = 0; UI.updateStars(true); } announce('🚨 체포 영장 발부', `${m.vn}님 신고 · 형량 ${m.s}초 — 경찰이 출동했다`); sfx('error'); }
         else { my.w++; if (m.fine) { const f = Math.min(ME.money, m.fine); ME.money -= f; toast(`💸 벌금 ${fmtMoney(f)} 납부`); } else toast('⚠ 경찰 경고: 조심하세요'); }
         this.saveMy();
       }
@@ -144,16 +146,33 @@ const POLICE = {
     clearTimeout(this._cT); this._cT = setTimeout(() => { el.style.display = 'none'; }, 14000); this.card = el;
   },
   // ---------- 경찰 출동 (방장 NPC) ----------
-  freeCop(x, z, near = 70) {
+  freeCop(x, z, near = 70, dmin = 28, dmax = 45) {
     let best = null, bd = near;
     for (const p of PEDS) if (p.kind === 'police' && (p.state === 'walk' || p.state === 'idle' || p.state === 'talk') && !p.raidCop) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
     if (best) return best;
     // 근처에 경찰이 없으면 순찰 경찰을 새로 배치 (안 보이는 NPC를 경찰로 바꿔 35m 밖 도로에 세운다)
     const spare = PEDS.filter(p => p.state === 'parked' || ((p.kind === 'civ' || p.kind === 'worker') && p.state === 'walk' && nearestPlayerDist(p.x, p.z) > 90)).sort((a, b) => (a.state === 'parked' ? -1 : 0) - (b.state === 'parked' ? -1 : 0))[0];
-    if (!spare) return null; const r = edgeNearPoint(x, z, 28, 45, e => !e.bridge);
+    if (!spare) return null; const r = edgeNearPoint(x, z, dmin, dmax, e => !e.bridge);
     pedSetIdentity(spare, 'police', (Math.random() * 1e9) | 0);
-    if (r) placePedOnEdge(spare, r.e, r.t, 1, 1); else { const a = rnd(0, TAU); spare.x = x + Math.sin(a) * 30; spare.z = z + Math.cos(a) * 30; spare.y = groundHeight(spare.x, spare.z); }
+    if (r) placePedOnEdge(spare, r.e, r.t, 1, 1); else { const a = rnd(0, TAU), dd = (dmin + dmax) / 2; spare.x = x + Math.sin(a) * dd; spare.z = z + Math.cos(a) * dd; spare.y = groundHeight(spare.x, spare.z); }
     spare.spawnT = G.t; spare.job = 'patrol'; return spare;
+  },
+  // 수배자에게 경찰 출동 (방장, 5초마다): ★1 1명 · ★2 2명 · ★3 3명 · ★4 4명 · ★5 6명이 쫓아온다
+  //  - 새로 신고되거나(★이 올라감) 경찰·순찰차 눈에 띄는 동안만 계속 보낸다 → 멀리 따돌리고 15초 숨으면 추적이 끊기고 ★이 줄기 시작한다
+  hostDispatch() {
+    const seen = this._seen || (this._seen = {}), lw = this._lw || (this._lw = {});
+    for (const pl of playersList()) {
+      const w = pl.wanted | 0, pw = lw[pl.id] | 0; lw[pl.id] = w; if (!w || pl.inside) continue; if (pl.me ? ADMIN.on : G.adminId === pl.id) continue;
+      if (w > pw || PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - pl.x, q.z - pl.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - pl.x, v.z - pl.z) < 90)) seen[pl.id] = G.t;
+      if (G.t - (seen[pl.id] ?? -99) > 15) continue; // 경찰이 놓쳤다
+      const want = [0, 1, 2, 3, 4, 6][Math.min(5, w)]; let have = 0;
+      for (const p of PEDS) if (p.kind === 'police' && p.state === 'fight' && p.target && p.target.id === pl.id) { have++; if (p.dispT < G.t + 20) p.dispT = G.t + 30; }
+      for (let i = have; i < want; i++) {
+        const c = this.freeCop(pl.x, pl.z, 130, 80, 115); if (!c) break; // 새 경찰은 80~115m 밖에서 달려온다
+        c.state = 'fight'; c.target = { kind: pl.me ? 'me' : 'player', id: pl.id }; c.dispT = G.t + 40; c.percT = 1;
+        if (c.char) c.char.say(pick(['🚨 거기 서!', '🚔 경찰이다! 멈춰!', '🚨 수배자 발견!', '🚔 손 들어!']), 3);
+      }
+    }
   },
   dispatch(id) {
     const tg = { kind: id === ME.id ? 'me' : 'player', id }; const tp = id === ME.id ? anchorOf(ME) : anchorOf(G.players.get(id) || { x: ME.x, z: ME.z });
@@ -180,6 +199,7 @@ const POLICE = {
   tick(dt) {
     if (!G.started) return;
     if (G.isHost && (this._oT = (this._oT || 0) - dt) <= 0) { this._oT = 0.5; this.observe(ME.id, ME.wanted, this.rcOut()); }
+    if ((!G.online || G.isHost) && (this._dT = (this._dT || 0) - dt) <= 0) { this._dT = 5; this.hostDispatch(); }
     const w = ME.warrant; if (w) { if (ME.jail || ADMIN.on) ME.warrant = null; else if (G.t > w.until) { ME.warrant = null; toast('📄 체포 영장 만료 — 하지만 전과 기록은 남는다'); } else if (!ME.dead && ME.wanted < 2) { ME.wanted = 2; ME.wantedCool = 0; UI.updateStars(); } }
     if ((this._bT = (this._bT || 0) - dt) <= 0) { this._bT = 1; this.refreshBtn(); }
   },

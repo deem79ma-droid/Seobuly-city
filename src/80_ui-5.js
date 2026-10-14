@@ -1,9 +1,9 @@
-// @v 2026101323
+// @v 2026101410
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
 let annT = 0;
-function announce(a, b = '') { const el = $('#bigMsg'); el.innerHTML = `${a}<small>${b}</small>`; el.style.opacity = 1; clearTimeout(annT); annT = setTimeout(() => el.style.opacity = 0, 3200); sfx('levelup'); }
+function announce(a, b = '') { const el = $('#bigMsg'); el.textContent = String(a ?? ''); const sm = document.createElement('small'); sm.textContent = String(b ?? ''); el.appendChild(sm); /* 글자로만 넣는다 (다른 사람이 보낸 공지에 HTML이 섞여도 실행되지 않게) */ el.style.opacity = 1; clearTimeout(annT); annT = setTimeout(() => el.style.opacity = 0, 3200); sfx('levelup'); }
 const UI = {
   menuOpen: false, mapOpen: false, waypoint: null, lastRegion: '',
   init() {
@@ -18,7 +18,7 @@ const UI = {
   // ---------- HUD ----------
   updateHud() {
     { const adm = ADMIN.on && ADMIN.ready; const k = ME.name + '|' + adm; const el = $('#myName'); if (el && el._k !== k) { el._k = k; el.innerHTML = '🙂 <span></span>' + (adm ? '<span class="admBadge">👑 관리자</span>' : ''); el.querySelector('span').textContent = ME.name; } }
-    $('#money').textContent = fmtMoney(ME.money);
+    $('#money').textContent = fmtMoney(ME.money); { const cb = $('#cardBal'); if (cb) cb.textContent = '💳 ' + fmtMoney(CARD.bal); }
     { const god = adminGod(); const hb = $('#hpBar'); if (hb.classList.contains('inf') !== god) hb.classList.toggle('inf', god); $('#hpBar i').style.width = (god ? 100 : clamp(ME.hp, 0, 100)) + '%'; } $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
     const regionChanged = R !== this.lastRegion;
@@ -38,12 +38,13 @@ const UI = {
   updateWeapon() { const W = WEAPONS[ME.weapon]; $('#wName').textContent = `${W.icon} ${W.name}`; $('#wAmmo').textContent = W.melee ? (W.chop ? '나무를 베면 목재 획득' : '') : `${ME.mag[ME.weapon] || 0} / ${ME.ammo[ME.weapon] || 0}${ME.reloadT > 0 ? ' · 재장전…' : ''}`; this.buildHotbar(); },
   damageFlash(a) { const e = $('#dmgFlash'); e.style.transition = 'none'; e.style.opacity = Math.min(0.9, 0.3 + a); requestAnimationFrame(() => { e.style.transition = 'opacity .5s'; e.style.opacity = 0; }); },
   hitMarker() { const c = $('#cross'); c.classList.add('hit'); clearTimeout(this._hm); this._hm = setTimeout(() => c.classList.remove('hit'), 120); sfx('hit', undefined, undefined, 0.3); },
-  setPrompt(it) { const el = $('#prompt'); if (!it) { el.classList.add('hidden'); return; } el.classList.remove('hidden'); el.innerHTML = IS_TOUCH ? `<kbd>${it.key === 'F' ? '🚗' : '✋'}</kbd>${it.label}` : `<kbd>${it.key}</kbd>${it.label}`; },
+  setPrompt(it) { const el = $('#prompt'); if (!it) { el.classList.add('hidden'); return; } el.classList.remove('hidden'); el.innerHTML = IS_TOUCH ? `<kbd>${it.key === 'F' ? '🚗' : '✋'}</kbd>${escHtml(it.label)}` : `<kbd>${escHtml(it.key)}</kbd>${escHtml(it.label)}`; },
   // ---------- chat ----------
   openChat() { const i = $('#chatIn'); i.classList.remove('hidden'); i.focus(); if (document.pointerLockElement) document.exitPointerLock(); },
   closeChat() { const i = $('#chatIn'); i.value = ''; i.classList.add('hidden'); i.blur(); },
   sendChat() {
-    const i = $('#chatIn'); const m = i.value.trim(); this.closeChat(); this._chatSentT = performance.now(); if (!m) return;
+    const i = $('#chatIn'); const m = cleanText(i.value.trim(), 80); this.closeChat(); this._chatSentT = performance.now(); if (!m) return;
+    if (!m.startsWith('/') && !NET.rate('me-chat', 5, 5)) { toast('채팅을 너무 빨리 보내고 있다 — 잠깐 쉬었다가'); return; }
     if (m.startsWith('/')) { this.command(m); return; }
     this.chatLine(displayName(ME.id, ME.name), m); ME.char.say(m); NET.send({ t: 'chat', m });
   },
@@ -62,14 +63,15 @@ const UI = {
   openMenu(title, desc, items, opts = {}) {
     { const f = this._onClose; this._onClose = null; if (f) f(); }
     this.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
-    const box = $('#menuBox'); box.innerHTML = `<h2></h2><div class="desc"></div><div class="items"></div>${opts.extra || ''}<button class="btn b3 close">닫기</button>`;
+    if (!opts.phone) this._phTok = null; // 다른 창이 열리면 폰 로딩은 취소
+    const box = $('#menuBox'); box.dataset.phone = opts.phone || ''; box.innerHTML = `<h2></h2><div class="desc"></div><div class="items"></div>${opts.extra || ''}<button class="btn b3 close">닫기</button>`;
     box.querySelector('h2').textContent = title; box.querySelector('.desc').innerHTML = desc || '';
     const wrap = box.querySelector('.items');
     for (const it of items) {
       const b = document.createElement('button'); b.className = 'item' + (it.dis ? ' dis' : '');
       b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined && (typeof it.p === 'number' ? it.p > 0 : it.p !== '') ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
-      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전에는 구매할 수 없습니다'); return; } if (ME.money < it.p) { toast('💸 돈이 부족하다'); sfx('error'); return; } ME.money -= it.p; } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전엔 살 수 없다'); sfx('error'); return; } if (!CARD.pay(it.p)) { toast('💸 돈이 부족하다 (현금 + 카드)'); sfx('error'); return; } } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
       wrap.appendChild(b);
     }
     box.querySelector('.close').onclick = () => this.closeMenu();
@@ -78,13 +80,14 @@ const UI = {
   closeMenu() { this.menuOpen = false; $('#menu').classList.add('hidden'); clearInterval(this._mg); const f = this._onClose; this._onClose = null; if (f) f(); },
   // ---------- facility ----------
   openFacility(f) {
+    if (ME.wanted > 0 && !ADMIN.on && (f.type === 'gun' || f.type === 'dealer')) { toast('🚨 수배자는 받지 않는다 — 가게 문이 잠겼다', 3000); sfx('error'); return; }
     sfx('door'); const skillUp = (k, name) => { if (ME.skills[k] >= 5) { toast('이미 최고 레벨!'); return; } ME.skills[k]++; sfx('levelup'); toast(`📈 ${name} 레벨 ${ME.skills[k]}`); };
     const heal = (n) => { ME.hp = Math.min(100, ME.hp + n); };
     switch (f.type) {
       case 'police': this.openMenu('🚓 경찰서', `${REGIONS[f.region].name} 경찰서. 현재 수배 ★${ME.wanted}`, [
         { ic: '🙇', t: '자수하기 (감옥에서 형량 복역)', p: 0, d: JOBS.criminal() ? `남은 형량 ${Math.ceil(JOBS.record)}초 · 복역하면 범죄자 신분 해제` : '범죄 기록이 없다', dis: !JOBS.criminal() && !ME.wanted, disMsg: '범죄 기록도 수배도 없다', fn: () => { LAW.arrest(); } },
-        { ic: '💸', t: '벌금 내고 수배 해제', p: ME.wanted * 2500 || 0, d: '★당 ₩2,500', dis: !ME.wanted, disMsg: '수배 중이 아니다', fn: () => { ME.wanted = 0; toast('✅ 수배 해제'); } },
-        { ic: '🪪', t: `출소카드 구입 (보유 ${ME.inv.card | 0})`, p: 25000, d: '수감 중 E 로 즉시 출소', stay: true, fn: () => { ME.inv.card = (ME.inv.card | 0) + 1; toast('🪪 출소카드 +1'); } },
+        { ic: '💸', t: '벌금 내고 수배 해제', p: ME.wanted * 10000 || 0, d: '가벼운 위반만 (★1~2 · 범죄 기록 없음) · ★당 ₩10,000', dis: !ME.wanted || ME.wanted > 2 || JOBS.criminal(), disMsg: !ME.wanted ? '수배 중이 아니다' : '중범죄는 벌금으로 안 된다 — 자수해서 복역해야 한다', fn: () => { ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); toast('✅ 벌금 납부 — 수배 해제'); } },
+        { ic: '🪪', t: `출소카드 구입 (보유 ${ME.inv.card | 0})`, p: 25000, d: '수감 중 E 로 즉시 출소 · 남은 형량(범죄 기록)은 그대로', stay: true, fn: () => { ME.inv.card = (ME.inv.card | 0) + 1; toast('🪪 출소카드 +1'); } },
         { ic: '📞', t: '갱단 원한 해제 상담', p: 5000, d: '레드/블루 갱이 더 이상 노리지 않음', fn: () => { ME.grudge = {}; toast('🤝 갱단 원한이 풀렸다'); } },
         { ic: '🚔', t: '압류 차량 찾기', p: 1500, d: '내 차를 경찰서 앞으로', dis: !ME.garage.length, disMsg: '보유 차량 없음', fn: () => this.openGarage(f.x, f.z) }]); break;
       case 'hospital': this.openMenu('🏥 병원', '치료와 의약품', [
@@ -136,7 +139,7 @@ const UI = {
   openGun() {
     const items = [];
     for (const w of WEAPON_ORDER) { const W = WEAPONS[w]; if (!W.price) continue; if (!ME.weapons[w]) items.push({ ic: W.icon, t: W.name, p: W.price, d: W.melee ? '근접 무기' : `탄창 ${W.mag}발 포함`, fn: () => { ME.weapons[w] = 1; if (!W.melee) { ME.mag[w] = W.mag; ME.ammo[w] = (ME.ammo[w] || 0) + W.mag; } selectWeapon(w); this.buildHotbar(); saveGame(); setTimeout(() => CINE_EV.gun(W.name), 150); } }); else if (!W.melee) items.push({ ic: '📦', t: `${W.name} 탄약`, p: W.ammoPrice, d: `+${W.mag * 2}발 (보유 ${ME.ammo[w] || 0})`, stay: true, fn: () => { ME.ammo[w] = (ME.ammo[w] || 0) + W.mag * 2; UI.updateWeapon(); this.openGun(); return true; } }); }
-    items.push({ ic: '🦺', t: '방탄복', p: 2500, d: '피해 1회 방어 · 소모품', fn: () => { ME.armor = 100; } });
+    items.push({ ic: '🦺', t: '방탄조끼', p: 2500, d: ME.armor > 0 ? '이미 입고 있다' : '목숨 +1 (피해 100을 대신 받고 부서짐 · 죽으면 잃음)', dis: ME.armor > 0, disMsg: '이미 방탄조끼를 입고 있다', fn: () => { ME.armor = 100; toast('🦺 방탄조끼 착용 — 피해 100까지 대신 막아 준다'); } });
     items.push({ ic: '', t: '수류탄 3개', p: 4500, d: `B 키로 던지기 · 2.4초 뒤 폭발 · 보유 ${ME.inv.grenade | 0}개`, stay: true, fn: () => { ME.inv.grenade = (ME.inv.grenade | 0) + 3; UI.updateInv && UI.updateInv(); this.openGun(); return true; } });
     this.openMenu('🔫 총포사', '무기와 탄약 · 경찰 앞에서 쏘면 수배된다', items);
   },
@@ -211,7 +214,7 @@ const UI = {
   openPed(p) {
     const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { pedAction(p, 'talk'); } } /* NPC가 기억·상황에 맞게 대답한다 (방장이 정함) */, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { const d = Math.floor(Math.random() * 8); ME.dance = d; pedAction(p, 'dance', d); } }];
     if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { if (p.char) p.char.say('뭐, 뭐예요?!', 1.4); pedAction(p, 'rob'); } }); // 반응은 방장이 정한다: 돈 없음·순순히·도망치며 신고·반격·총
-    if (p.kind === 'police' && ME.wanted) items.push({ ic: '🙇', t: '자수하기', p: ME.wanted * 1500, d: '벌금 내고 수배 해제', fn: () => { ME.wanted = 0; toast('🙇 자수했다'); } });
+    if (p.kind === 'police' && (ME.wanted || JOBS.criminal())) items.push({ ic: '🙇', t: '자수하기', p: 0, d: '재판을 받고 감옥에서 복역', fn: () => { toast('🙇 자수했다'); LAW.arrest(); } });
     if (p.kind === 'police' && ADMIN.on) items.push({ ic: '🔓', t: '수감자 무료 석방 (관리자)', p: 0, fn: () => ADMIN.freeOther() });
     if (p.kind === 'medic') items.push({ ic: '💉', t: '응급치료', p: 500, fn: () => { ME.hp = 100; } });
     this.openMenu(p.kind === 'police' ? '👮 경찰' : p.kind.startsWith('gang') ? (p.kind === 'gangA' ? '🔴 레드 크루' : '🔵 블루 독스') : p.kind === 'medic' ? '🧑‍⚕️ 의사' : '🧑 시민', '', items);
@@ -226,18 +229,29 @@ const UI = {
   openPlayer(rp) {
     this.openMenu(`🤝 ${displayName(rp.id, rp.name)}`, '', [
       ...(ADMIN.on && rp.jail ? [{ ic: '🔓', t: '무료 석방', p: 0, fn: () => NET.send({ t: 'free', to: rp.id }) }] : []),
-      { ic: '💸', t: '₩1,000 송금', p: 1000, fn: () => { NET.send({ t: 'chat', m: `💸 ${ME.name} → ${rp.name} ₩1,000 송금`, sys: 1 }); NET.send({ t: 'income', to: rp.id, amt: 1000 }); } },
+      { ic: '💸', t: '₩1,000 송금', p: 1000, fn: () => { NET.send({ t: 'chat', m: `💸 ${ME.name} → ${rp.name} ₩1,000 송금`, sys: 1 }); NET.send({ t: 'gift', to: rp.id }); } },
       { ic: '👋', t: '손 흔들기', p: 0, fn: () => { ME.action = 'wave'; ME.actionT = 0; NET.send({ t: 'act', a: 'wave' }); } },
       { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { ME.dance = rp.dance >= 0 ? rp.dance : 0; NET.send({ t: 'chat', m: `💃 ${ME.name}님이 같이 춤추자고 한다!`, sys: 1 }); } }]);
   },
   openDance() {
     this.openMenu('💃 춤', 'X 또는 이동하면 멈춘다', DANCES.map((n, i) => ({ ic: ['🕺', '🌊', '🎤', '🪩', '🌀', '🤖', '🐎', '🧵'][i], t: n, p: 0, fn: () => { ME.dance = i; ME.sitBench = null; } })));
   },
-  openPhone() {
-    if (this.menuOpen) { this.closeMenu(); return; }
+  openPhone(tab) {
+    if (this.menuOpen && !tab) { this.closeMenu(); return; }
+    const P = PHONE.cur(), w = PHONE.wait(!!tab);
+    if (w > 0.05) { // 📱 로딩 화면 (스테이온 보급형은 느리다)
+      const tok = this._phTok = {}; const slow = w > P.lag + 0.1;
+      this.openMenu('📱 ' + P.n, `<div class="phload"><span class="spin"></span><b>${tab ? '앱 여는 중…' : 'StayOn 부팅 중…'}</b>${slow ? '<small>버벅거린다… (보급형이라 느리다)</small>' : ''}</div>`, [], { phone: P.id });
+      setTimeout(() => { if (this._phTok === tok && this.menuOpen) this.openPhoneNow(tab); }, w * 1000); return;
+    }
+    this.openPhoneNow(tab);
+  },
+  openPhoneNow(tab) {
+    tab = tab || this.phoneTab || 'main'; this.phoneTab = tab; const PH = PHONE.cur();
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
-    this.openMenu('📱 휴대폰', `${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`, [
+    const desc = `<small style="opacity:.75">${PH.n} · ${PH.g} · 💳 ${fmtMoney(CARD.bal)}</small><br>${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`;
+    const ALL = [
       { ic: '🏛️', t: '정치 · 경제', p: 0, d: `${ECON.presName()} · 세금 ${Math.round(ECON.taxRate() * 100)}% · 집값 ×${ECON.houseMul().toFixed(2)}${ECON.E.elec ? ' · 🗳️ 선거 중!' : ''}`, fn: () => setTimeout(() => ECON.open(), 30) },
       { ic: '📰', t: '서불리 일보', p: 0, d: ECON.E.news[0] ? ECON.E.news[0].s.slice(0, 40) : '뉴스 없음', fn: () => setTimeout(() => ECON.openNews(), 30) },
       { ic: '🧭', t: '장소 찾기', p: 0, d: UI.waypoint ? `📍 ${UI.waypoint.label || '표시한 곳'} · ${whereTxt(UI.waypoint.x, UI.waypoint.z)}` : '총포사·옷가게·음식점… 방향·거리 안내', fn: () => setTimeout(() => NAV.open(), 30) },
@@ -262,7 +276,12 @@ const UI = {
       { ic: '🖱️', t: '마우스 감도', p: 0, d: 'x' + (G.sens || 1), dis: IS_TOUCH, disMsg: '터치에선 필요 없어요', fn: () => setTimeout(() => this.openSens(), 30) },
       { ic: '❓', t: '조작법 (F1)', p: 0, fn: () => setTimeout(() => this.openHelp(), 30) },
       { ic: '🛠️', t: '관리자', p: 0, d: ADMIN.enabled() ? (ADMIN.on ? '로그인됨' : '비밀번호 필요') : '이 빌드에선 비활성', fn: () => setTimeout(() => ADMIN.open(), 30) },
-    ]);
+      ...QUEST.phoneItems(),
+    ];
+    // 휴대폰 탭: 주요 · 생활 · 사회 · 설정
+    const TAB_OF = t => /직업|의뢰|장소|지도|차 부르기|택시|튜토리얼|가이드/.test(t) ? 'main' : /구급|도시락|반려|춤|시점|저장/.test(t) ? 'life' : /정치|일보|랭킹|업적|현상금|신고|초대/.test(t) ? 'social' : 'set';
+    const TABS = [['main', '주요'], ['life', '생활'], ['social', '사회'], ['set', '설정']];
+    this.openMenu('📱 ' + PH.n, desc, ALL.filter(it => TAB_OF(it.t) === tab), { phone: PH.id, after: box => { const bar = document.createElement('div'); bar.className = 'ctabs'; for (const [k, n] of TABS) { const b = document.createElement('button'); b.type = 'button'; b.className = 'ctab' + (k === tab ? ' on' : ''); b.textContent = n; b.onclick = () => { sfx('ui'); this.openPhone(k); }; bar.appendChild(b); } box.insertBefore(bar, box.querySelector('.items')); } });
   },
   confirmLeave() {
     this.openMenu('🚪 ' + (G.online ? '서버 나가기' : '메인 화면으로'), G.online ? `방 <b style="color:#ffd34a">${G.room || ''}</b>에서 나가 로비로 돌아갑니다.<br><small style="opacity:.75">진행 상황은 자동 저장돼요</small>` : '저장하고 로비로 돌아갑니다.', [
@@ -345,7 +364,7 @@ const UI = {
     if (this.waypoint) { const s = P(this.waypoint.x, this.waypoint.z); mapPin(x, s[0], s[1], 28); }
     x.font = '20px sans-serif'; JOBS.drawBig(x, P);
     TAXI.drawRoute(x, P); if (TAXI.cab) { const s = P(TAXI.cab.x, TAXI.cab.z); mapBadge(x, 'taxi', s[0], s[1], 18); }
-    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); }
+    for (const rp of G.players.values()) { const ra = anchorOf(rp); const s = P(ra.x, ra.z); x.fillStyle = '#ffd34a'; x.beginPath(); x.arc(s[0], s[1], 7, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.fillText(rp.name, s[0], s[1] - 14); const bt = ECON.E.bounty && ECON.E.bounty[rp.id]; if (bt) { x.fillStyle = '#ff4a4a'; x.font = 'bold 12px sans-serif'; x.fillText('현상금 ' + fmtMoney(bt.amt), s[0], s[1] + 16); } }
     const MA = anchorOf(ME); const me = P(MA.x, MA.z); x.fillStyle = '#ff3d6a'; x.beginPath(); x.arc(me[0], me[1], 8, 0, TAU); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 14px sans-serif'; x.fillText('나', me[0], me[1] - 16);
     x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillStyle = 'rgba(255,255,255,.8)'; x.fillText('지도를 클릭하면 목적지 설정 · 숫자 = 16개 구역 (택시 목적지)', 14, H - 16); { let lx = 430; for (const [k, t] of [['plotEmpty', '매물'], ['plotBuild', '공사중'], ['plotMine', '내 건물'], ['taxi', '택시'], ['court', '법원'], ['army', '군부대']]) { mapBadge(x, k, lx, H - 20, 15); x.fillStyle = 'rgba(255,255,255,.85)'; x.textAlign = 'left'; x.font = '13px sans-serif'; x.fillText(t, lx + 12, H - 16); lx += 30 + t.length * 13; } }
   },
@@ -427,7 +446,7 @@ function fastTravel(r) {
 // ---------- customizer (lobby + clothes shop) ----------
 function buildCustomizer(el, o, onChange) {
   el.innerHTML = '';
-  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['beard', '수염', OPT.beard]];
+  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['face', '얼굴형', OPT.face], ['eyes', '눈매', OPT.eyes], ['brow', '눈썹', OPT.brow], ['nose', '코', OPT.nose], ['mark', '피부 특징', OPT.mark], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['acc', '액세서리', OPT.acc], ['beard', '수염', OPT.beard]];
   for (const [k, label, opts] of fields) {
     const f = document.createElement('div'); f.className = 'f'; f.innerHTML = `<label>${label}</label>`;
     let inp; if (opts) { inp = document.createElement('select'); for (const [v, n] of opts) { const op = document.createElement('option'); op.value = v; op.textContent = n; inp.appendChild(op); } }

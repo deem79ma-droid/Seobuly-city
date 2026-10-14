@@ -1,10 +1,11 @@
-// @v 2026101323
+// @v 2026101410
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
 const ROOM_PREFIX = 'sbc3d-v1-';
 const PUBLIC_ROOMS = ['PUB01','PUB02','PUB03','PUB04','PUB05','PUB06','PUB07','PUB08','PUB09','PUB10','PUB11','PUB12','PUB13','PUB14','PUB15','PUB16','PUB17','PUB18','PUB19','PUB20'];
 const NET_ERR = {
+  iddup: '같은 아이디로 이미 접속 중이에요 — 다른 탭을 닫고 다시 시도해 주세요', slow: '접속 시도가 너무 많아요 — 1분 뒤에 다시 해 주세요',
   namelock: '이 닉네임은 가입된 계정이에요 — 비밀번호로 로그인하거나 다른 닉네임을 써 주세요',
   'peer-unavailable': '방을 찾을 수 없어요 — 친구가 게임 화면을 켜 두었는지 확인해 주세요',
   'unavailable-id': '이미 사용 중인 방 코드예요', full: `방이 가득 찼어요 (최대 ${MAX_PLAYERS}명)`, allfull: '공개방이 모두 가득 찼어요 — 잠시 후 다시 시도하거나 링크로 초대해 보세요',
@@ -37,7 +38,7 @@ function peerOpts() {
   { urls: 'stun:staticauth.openrelay.metered.ca:80' },
   ...TURN.ice
 ] } };
-  const h = URLP.get('peerhost'); // 테스트/자체 서버용 (기본은 PeerJS 공개 클라우드 서버, https)
+  const h = DEV ? URLP.get('peerhost') : null; // 테스트/자체 서버용 (내 컴퓨터에서만) (기본은 PeerJS 공개 클라우드 서버, https)
   if (h) { o.host = h; o.port = +(URLP.get('peerport') || 443); o.path = URLP.get('peerpath') || '/'; o.secure = URLP.has('peersecure') ? URLP.get('peersecure') === '1' : o.port === 443; }
   return o;
 }
@@ -49,7 +50,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SERVER_URL = '__SERVER_URL__';
 const NET = {
   ws: null, wsMode: false, wsHost: null, wsSave: null, wsRoom: null, wsUp: false, _saveT: 0,
-  server() { const s = URLP.get('server') || SERVER_URL; return s && !s.startsWith('__') ? s.replace(/\/+$/, '') : ''; },
+  // 공개 사이트에선 주소창(?server=)으로 서버를 바꿀 수 없다
+  server() { const s = (DEV && URLP.get('server')) || SERVER_URL; return s && !s.startsWith('__') ? s.replace(/\/+$/, '') : ''; },
+  // 이 탭만 아는 비밀값: 서버가 같은 id의 재접속인지 확인하는 데 쓴다 (남이 내 id로 접속해 나를 쫓아내지 못하게)
+  sk() { if (!this._sk) { try { this._sk = sessionStorage.getItem('sbc3d_sk'); } catch (e) { } if (!this._sk || !/^[0-9a-f]{32}$/.test(this._sk)) { const a = new Uint8Array(16); crypto.getRandomValues(a); this._sk = [...a].map(x => x.toString(16).padStart(2, '0')).join(''); try { sessionStorage.setItem('sbc3d_sk', this._sk); } catch (e) { } } } return this._sk; },
+  // 보낸 사람마다 횟수 제한 (도배·조작 메시지 차단)
+  _rl: new Map(),
+  rate(key, max, win) { const now = performance.now() / 1000; let a = this._rl.get(key); if (!a) { if (this._rl.size > 500) this._rl.clear(); a = []; this._rl.set(key, a); } while (a.length && now - a[0] > win) a.shift(); if (a.length >= max) return false; a.push(now); return true; },
   wsSend(o) { const w = this.ws; if (w && w.readyState === 1) { try { w.send(JSON.stringify(o)); } catch (e) { } } },
   wsConn(peerId) { const self = this; return { pid: null, peerId, open: true, lastRx: performance.now(), send(m) { self.wsSend({ to: self.wsHost === peerId && !G.isHost ? 'host' : peerId, m }); }, close() { } }; },
   // 서버의 방에 접속 → { mode: 'host' | 'join' }
@@ -57,14 +64,14 @@ const NET = {
     const base = this.server(); if (!base || typeof WebSocket === 'undefined') return Promise.reject(netErr('network'));
     try { this.ws && this.ws.close(); } catch (e) { }
     return new Promise((res, rej) => {
-      const url = base.replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(room) + '&id=' + encodeURIComponent(ME.id) + '&n=' + encodeURIComponent(ME.name) + (ACCT.on ? '&tok=' + encodeURIComponent(ACCT.tok) : '');
+      const url = base.replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(room) + '&id=' + encodeURIComponent(ME.id) + '&sk=' + this.sk() + '&n=' + encodeURIComponent(ME.name) + (ACCT.on ? '&tok=' + encodeURIComponent(ACCT.tok) : '');
       let done = false; const ws = new WebSocket(url); this.ws = ws;
       const fail = code => { if (done) return; done = true; clearTimeout(to); try { ws.close(); } catch (e) { } rej(netErr(code)); };
       const to = setTimeout(() => fail('timeout'), ms);
       ws.onmessage = ev => {
         let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
         if (d.sys === 'full') { fail('full'); return; }
-        if (d.sys === 'namelock') { fail('namelock'); return; }
+        if (d.sys === 'namelock' || d.sys === 'iddup' || d.sys === 'slow') { fail(d.sys); return; }
         if (d.sys === 'init') {
           this.wsMode = true; this.wsUp = true; this.wsRoom = room; this.wsHost = d.host; this.wsSave = d.save || null; this.conns = []; this.hostConn = null;
           if (d.host !== ME.id) { this.hostConn = this.wsConn(d.host); this.conns.push(this.hostConn); }
@@ -88,6 +95,8 @@ const NET = {
     // 일반 게임 메시지
     let c = this.conns.find(x => x.peerId === d.from);
     if (!c) { if (!G.isHost) return; c = this.wsConn(d.from); this.conns.push(c); }
+    if (!d.m || typeof d.m !== 'object') return;
+    if (G.isHost) d.m.f = d.from; // 방장: 서버가 확인한 보낸 사람으로 덮어쓴다 (남인 척 보내기 차단)
     c.lastRx = performance.now(); this.onData(d.m, c);
   },
   // 서버가 정한 새 방장
@@ -386,8 +395,10 @@ const NET = {
   flush() { const q = this.queue; this.queue = []; for (const [m, c] of q) this.onData(m, c); },
   onData(m, conn) {
     if (m && (m.t === 'hb' || m.t === 'acc')) return;
-    if (!m || !m.t) return; const f = m.f;
-    if (m.n != null && (m.t === 'hello' || m.t === 'p' || m.t === 'welcome')) m.n = String(m.n).slice(0, 12); if (m.t === 'chat') m.m = String(m.m ?? '').slice(0, 80); // 조작된 클라이언트의 초장문 이름/채팅 방지 (로비·채팅 입력 길이와 같게)
+    if (!m || typeof m !== 'object' || typeof m.t !== 'string') return; let f = m.f;
+    if (G.isHost && conn && !this.wsMode && conn.pid && m.t !== 'hello') m.f = f = conn.pid; // P2P 방장: 연결로 확인된 보낸 사람
+    // 다른 사람이 보낸 글자 정리 (이름·채팅·알림) — 태그·제어문자 제거
+    if (m.n != null && typeof m.n !== 'number') m.n = cleanName(m.n); if (m.t === 'chat') m.m = cleanText(m.m, 80); if (m.t === 'ann') { m.a = cleanText(m.a, 60); m.b = cleanText(m.b, 100); } // 조작된 클라이언트의 초장문 이름/채팅 방지 (로비·채팅 입력 길이와 같게)
     if (G.isHost && conn && conn.pname && m.t === 'p') m.n = conn.pname; // 게임 중 닉네임 바꿔치기 방지
     if (f && f === ME.id && m.t !== 'hello' && m.t !== 'reid') return; // 내 id로 온 메시지(자기 메아리·id 충돌)는 무시 → 자기 자신 복제/자해 방지
     if (!G.started && m.t !== 'full') { if (m.t !== 'p' && m.t !== 'w') this.queue.push([m, conn]); return; }
@@ -395,6 +406,8 @@ const NET = {
     if (G.isHost && !NO_RELAY.has(m.t)) this.relay(m, conn);
     if (G.isHost && conn && conn.pid && (m.t === 'hitAck' || (m.t === 'dmg' && m.to !== ME.id))) POLICE.hostSee(m, conn.pid); // 방장: 신고 수사용 사건 기록
     if (m.to && m.to !== ME.id) return;
+    // 돈·수배·보상처럼 방장만 보낼 수 있는 메시지: 방장 연결에서 방장 이름으로 온 것만 받는다
+    if (HOST_ONLY.has(m.t) && (G.isHost || conn !== this.hostConn || (f && f !== G.hostId))) return;
     switch (m.t) {
       case 'full': toast(`방이 가득 찼다 (최대 ${MAX_PLAYERS}명)`); break;
       case 'hello': {
@@ -480,14 +493,16 @@ const NET = {
         for (const a of m.an) { const A = ANIMALS[a[0]]; if (!A) continue; if (A.tx2 === undefined || Math.hypot(A.x - a[1], A.z - a[3]) > 20) { A.x = a[1]; A.y = a[2]; A.z = a[3]; A.yaw = a[4]; } A.tx2 = a[1]; A.ty2 = a[2]; A.tz2 = a[3]; A.tyaw = a[4]; A.spd = a[5]; A.state = a[6]; A.owner = a[7] || null; }
         break;
       }
-      case 'chat': { if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? displayName(f, rp.name) : '?', m.m); if (rp) rp.char.say(m.m); } break; }
+      case 'gift': { if (!f || !NET.rate('g' + f, 5, 60)) break; ME.money += 1000; sfx('cash'); const rp = G.players.get(f); toast(`${rp ? rp.name : '누군가'}님이 ₩1,000을 보냈다`); break; } // 플레이어끼리 송금 (금액 고정 · 분당 5번)
+      case 'chat': { if (!NET.rate((m.sys ? 's' : 'c') + (f || '?'), m.sys ? 10 : 6, 6)) break; if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? displayName(f, rp.name) : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
       case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; if (PUNCH_MOVES[m.a] && sameSpace(rp)) sfx('whoosh', rp.x, rp.z, 0.7); } break; }
       case 'punchFx': { const rp = G.players.get(f); if (rp && !sameSpace(rp)) break; sfx(m.h ? 'punchH' : 'punch', m.x, m.z); FX.impact({ x: m.x, y: m.y, z: m.z }, 'dust'); FX.impact({ x: m.x, y: m.y, z: m.z }, 'spark'); FX.emoji(m.h ? '💥' : '✦', m.x, m.y + 0.15, m.z, m.h ? 0.45 : 0.3); if (Math.hypot(ME.x - m.x, ME.z - m.z) < 3) CAM.shake = Math.min(0.6, CAM.shake + (m.h ? 0.22 : 0.1)); break; }
       case 'dmg': { // 맞은 사람만 피해를 적용(권한자) → 공격자에게 결과 통보
         if (m.to !== ME.id || !f || f === ME.id || m.from === ME.id) break;
-        const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자 (게스트는 NPC 피해를 꾸며낼 수 없다)
-        const amount = m.k === 'gun' ? shotDamage(w, !!m.head) : m.k === 'melee' && w === 'fist' ? 3 : Math.max(0, Math.min(999, +m.amt || 0)); const before = ME.hp; ME.takeDamage(amount, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
+        if (!NET.rate('d' + f, 40, 1)) break; // 피해 메시지 횟수 상한
+        const src = G.isHost && conn && conn.pid ? conn.pid : f; const from = G.isHost ? src : String(m.from || f); const w = W_SEV[m.w] || WILD_DEATH[m.w] ? m.w : ''; // 방장: 실제로 보낸 연결이 가해자
+        const cap = f === G.hostId ? 999 : 200; const amount = m.k === 'gun' ? shotDamage(w, !!m.head) : m.k === 'melee' && w === 'fist' ? 3 : Math.max(0, Math.min(cap, +m.amt || 0)); const before = ME.hp; ME.takeDamage(amount, from, w); const d = Math.max(0, Math.round(before - Math.max(0, ME.hp)));
         if (G.isHost) POLICE.hostSelfHit(src, w, m.k, d);
         if (f !== 'n' && G.players.has(f)) this.send({ t: 'hitAck', to: f, a: from, d, hp: Math.max(0, Math.round(ME.hp)), dead: ME.dead ? 1 : 0, k: m.k });
         break;
@@ -495,7 +510,7 @@ const NET = {
       case 'hitAck': { if (m.to !== ME.id || (m.a && m.a !== ME.id)) break; const rp = G.players.get(f); UI.hitMarker(); if (rp) { rp.act = 'hit'; rp.actT = 0; rp.hp = m.hp; if (m.d > 0) FX.emoji('💢', rp.x, rp.y + 2.1, rp.z); } ME.lastHit = { id: f, d: m.d, hp: m.hp, t: G.t }; if (m.dead && rp) toast(`💀 ${rp.name} 쓰러뜨렸다!`); break; }
       case 'pdmg': if (G.isHost) pedDamage(PEDS[m.id], m.amt, m.f, { kind: m.k }); break;
       case 'admg': if (G.isHost) animalDamage(ANIMALS[m.id], m.amt, m.f); break;
-      case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': if (m.to === ME.id) handlePersonal(m); break;
+      case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': case 'bounty': if (m.to === ME.id) handlePersonal(m); break;
       case 'plotFail': if (m.to === ME.id) { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); } break;
       case 'income': if (m.to === ME.id) { const r = ECON.net(m.amt * ECON.rentMul(), 'rent'); ME.money += r.net; sfx('cash'); toast(`💰 임대 수익 ${fmtMoney(r.net)} 수령${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); } break;
       case 'nade': if (m.o && typeof m.o.x === 'number') GRENADE.spawn(Object.assign({}, m.o, { by: f })); break;
@@ -536,6 +551,8 @@ const NET = {
     }
   },
 };
+// 방장만 보낼 수 있는 메시지 (돈·수배·사냥 보상·공지)
+const HOST_ONLY = new Set(['income', 'plotFail', 'bounty', 'meat', 'kill', 'robRes', 'wanted', 'grudge', 'pedTip', 'petDead', 'adopted', 'ann']);
 const NO_RELAY = new Set(['pol', 'pedHelp', 'hello', 'peer', 'migrate', 'nameNo', 'pdmg', 'admg', 'buyLand', 'build', 'collect', 'pick', 'jack', 'adopt', 'panic', 'adm', 'admClaim', 'admChal', 'admProof', 'hostTo', 'taxiHail', 'pedAct', 'report', 'verdict']);
 // tree regrowth (host)
 function hostTrees(dt) {

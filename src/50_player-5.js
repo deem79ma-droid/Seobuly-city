@@ -1,4 +1,4 @@
-// @v 2026101323
+// @v 2026101410
 
 // ================= PLAYER =================
 const ME = {
@@ -10,11 +10,8 @@ const ME = {
   takeDamage(amt, from, w) {
     if (this.dead || this.god || G.godT > G.t) return; amt = Math.max(0, amt);
     if (adminGod()) { this.hp = 100; if (amt > 0 && G.t > (this._godFx || 0)) { this._godFx = G.t + 0.6; FX.emoji('🛡️', this.x, this.y + 2.1, this.z, 0.35); } return; } // 관리자: 체력 무한
-    if (this.armor > 0 && amt > 0) {
-      // 방탄조끼는 한 번의 피해를 막고 사라지는 소모품이다.
-      this.armor = 0; amt = 0;
-      if (typeof toast === 'function') toast('방탄조끼가 공격을 막고 소모되었습니다');
-    }
+    // 방탄조끼 = 목숨 하나 더: 조끼가 남아 있는 동안은 피해를 전부 조끼가 대신 받고, 다 닳으면 부서져 사라진다 (영구 보호 아님)
+    if (this.armor > 0 && amt > 0) { const a = Math.min(this.armor, amt); this.armor -= a; amt -= a; if (this.armor <= 0.05) { this.armor = 0; toast('🦺 방탄조끼가 부서졌다 — 이제 맨몸이다', 3000); sfx('hit'); FX.emoji('💥', this.x, this.y + 1.6, this.z, 0.4); } }
     this.lastW = w; this.hp -= amt; this.combatT = G.t + 4; UI.damageFlash(Math.min(1, amt / 30));
     if (this.char) { this.action = 'hit'; this.actionT = 0; }
     if (amt > 2) CAM.shake = Math.min(0.6, CAM.shake + amt / 60);
@@ -26,20 +23,22 @@ const ME = {
   knock(vx, vz) { this.vx += vx; this.vz += vz; this.vy = 4; this.grounded = false; this.knockT = 1.6; if (this.vehicle) exitVehicle(true); },
   die(from) {
     if (this.dead || adminGod()) { if (adminGod()) this.hp = 100; return; } this.dead = true; this.deadT = 0; this.hp = 0; if (this.vehicle) exitVehicle(true); this.dance = -1; this.sitBench = null;
+    if (from && from !== this.id && G.players.has(from) && ECON.E.bounty && ECON.E.bounty[this.id]) ECON.req({ a: 'bhit', k: from }); // 내 목의 현상금 → 처치한 사람에게
     CINE_EV.death(); $('#death').classList.remove('hidden'); $('#deathSub').textContent = (WILD_DEATH[this.lastW] ? WILD_DEATH[this.lastW] + ' · ' : '') + '병원으로 이송 중…'; NET.send({ t: 'chat', m: '💀 ' + this.name + ' 사망', sys: 1 });
     const lost = loseAllOnDeath(); const dl = $('#deathLoss'); // 사망하면 현금·무기·탄약·아이템·산 옷을 전부 잃는다
-    if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } }
+    if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } const cd = document.createElement('div'); cd.style.color = '#9fe0ff'; cd.textContent = `💳 카드는 그대로 — 잔액 ${fmtMoney(CARD.bal)}`; dl.appendChild(cd); }
     if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 모두 잃었다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품을 모두 잃었다', sys: 1 }); }
   },
   respawn() {
     if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
-    this.dead = false; this.hp = 100; this.armor = 0; const fee = Math.min(5000, Math.floor(this.money * 0.1)); this.money -= fee; this.wanted = 0;
+    const wasWanted = this.wanted | 0; this.dead = false; this.hp = 100; this.armor = 0; const fee = Math.min(5000, Math.floor(this.money * 0.1)); this.money -= fee; this.wanted = 0;
     let sp = null;
     if (this.homePlot != null && PLOTS[this.homePlot] && PLOTS[this.homePlot].state === 'done' && PLOTS[this.homePlot].owner === this.id) { const p = PLOTS[this.homePlot]; sp = { x: p.x + SIDE_VEC[p.side][0] * (p.w / 2 + 2), z: p.z + SIDE_VEC[p.side][1] * (p.d / 2 + 2) }; }
     if (!sp) { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } } sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 }; }
     this.x = sp.x; this.z = sp.z; this.y = groundHeight(this.x, this.z) + 0.1; this.vx = this.vz = this.vy = 0;
     $('#death').classList.add('hidden'); CINE_EV.respawn(); toast(fee > 0 ? `🏥 병원비 ${fmtMoney(fee)} 지불` : '🏥 병원에서 깨어났다 — 빈털터리다…'); G.godT = G.t + 3;
-    if (this.warrant) { this.wanted = 2; toast('🚨 체포 영장은 아직 유효하다 — 경찰이 찾고 있다', 3000); }
+    // 수배 중에 죽어도 수배는 안 풀린다: 병원에서 깨어나면 기다리고 있던 경찰에게 체포된다
+    if ((wasWanted > 0 || this.warrant) && !ADMIN.on) { this.wanted = Math.max(wasWanted, this.warrant ? 2 : 0); UI.updateStars(); toast('🚔 병원 앞에 경찰이 기다리고 있었다…', 3200); setTimeout(() => { if (!this.jail && !this.dead && !ADMIN.on && !COURT.pending) { announce('🚔 체포', '죽는다고 수배가 풀리지 않는다'); LAW.arrest(); } }, 3600); }
   },
 };
 const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
@@ -144,12 +143,13 @@ function dealDamage(tg, amt, from, opts = {}) {
 function sendDmg(msg) { NET.send(msg); if (G.isHost && typeof POLICE !== 'undefined') POLICE.hostSee(msg, ME.id); }
 function notifyPlayer(id, msg) { if (id === ME.id) handlePersonal(msg); else { msg.to = id; NET.send(msg); } }
 function handlePersonal(m) {
-  if (m.t === 'wanted') addWanted(m.add);
+  if (m.t === 'wanted') { addWanted(clamp(+m.add | 0, 0, 5)); if (m.c === 'assault') JOBS.crime('assault', true); } // 폭행은 범죄 기록도 남는다
   if (m.t === 'grudge') { ME.grudge[m.g] = G.t + 90; if (!ME._gT || G.t - ME._gT > 10) { toast(m.g === 'gangA' ? '🔴 레드 크루가 너를 노린다!' : '🔵 블루 독스가 너를 노린다!'); ME._gT = G.t; } }
   if (m.t === 'kill') { ME.kills++; JOBS.onKill(m.k); }
   if (m.t === 'robRes') onRobResult(m);
   if (m.t === 'pedTip') toast(m.s, 3500);
   if (m.t === 'meat') { JOBS.onHunt(m.k); }
+  if (m.t === 'bounty') QUEST.onBounty(m);
   if (m.t === 'petDead') { ME.petId = null; toast('🐾 반려동물이 죽었다…'); }
   if (m.t === 'adopted') { ME.petId = m.a; toast('🐶 입양 완료! 이제 따라다닌다'); }
   if (m.t === 'plotFail') { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); }
@@ -286,7 +286,7 @@ function enterVehicle(v) {
   if (v.ai) {
     const cop = v.model === 'police'; if (G.isHost) ejectNpcDriver(v); else NET.send({ t: 'jack', v: v.id });
     v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false;
-    if (cop) addWanted(2); else if (PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 40)) addWanted(1);
+    if (cop) addWanted(2); else addWanted(1); // 끌려 나온 운전자가 바로 신고한다
     toast(cop ? '🚓 경찰차 탈취!' : '🔑 차량 탈취!'); JOBS.crime('car');
   } else if (v.owner && v.owner !== ME.id && !v.driver) { toast('🔑 남의 차를 훔쳤다!'); JOBS.crime('car'); } // 다른 사람 소유 차
   v.driver = ME.id; v.ctrl = 'local'; ME.vehicle = v; ME.seat = 'd'; ME.dance = -1; ME.sitBench = null; NET.send({ t: 'seat', v: v.id, s: 'd' }); sfx('door');
@@ -370,8 +370,8 @@ function updatePlayer(dt) {
   // wanted decay
   if (ME.wanted > 0) {
     const copNear = PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - ME.x, v.z - ME.z) < 90);
-    ME.wantedCool += copNear ? -dt * 0.5 : dt; ME.wantedCool = Math.max(0, ME.wantedCool);
-    if (ME.wantedCool > 18) { ME.wanted--; ME.wantedCool = 0; UI.updateStars(); if (!ME.wanted) toast('✅ 수배 해제'); }
+    ME.wantedCool += copNear ? -dt * 0.5 : INTERIOR.cur ? 0 : dt; ME.wantedCool = Math.max(0, ME.wantedCool); // 건물에 숨어 있어도 수배는 그대로
+    if (ME.wantedCool > 25 + ME.wanted * 10) { ME.wanted--; ME.wantedCool = 0; UI.updateStars(); if (!ME.wanted) toast('✅ 경찰을 따돌렸다 — 수배 해제' + (JOBS.criminal() ? ' (범죄 기록은 남아 있다)' : '')); }
   }
   if (INP.fire) { const W = WEAPONS[ME.weapon]; if (W.auto || !INP._fired) { tryAttack(); INP._fired = true; } } else INP._fired = false;
   if (adminGod()) { ME.hp = 100; ME.dead = false; }

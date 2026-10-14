@@ -1,4 +1,4 @@
-// @v 2026101322
+// @v 2026101410
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
@@ -538,7 +538,7 @@ async function buildWorld(progress) {
   await tick(); progress(0.46, '이벤트광장 조성 중…'); buildPlaza(); buildBridge();
   await tick(); progress(0.52, '디산베이 마을 조성 중…'); genCountryside(); buildJobWorld();
   await tick(); progress(0.58, '지형 메쉬 생성 중…'); buildTerrainMesh(); buildWater();
-  await tick(); progress(0.68, '나무 심는 중…'); genTrees(); buildStreetProps();
+  await tick(); progress(0.68, '나무 심는 중…'); genTrees(); buildStreetProps(); buildCityDetail();
   flushMB();
   await tick(); progress(0.78, '하늘 생성 중…');
 }
@@ -626,6 +626,7 @@ function addBuildingBox(x, z, w, d, h, style, col, opts = {}) {
   if (cityShop) { mbAt('shop', x, z).box(x, y0, z, w + 0.4, 4.4, d + 0.4, C(0xffffff), BAY.shop, { noTop: true, uoff: Math.floor(wr(0, 4)) / 4 }); }
   const yb = cityShop ? y0 + 4.4 : y0;
   mbAt(style, x, z).box(x, yb, z, w, h - (yb - y0), d, col, BAY[style], { topCol: col.clone().multiplyScalar(0.55) });
+  if (!GEN_DRY) FACADES.push({ x, z, w, d, y0: yb, h: h - (yb - y0), style, col }); // 외벽 디테일용 (16_detail)
   if (!opts.noCornice) mbAt('plain', x, z).box(x, y0 + h, z, w + 0.6, 0.7, d + 0.6, col.clone().multiplyScalar(0.7));
   if (G.quality >= 1) { // 고품질 외관: 모서리 기둥, 옥상 난간(파라펫)+금속 마감, 지상층 석재 기단
     const m = mbAt('plain', x, z); const pc = style === 'glass' ? C(0x4e555e) : col.clone().multiplyScalar(0.82); const ph = h - (yb - y0);

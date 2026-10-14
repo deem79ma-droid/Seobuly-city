@@ -1,4 +1,4 @@
-// @v 2026101221
+// @v 2026101410
 
 // ================= LAW (체포/감옥/출소카드) + ADMIN 특권 =================
 const BANS = new Set(); try { for (const b of JSON.parse(localStorage.getItem('sbc3d_bans') || '[]')) BANS.add(b); } catch (e) { }
@@ -134,14 +134,41 @@ const LAW = {
     if (ADMIN.on || ME.jail) { if (ADMIN.on) { ME.wanted = 0; UI.updateStars(); } return; } // 관리자는 체포 면제
     const a = anchorOf(ME); const pr = this.nearestPrison(a.x, a.z);
     INTERIOR.dispose(); INTERIOR.clearRoof(); if (ME.vehicle) exitVehicle(true); if (TAXI.cab) TAXI.dispose(true);
-    const stars = ME.wanted; const wr = ME.warrant; const s = LAW._courtS ?? Math.max(40, stars * 40, wr ? wr.s : 0, Math.ceil(JOBS.record));
+    const stars = ME.wanted; const wr = ME.warrant; const s = LAW._courtS ?? Math.max(60, stars * 60, wr ? wr.s : 0, Math.ceil(JOBS.record));
     if (LAW._courtS === undefined && COURT.intercept(s)) return; // 먼저 법원에서 재판 // 범죄 기록(형량)이 있으면 그만큼 복역 // 신고 수사로 정해진 형량이 있으면 그 형량
     ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); ME.dance = -1; ME.sitBench = null; ME.weapon !== 'fist' && selectWeapon('fist');
     if (!pr) { toast('🚔 체포됐지만 근처에 교도소가 없어 훈방됐다'); return; }
     const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length;
     ME.jail = { t: s, total: s, pr: pr.id, cell: ci, escT: 0, escCool: 0 };
-    this.putInCell(pr.cells[ci]); setTimeout(() => CINE_EV.jail(pr, s), 120);
+    this.putInCell(pr.cells[ci]); setTimeout(() => CINE_EV.jail(pr, s), 120); this.penalize(s);
     announce('🚔 체포!', `${pr.name} ${ci + 1}번 감방 · 형량 ${s}초${wr ? ' (신고 사건 · ' + wr.v + ')' : ''}`); NET.send({ t: 'chat', m: `🚔 ${ME.name} 체포 → ${pr.name} 수감 (형량 ${s}초)`, sys: 1 }); sfx('error');
+  },
+  // 수감될 때: 총기·수류탄 압수 + 벌금 (형량에 비례 · 들고 있는 현금의 10~50%)
+  penalize(s) {
+    const lost = [];
+    for (const w of WEAPON_ORDER) if (ME.weapons[w] && !WEAPONS[w].melee) { delete ME.weapons[w]; ME.ammo[w] = 0; ME.mag[w] = 0; lost.push(WEAPONS[w].name); }
+    if ((ME.inv.grenade | 0) > 0) { lost.push(`수류탄 ${ME.inv.grenade | 0}개`); ME.inv.grenade = 0; }
+    if (ME.weapon !== 'fist' && !ME.weapons[ME.weapon]) selectWeapon('fist');
+    const fine = Math.floor(Math.max(0, ME.money) * clamp(0.1 + s / 1200, 0.1, 0.5)); if (fine > 0) ME.money -= fine;
+    if (UI.buildHotbar) UI.buildHotbar(); if (UI.updateWeapon) UI.updateWeapon(); if (UI.updateInv) UI.updateInv();
+    const parts = []; if (lost.length) parts.push('압수: ' + lost.join(', ')); if (fine > 0) parts.push('벌금 ' + fmtMoney(fine));
+    if (parts.length) { const t = '🚔 ' + parts.join(' · '); setTimeout(() => toast(t, 5000), 1500); UI.chatLine(null, t); }
+    saveGame();
+  },
+  // 저장: 수배·남은 형기·재판 중 구형·체포 영장 → 새로고침/재접속해도 그대로
+  save() {
+    const w = ME.warrant, j = ME.jail ? Math.ceil(ME.jail.t) : (COURT.pending ? COURT.pending.s : 0);
+    return { w: ME.wanted | 0, j: Math.max(0, j | 0), wr: w && w.until > G.t ? { s: w.s | 0, left: Math.ceil(w.until - G.t), v: w.v || '' } : null };
+  },
+  restore(o) {
+    if (!o || typeof o !== 'object' || ADMIN.on) return;
+    const j = clamp(+o.j || 0, 0, 3600), w = clamp(+o.w | 0, 0, 5);
+    if (o.wr && +o.wr.left > 0) ME.warrant = { s: clamp(+o.wr.s || 0, 0, 900), until: G.t + Math.min(900, +o.wr.left), v: cleanText(o.wr.v, 20) };
+    if (j > 0) {
+      const pr = this.nearestPrison(ME.x, ME.z);
+      if (pr) { if (!this.built) this.build(); const ci = hashStr(ME.id + ':' + pr.id) % pr.cells.length; ME.jail = { t: j, total: j, pr: pr.id, cell: ci, escT: 0, escCool: 0 }; this.putInCell(pr.cells[ci]); ME.wanted = 0; UI.updateStars(); announce('🔒 남은 형기', `${pr.name} · ${j}초 — 나갔다 들어와도 형기는 그대로다`); return; }
+    }
+    if (w > 0) { ME.wanted = w; ME.wantedCool = 0; UI.updateStars(true); setTimeout(() => toast(`🚨 수배 ★${w} 그대로 — 다시 접속해도 경찰은 잊지 않는다`, 4500), 1200); }
   },
   release(msg) {
     if (!ME.jail) return; const pr = PRISONS[ME.jail.pr]; ME.jail = null;
@@ -149,20 +176,20 @@ const LAW = {
     const rr = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = rr.x; ME.z = rr.z; G.godT = G.t + 3; toast(msg || '🔓 출소했다'); announce('🔓 출소', pr ? pr.name + ' 정문' : ''); setTimeout(() => CINE_EV.release(pr), 150); sfx('levelup');
     NET.send({ t: 'chat', m: `🔓 ${ME.name} 출소`, sys: 1 });
   },
-  // 감방 문 앞에서 E: 탈옥 시도 (3초, 약 35% 성공) — 성공하면 내 화면에서만 감방 문·정문이 열리고 수배 ★3
+  // 감방 문 앞에서 E: 탈옥 시도 (3초, 약 25% 성공) — 성공하면 내 화면에서만 감방 문·정문이 열리고 수배 ★3
   interact() {
     const j = ME.jail; const c = this.cellOf(j); const card = ME.inv.card | 0;
-    if (card > 0) return { label: `🪪 출소카드 사용 (보유 ${card}장)`, key: 'E', fn: () => { ME.inv.card--; this.release('🪪 출소카드로 즉시 출소했다'); } };
+    if (card > 0) return { label: `🪪 출소카드 사용 (보유 ${card}장)`, key: 'E', fn: () => { ME.inv.card--; this.release(JOBS.record > 0 ? `🪪 출소카드로 출소 — 남은 형량 ${Math.ceil(JOBS.record)}초는 그대로, 경찰이 알아보면 다시 잡힌다` : '🪪 출소카드로 즉시 출소했다'); } };
     if (c && Math.hypot(ME.x - c.dx, ME.z - (c.dz + 0.6)) < 1.7) {
       if (j.escT) return { label: '⛓️ 자물쇠 따는 중…', key: 'E', fn: () => { } };
       if (G.t < j.escCool) return { label: `⛓️ 탈옥 시도 (교도관 경계 중 ${Math.ceil(j.escCool - G.t)}초)`, key: 'E', fn: () => toast('🚨 교도관이 지켜보고 있다') };
-      return { label: '⛓️ 탈옥 시도 (성공하면 수배 ★3 · 실패하면 형량 +30초)', key: 'E', fn: () => { j.escT = G.t + 3; toast('⛓️ 자물쇠를 따는 중… (3초간 문 앞에 있어야 한다)', 2500); sfx('ui'); } };
+      return { label: '⛓️ 탈옥 시도 (성공 25% · 성공하면 수배 ★3 · 실패하면 형량 +30초)', key: 'E', fn: () => { j.escT = G.t + 3; toast('⛓️ 자물쇠를 따는 중… (3초간 문 앞에 있어야 한다)', 2500); sfx('ui'); } };
     }
     return null;
   },
   escapeResolve() {
     const j = ME.jail; const pr = PRISONS[j.pr]; const c = this.cellOf(j); j.escT = 0;
-    if (Math.random() < 0.35 || ME.forceEscape) {
+    if (Math.random() < 0.25 || ME.forceEscape) {
       ME.jail = null; removeCollider(c.doorCol); removeCollider(pr.gateCol); pr.gateMesh.visible = false;
       this.esc = { pr, c, until: G.t + 75 };
       addWanted(3); JOBS.crime('escape'); announce('🚨 탈옥 성공!', '정문이 열렸다 — 수배 ★3, 경찰이 쫓아온다!'); CINE_EV.escape(); NET.send({ t: 'chat', m: `🚨 ${ME.name} 탈옥! (${pr.name})`, sys: 1 }); sfx('error');
@@ -207,8 +234,8 @@ function safeOutfit(o, adm) { if (!o || adm || !o.mask || o.mask === 'none') ret
 function setRemoteOutfit(rp, o) { if (!o) return; rp.rawOutfit = o; rp._madm = G.adminId === rp.id; rp.char.setOutfit(safeOutfit(o, rp._madm)); }
 function refreshRemoteName(rp) {
   const adm = G.adminId === rp.id; if (rp.rawOutfit && rp._madm !== adm) setRemoteOutfit(rp, rp.rawOutfit);
-  const key = rp.name + '|' + !!rp.jail + '|' + adm + '|' + (rp.jb || '') + '|' + (rp.cr || 0); if (rp._nk === key) return; rp._nk = key;
-  const ji = jobIcon(rp.jb); rp.char.setName((adm ? '[관리자] ' : '') + (ji ? ji + ' ' : '') + (rp.name || '') + (rp.cr && !rp.jail ? ' 🦹범죄자' : '') + (rp.jail ? ' 🔒수감 중' : ''), adm ? '#ff3b3b' : rp.jail ? '#ff9a6a' : rp.cr ? '#ff6a3a' : (rp.baseCol || '#9fe0ff'));
+  const bty = !!(ECON.E.bounty && ECON.E.bounty[rp.id]); const key = rp.name + '|' + !!rp.jail + '|' + adm + '|' + (rp.jb || '') + '|' + (rp.cr || 0) + '|' + bty; if (rp._nk === key) return; rp._nk = key;
+  const ji = jobIcon(rp.jb); rp.char.setName((adm ? '[관리자] ' : '') + (ji ? ji + ' ' : '') + (rp.name || '') + (rp.cr && !rp.jail ? ' 🦹범죄자' : '') + (rp.jail ? ' 🔒수감 중' : '') + (bty ? ' [현상금]' : ''), adm ? '#ff3b3b' : rp.jail ? '#ff9a6a' : rp.cr ? '#ff6a3a' : (rp.baseCol || '#9fe0ff'));
 }
 if (ADMIN.enabled()) {
   // Admin field is hidden by default; revealed only after 7 consecutive clicks on the ? button

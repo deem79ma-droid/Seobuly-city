@@ -1,9 +1,13 @@
+// @v 2026101410
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // ================= CORE =================
 const $ = s => document.querySelector(s);
@@ -39,6 +43,15 @@ function distSeg(px, pz, ax, az, bx, bz) {
 }
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 const URLP = new URLSearchParams(location.search);
+// ---- 보안 ----
+// 테스트용 주소 옵션(?server= ?debug= ?peerhost=)은 내 컴퓨터(localhost)에서 열 때만 쓴다.
+// 공개 사이트에서는 무시 → 가짜 서버 주소를 넣은 링크로 비밀번호를 빼돌리거나, 디버그 창으로 치트를 쓰지 못한다.
+const DEV = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
+// 다른 플레이어가 보낸 글자 정리: 태그·제어문자·글자 방향을 뒤집는 문자 제거
+function cleanText(s, n = 80) { return String(s ?? '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '').replace(/[<>]/g, '').slice(0, n); }
+function cleanName(s) { const t = cleanText(s, 40).replace(/[&"'`\\]/g, '').trim().slice(0, 12); return t || '???'; }
+// 다른 사이트가 이 게임을 몰래 틀(iframe) 안에 넣어 클릭을 가로채는 것(클릭재킹) 방지
+if (!DEV && window.top !== window.self) { try { window.top.location.replace(location.href); } catch (e) { document.documentElement.style.display = 'none'; } }
 
 // ================= GLOBAL GAME STATE =================
 const G = {

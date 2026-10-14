@@ -1,4 +1,4 @@
-// @v 2026101217
+// @v 2026101410
 
 // ================= 건물 실내 (모든 건물 입장 가능) =================
 // 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
@@ -211,7 +211,8 @@ const INTERIOR = {
     else { box(0, LV(hi) + H, 0, W + 0.6, 0.25, D + 0.6, T.ceil, false, true); cols.push(addCollider(X(-W / 2), Z(-D / 2), X(W / 2), Z(D / 2), O.y + LV(hi) + H + 0.4, 'roof', null, O.y + LV(hi) + H)); }
     // 간판 (안쪽 벽)
     const title = fac ? fac.name : b.name;
-    for (let k = lo; k <= hi; k++) { const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(k ? `${k + 1}층` : title, k ? title : T.sub, T.sign) })); sg.position.set(X(tall ? 1 : 0), O.y + LV(k) + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
+    const tenOf = (k) => (k > 0 && tall && !['hotel', 'apartment', 'hospital', 'police', 'guard', 'school'].includes(kind)) ? floorTenant(b, k) : null; // 위층 가게·상점·센터
+    for (let k = lo; k <= hi; k++) { const tn = tenOf(k); const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(k ? (tn ? `${k + 1}층 · ${tn.n}` : `${k + 1}층`) : title, k ? title : T.sub, T.sign) })); sg.position.set(X(tall ? 1 : 0), O.y + LV(k) + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
     // 종류별 가구
     const facItem = (lx, lz, label) => { if (fac) item(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, () => UI.openFacility(fac), 2.4); };
     const desk = (lx, lz, col = 0x8a6a4a, mon = true) => { box(lx, 0, lz, 1.6, 0.76, 0.8, col, true); if (mon) { box(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); } box(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); box(lx, 0.45, lz + 0.98, 0.5, 0.55, 0.06, 0x2a2a30); };
@@ -224,6 +225,46 @@ const INTERIOR = {
     const plant = (lx, lz) => { cyl(lx, 0, lz, 0.25, 0.45, 0x8a5a3a, 8, 0.2); box(lx, 0.45, lz, 0.6, 0.9, 0.6, 0x3a8a3a); };
     const bars = (x0, z0, x1, z1, h = 3) => { const len = Math.hypot(x1 - x0, z1 - z0); const n = Math.floor(len / 0.3); for (let i = 0; i <= n; i++) { const t = i / n; box(lerp(x0, x1, t), 0, lerp(z0, z1, t), 0.06, h, 0.06, 0x2a2c30); } cols.push(addCollider(X(Math.min(x0, x1)) - 0.12, Z(Math.min(z0, z1)) - 0.12, X(Math.max(x0, x1)) + 0.12, Z(Math.max(z0, z1)) + 0.12, O.y + h, 'int', null, O.y - 0.3)); };
     const hw = W / 2, hd = D / 2;
+    // 🧑‍💼 알바 자리 (가게·상점·센터 계산대 뒤) — E로 12초 근무
+    const part = (lx, lz, name, pay, ly = 0) => item(lx, lz, PART.label(name, pay), () => PART.work(name, pay), 1.5, ly);
+    const atm = (lx, lz, ly = 0, face = -1) => { box(lx, ly, lz, 0.7, 1.7, 0.6, 0x2a4a6a, true); box(lx, ly + 1.0, lz + face * 0.32, 0.45, 0.4, 0.02, 0x6ad8ff); box(lx, ly + 0.75, lz + face * 0.33, 0.3, 0.05, 0.02, 0x111111); item(lx, lz + face * 1.1, '🏧 ATM (카드 입출금)', () => CARD.menu('ATM'), 1.3, ly); };
+    // 건물 층마다 들어선 가게·상점·센터 (위층) — 층마다 계산대 + 알바 자리
+    const shopFloor = (TN, y, rr) => {
+      const B = (lx, ly, lz, w, h, d, col, solid) => box(lx, y + ly, lz, w, h, d, col, solid);
+      const CY = (lx, ly, lz, r, h, col, seg = 12) => cyl(lx, y + ly, lz, r, h, col, seg);
+      const colr = () => C([0xe84a3a, 0x3a8ae8, 0xf2c23a, 0x4ac86a, 0xf08a2a, 0xffffff, 0x9a5ae8][Math.floor(rr() * 7)]);
+      const cx = -hw0 / 2 + 1, cz = hd0 - 3; // 계산대: 엘리베이터에서 내리면 앞쪽
+      const ctr = (len, col) => { B(cx, 0, cz, len, 1.05, 0.8, col, true); B(cx, 1.05, cz, len + 0.1, 0.06, 0.9, 0xe8e4dc); B(cx + len / 2 - 0.5, 1.11, cz, 0.45, 0.3, 0.35, 0x222222); };
+      const midX0 = -hw0 + 4.2, midX1 = hw0 - 4.4, midZ0 = -hd0 + 3.4, midZ1 = cz - 2.2; // 가운데 매장 공간
+      const grid = (sx, sz, fn) => { for (let lz = midZ0; lz <= midZ1; lz += sz) for (let lx = midX0; lx <= midX1; lx += sx) fn(lx, lz); };
+      switch (TN.id) {
+        case 'conv':
+          ctr(3, 0xe8e8e8); for (let lx = midX0 + 1; lx <= midX1; lx += 2.6) { const len = Math.max(2, midZ1 - midZ0); const mz = (midZ0 + midZ1) / 2; B(lx, 0, mz, 0.6, 1.8, len, 0xd8d8d8, true); for (let hh = 0.35; hh < 1.8; hh += 0.45) for (let j = 0; j < Math.floor(len / 0.45); j++) B(lx, hh, mz - len / 2 + 0.25 + j * 0.45, 0.62, 0.3, 0.36, colr()); }
+          atm(hw0 - 5.4, hd0 - 0.45, y); break;
+        case 'cafe':
+          ctr(4, 0x5a3a2a); B(cx - 1.2, 1.11, cz, 0.6, 0.5, 0.45, 0x888888); grid(3.2, 3, (lx, lz) => { CY(lx, 0, lz, 0.08, 0.72, 0x444444, 6); CY(lx, 0.72, lz, 0.55, 0.05, 0xe8e0d0, 14); B(lx - 0.85, 0, lz, 0.45, 0.45, 0.45, 0x6a4a2a); B(lx + 0.85, 0, lz, 0.45, 0.45, 0.45, 0x6a4a2a); }); break;
+        case 'food':
+          ctr(3, 0xc4552e); for (let i = 0; i < 3; i++) { const lx = -hw0 + 5 + i * (W - 9) / 2.5; B(lx, 0, -hd0 + 0.7, 3, 1.0, 0.8, colr(), true); B(lx, 1.9, -hd0 + 0.2, 2.6, 0.7, 0.05, colr()); } grid(3.4, 3, (lx, lz) => { B(lx, 0, lz, 1.4, 0.75, 1.0, 0xa07850, true); B(lx, 0, lz - 0.85, 1.4, 0.45, 0.35, 0x5a3a22); B(lx, 0, lz + 0.85, 1.4, 0.45, 0.35, 0x5a3a22); }); break;
+        case 'clothes':
+          ctr(2.6, 0xf6e8f6); grid(3.6, 2.6, (lx, lz) => { B(lx, 1.5, lz, 2.6, 0.05, 0.05, 0xaaaaaa); B(lx - 1.3, 0, lz, 0.06, 1.55, 0.06, 0xaaaaaa); B(lx + 1.3, 0, lz, 0.06, 1.55, 0.06, 0xaaaaaa); for (let i = 0; i < 7; i++) B(lx - 1.1 + i * 0.37, 0.75, lz, 0.08, 0.75, 0.55, colr()); }); break;
+        case 'phone': {
+          ctr(3, 0xf2f2f2); grid(3.4, 3, (lx, lz) => { B(lx, 0, lz, 2.4, 0.85, 0.9, 0xf4f4f4, true); for (let i = 0; i < 4; i++) { B(lx - 0.9 + i * 0.6, 0.86, lz, 0.16, 0.02, 0.3, 0x111111); B(lx - 0.9 + i * 0.6, 0.875, lz, 0.13, 0.005, 0.26, i % 2 ? 0x3a7ad8 : 0x6ad8c8); } });
+          B(0, 1.2, -hd0 + 0.2, Math.min(9, W - 6), 1.4, 0.06, 0x1a3aa0); { const sg = textSprite('StayOn 스테이온', '#ffffff', 'rgba(26,58,160,0)', 56); sg.position.set(X(0), O.y + y + 1.9, Z(-hd0 + 0.35)); sg.scale.multiplyScalar(2.2); group.add(sg); }
+          item(cx, cz + 1.2, '📱 스테이온 폰 구경 · 사기', () => PHONE.shop('store'), 1.4, y); break;
+        }
+        case 'academy':
+          ctr(2.4, 0x8a6a4a); B(0, 1.0, -hd0 + 0.2, Math.min(8, W - 6), 1.5, 0.06, 0x2a5a3a); grid(2.4, 2.2, (lx, lz) => { B(lx, 0, lz, 1.1, 0.72, 0.6, 0xd8b88a, true); B(lx, 0, lz + 0.6, 0.45, 0.45, 0.45, 0x3a5a8a); }); break;
+        case 'fitness':
+          ctr(2.6, 0x2b2f38); grid(2.6, 3.2, (lx, lz) => { if (rr() < 0.5) { B(lx, 0, lz, 0.8, 0.25, 1.8, 0x222222, true); B(lx, 0.25, lz - 0.8, 0.7, 1.2, 0.08, 0x444444); B(lx, 1.4, lz - 0.8, 0.6, 0.3, 0.2, 0x111111); } else { B(lx, 0, lz, 0.5, 0.45, 1.4, 0x111111, true); B(lx, 1.2, lz, 2.0, 0.05, 0.05, 0x999999); CY(lx - 0.9, 1.0, lz, 0.28, 0.12, 0x222222); CY(lx + 0.9, 1.0, lz, 0.28, 0.12, 0x222222); } }); break;
+        case 'call': case 'office':
+          ctr(2.6, 0x8a8a8a); grid(3.2, 3, (lx, lz) => { if (rr() < 0.12) return; B(lx, 0, lz, 1.6, 0.76, 0.8, 0xd8d4cc, true); B(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); B(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); B(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); if (TN.id === 'call') B(lx - 0.82, 0, lz, 0.04, 1.3, 0.9, 0x9aa4b0); }); break;
+        case 'service':
+          ctr(4, 0x1a3aa0); B(0, 0, -hd0 + 0.7, Math.min(10, W - 8), 0.9, 0.8, 0x8a8e96, true); for (let i = 0; i < 6; i++) B(-2 + i * 0.8, 0.92, -hd0 + 0.7, 0.16, 0.02, 0.3, 0x111111); grid(1.0, 2.4, (lx, lz) => { if (lz > midZ0 + 5) return; B(lx, 0, lz, 0.45, 0.45, 0.45, 0x3a8ad8); B(lx, 0.45, lz + 0.2, 0.45, 0.5, 0.06, 0x3a8ad8); }); break;
+        case 'pc':
+          ctr(3, 0x3a2e5c); grid(1.8, 2.6, (lx, lz) => { B(lx, 0, lz, 1.6, 0.74, 0.7, 0x1a1a22, true); B(lx, 0.74, lz - 0.15, 0.7, 0.45, 0.05, 0x111111); B(lx, 0.78, lz - 0.12, 0.64, 0.38, 0.02, rr() < 0.5 ? 0x3a6aff : 0xff3a8a); B(lx, 0, lz + 0.7, 0.6, 0.5, 0.6, 0xc8202a); }); break;
+      }
+      part(cx, cz - 1.05, TN.n, TN.pay, y);
+    };
     if (lo === 0) { furn = true;
     switch (kind) {
       case 'police': case 'guard': {
@@ -247,7 +288,7 @@ const INTERIOR = {
       case 'dealer': {
         box(0, 0, 0, W - 2, 0.02, D - 2, 0xf4f4f4);
         for (const [lx, col] of [[-hw / 2, 0xd02a2a], [hw / 2, 0x2a5ad0]]) { cyl(lx, 0, -1, 3, 0.25, 0x333333, 24); box(lx, 0.6, -1, 1.9, 0.7, 4.2, col, true); box(lx, 1.3, -1.3, 1.7, 0.6, 2.2, 0x223344); for (const [wx, wz] of [[-0.95, 0.5], [0.95, 0.5], [-0.95, -2.5], [0.95, -2.5]]) cyl(lx + wx, 0.25, -1 + wz + 1, 0.36, 0.3, 0x111111, 10); }
-        desk(0, hd - 5, 0xeeeeee); facItem(0, hd - 3.6, '🚗 차량 구매 상담');
+        desk(0, hd - 5, 0xeeeeee); facItem(0, hd - 3.6, '🚗 차량 구매 상담'); part(-2.2, hd - 6.4, title + ' 판매', 750);
         break;
       }
       case 'factory': {
@@ -274,6 +315,7 @@ const INTERIOR = {
         if (cafe) { sofa(-hw + 1.6, hd - 2, 0x8a5a3a); plant(hw - 1, hd - 1.2); plant(-hw + 1, -hd + 4); }
         if (fac) facItem(0, -hd + 3.4);
         else item(0, -hd + 3.4, cafe ? '☕ 카페 메뉴 보기' : `${FOOD.shop(b).ic} ${FOOD.shop(b).name} 메뉴 보기`, () => FOOD.open(b, cafe), 2.4);
+        part(Math.min(9, W - 4) / 2 + 1.0, -hd + 2.4, title, cafe ? 600 : 650);
         break;
       }
       case 'mart': {
@@ -281,11 +323,13 @@ const INTERIOR = {
         for (let i = 0; i < Math.floor((W - 6) / 2.6); i++) shelf(-hw + 6 + i * 2.6, -1, D - 9, 'z');
         box(0, 0, -hd + 0.5, W - 2, 2.1, 0.8, 0xdde8f0, true); for (let i = -hw + 1.5; i < hw - 1; i += 1.2) box(i, 0.2, -hd + 0.92, 1.0, 1.7, 0.02, 0x9fd8ff);
         item(-hw + 3, hd - 2.8, '🛒 계산대 (음료 ₩2,000 · 구급상자 ₩8,000)', () => this.martMenu(), 2.2);
+        part(-hw + 3, hd - 5.1, title, 550); atm(hw - 0.8, hd - 2.6, 0, 1);
+        if (b.genre === 'electro' || b.genre === 'dept') { box(-hw + 2.6, 0, -hd + 2.6, 2.2, 0.85, 0.9, 0xf4f4f4, true); for (let i = 0; i < 3; i++) box(-hw + 1.9 + i * 0.7, 0.86, -hd + 2.6, 0.16, 0.02, 0.3, 0x111111); item(-hw + 2.6, -hd + 3.8, '📱 스테이온 휴대폰 코너', () => PHONE.shop('store'), 1.4); }
         break;
       }
       case 'pcbang': {
         for (let r = 0; r < Math.floor((D - 4) / 2.6); r++) for (let c = 0; c < Math.floor((W - 2) / 1.8); c++) { const x = -hw + 1.6 + c * 1.8, z = -hd + 2 + r * 2.6; box(x, 0, z, 1.6, 0.74, 0.7, 0x1a1a22, true); box(x, 0.74, z - 0.15, 0.7, 0.45, 0.05, 0x111111); box(x, 0.78, z - 0.12, 0.64, 0.38, 0.02, RP([0x3a6aff, 0xff3a8a, 0x3aff9a])); box(x, 0, z + 0.7, 0.6, 0.5, 0.6, 0xc8202a); box(x, 0.5, z + 0.95, 0.6, 0.8, 0.1, 0xc8202a); }
-        counter(hw - 3, hd - 2.5, 3, 0x3a2e5c); facItem(hw - 3, hd - 1.3, fac ? '🖥️ PC방 카운터' : undefined);
+        counter(hw - 3, hd - 2.5, 3, 0x3a2e5c); facItem(hw - 3, hd - 1.3, fac ? '🖥️ PC방 카운터' : undefined); part(hw - 1.2, hd - 3.6, title, 550);
         break;
       }
       case 'gym': {
@@ -293,35 +337,35 @@ const INTERIOR = {
         for (let i = 0; i < Math.floor((W - 4) / 2); i++) { const x = -hw + 2 + i * 2; box(x, 0, -hd + 2.2, 0.9, 0.25, 2, 0x222222, true); box(x, 0.25, -hd + 3.0, 0.8, 1.2, 0.08, 0x444444); box(x, 1.4, -hd + 3.0, 0.6, 0.3, 0.2, 0x111111); }
         for (let i = 0; i < 3; i++) { const x = -hw + 3 + i * 4; box(x, 0, 1.5, 0.5, 0.45, 1.4, 0x111111, true); box(x, 1.2, 1.5, 2.2, 0.05, 0.05, 0x999999); cyl(x - 1.0, 1.0, 1.5, 0.3, 0.12, 0x222222); cyl(x + 1.0, 1.0, 1.5, 0.3, 0.12, 0x222222); box(x - 0.5, 0, 1.5, 0.06, 1.3, 0.06, 0x999999); box(x + 0.5, 0, 1.5, 0.06, 1.3, 0.06, 0x999999); }
         box(hw - 1, 0, 0, 0.8, 1.2, 4, 0x333333, true); for (let i = 0; i < 6; i++) cyl(hw - 1, 1.2, -1.6 + i * 0.6, 0.12, 0.25, 0x888888, 8);
-        facItem(0, hd - 3, fac ? '💪 헬스장 카운터 (운동하기)' : undefined);
+        facItem(0, hd - 3, fac ? '💪 헬스장 카운터 (운동하기)' : undefined); part(-hw + 2, hd - 2.5, title + ' 카운터', 600);
         break;
       }
       case 'pool': {
         box(0, 0.003, -1, W - 6, 0.02, D - 9, 0x9ad8f0);
         { const p = new THREE.Mesh(new THREE.PlaneGeometry(W - 7, D - 10), MAT.poolWater); MAT.poolWater.userData.shared = true; p.rotation.x = -Math.PI / 2; p.position.set(X(0), O.y + 0.06, Z(-1)); group.add(p); }
         for (let i = 0; i < 5; i++) { box(-hw + 2 + i * 2.2, 0, hd - 2.2, 0.8, 0.35, 1.8, 0xffffff); box(-hw + 2 + i * 2.2, 0.35, hd - 1.5, 0.8, 0.4, 0.3, 0xffffff); }
-        facItem(hw - 2.5, hd - 2.5, fac ? '🏊 수영장 카운터' : undefined);
+        facItem(hw - 2.5, hd - 2.5, fac ? '🏊 수영장 카운터' : undefined); part(hw - 2.5, hd - 4.6, title + ' 안내 데스크', 550);
         break;
       }
       case 'gun': {
         counter(0, -hd + 3.4, Math.min(7, W - 4), 0x3a2a1e); box(0, 1.1, -hd + 3.4, Math.min(7, W - 4), 0.4, 0.7, 0xbfe0f0);
         box(0, 0.8, -hd + 0.2, W - 2, 2.0, 0.06, 0x6a4a2e); for (let i = 0; i < Math.floor(W / 1.2) - 2; i++) { box(-hw + 1.6 + i * 1.2, 1.1 + (i % 3) * 0.5, -hd + 0.28, 0.9, 0.12, 0.06, 0x1a1a1a); }
         for (let i = 0; i < 3; i++) { box(-hw + 2 + i * 2.5, 0, hd - 6, 0.08, 1.1, 1.6, 0x555555, true); box(-hw + 2 + i * 2.5, 1.2, hd - 1, 0.6, 0.8, 0.04, 0xffffff); }
-        facItem(0, -hd + 4.8, fac ? '🔫 총포사 카운터' : undefined);
+        facItem(0, -hd + 4.8, fac ? '🔫 총포사 카운터' : undefined); part(Math.min(7, W - 4) / 2 + 1.0, -hd + 3.0, title, 650);
         break;
       }
       case 'clothes': {
         for (let r = 0; r < 3; r++) { const z = -hd + 3 + r * (D - 6) / 2.5; box(-hw / 2, 1.5, z, W / 2.4, 0.05, 0.05, 0xaaaaaa); box(-hw / 2 - W / 4.8, 0, z, 0.06, 1.55, 0.06, 0xaaaaaa); box(-hw / 2 + W / 4.8, 0, z, 0.06, 1.55, 0.06, 0xaaaaaa); for (let i = 0; i < 9; i++) box(-hw / 2 - W / 5.5 + i * W / 22, 0.75, z, 0.08, 0.75, 0.55, C(RP([0xe84a7a, 0x4a8ae8, 0xf2f2f2, 0x222222, 0xf2c23a, 0x8a5ae8]))); }
         for (let i = 0; i < 3; i++) { const x = hw - 2 - i * 2; cyl(x, 0, -hd + 2, 0.25, 0.1, 0x222222); cyl(x, 0.1, -hd + 2, 0.05, 0.9, 0xcccccc, 6); box(x, 1.0, -hd + 2, 0.45, 0.65, 0.25, C(RP([0xe84a7a, 0x4a8ae8, 0xf2c23a]))); cyl(x, 1.65, -hd + 2, 0.12, 0.25, 0xf0d8c0, 8); }
         box(hw - 0.2, 0.3, 2, 0.06, 2, 1.2, 0xdff0ff); counter(hw - 3, hd - 3, 2.6, 0xf6e8f6);
-        facItem(hw - 3, hd - 1.8, fac ? '👕 옷가게 계산대 (옷 갈아입기)' : undefined);
+        facItem(hw - 3, hd - 1.8, fac ? '👕 옷가게 계산대 (옷 갈아입기)' : undefined); part(hw - 3, hd - 4.2, title, 600);
         break;
       }
       case 'casino': {
         box(0, 0.003, 0, W - 1, 0.01, D - 1, 0x8a1a2a);
         for (let i = 0; i < Math.floor((W - 4) / 1.3); i++) for (const z of [-hd + 1.2, -hd + 4.5]) { const x = -hw + 2 + i * 1.3; box(x, 0, z, 1.0, 1.6, 0.8, 0x2a1a08, true); box(x, 1.0, z + 0.41, 0.8, 0.5, 0.02, RP([0xffd34a, 0xff4a8a, 0x4affd3])); }
         for (let i = 0; i < 3; i++) { const x = -hw + 4 + i * (W - 8) / 2; cyl(x, 0, 2.5, 1.6, 0.85, 0x1a5a2a, 20); cyl(x, 0.85, 2.5, 0.5, 0.05, 0x8a5a2a, 16); cols.push(addCollider(X(x) - 1.5, Z(2.5) - 1.5, X(x) + 1.5, Z(2.5) + 1.5, O.y + 0.9, 'int', null, O.y - 0.3)); }
-        facItem(0, hd - 3, fac ? '🎰 카지노 칩 교환소 (게임하기)' : undefined);
+        facItem(0, hd - 3, fac ? '🎰 카지노 칩 교환소 (게임하기)' : undefined); part(-hw + 4, 4.6, '카지노 딜러', 800);
         break;
       }
       case 'bank': {
@@ -330,8 +374,10 @@ const INTERIOR = {
         { const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.4, 28), new THREE.MeshBasicMaterial({ color: 0x8a8e94 })); vd.rotation.x = Math.PI / 2; vd.position.set(X(0), O.y + 1.7, Z(-hd + 0.3)); group.add(vd); box(0, 1.6, -hd + 0.55, 1.6, 0.2, 0.2, 0xd8c070); }
         for (let i = 0; i < 2; i++) { box(hw - 1, 0, hd - 4 - i * 1.6, 0.8, 1.7, 1.0, 0x2a4a6a, true); box(hw - 1.42, 1.0, hd - 4 - i * 1.6, 0.02, 0.4, 0.5, 0x6ad8ff); }
         for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x2a3a5a, 1);
-        item(0, -hd + 5.2, '🏦 은행 창구 (대출·빚 상환)', () => CREDIT.bankMenu(), 2.4);
-        item(hw - 1.8, hd - 4.8, '🏧 ATM (₩10,000 출금 연출)', () => { sfx('cash'); toast('🏧 지갑에 이미 돈이 있습니다 — 잔액 ' + fmtMoney(ME.money)); }, 1.6);
+        item(-hw / 3, -hd + 5.2, '🏦 은행 창구 (대출·빚 상환)', () => CREDIT.bankMenu(), 2.0);
+        item(hw / 3, -hd + 5.2, '💳 카드 창구 (카드 입출금 · 잔액)', () => CARD.menu('은행 창구'), 2.0);
+        item(hw - 1.8, hd - 4.8, '🏧 ATM (카드 입출금)', () => CARD.menu('ATM'), 1.6);
+        part(-hw / 2, -hd + 2.8, title + ' 창구 보조', 700);
         break;
       }
       case 'church': {
@@ -352,7 +398,7 @@ const INTERIOR = {
       }
       case 'office': default: if (!loft) {
         if (kind === 'office' || kind === 'hotel') {
-          counter(0, hd - 4.5, 4, 0x8a8a8a); plant(-2.8, hd - 4.5); plant(2.8, hd - 4.5);
+          counter(0, hd - 4.5, 4, 0x8a8a8a); plant(-2.8, hd - 4.5); plant(2.8, hd - 4.5); part(0, hd - 5.6, title + ' 안내 데스크', 700);
           for (let r = 0; r < Math.floor((D - 8) / 3); r++) for (let c = 0; c < Math.floor((W - 4) / 3.2); c++) { const x = -hw + 2.4 + c * 3.2, z = -hd + 2 + r * 3; desk(x, z, 0xd8d4cc); box(x - 1.5, 0, z + 0.3, 0.06, 1.4, 2.2, 0x9aa4b0); }
           box(hw - 1.2, 0, hd - 2, 0.4, 1.2, 0.4, 0xcfe8f4);
         } else { sofa(0, 0); table4(0, -3); }
@@ -375,6 +421,10 @@ const INTERIOR = {
       box(-hw + 0.5, 0, 1, 0.8, 0.9, 3.2, 0xe8e4dc, true); box(-hw + 0.5, 0.9, 1, 0.85, 0.05, 3.25, 0x333333); box(-hw + 0.5, 0, 3.2, 0.8, 1.9, 0.8, 0xf2f2f2, true);
       table4(0, 1.5, 0xc8a07a);
       plant(hw - 1.2, hd - 1.2);
+      if (kind !== 'hotel') { // 💻 집 컴퓨터 (다락 아래 안쪽 벽 · 내 집에서만 켜진다)
+        const pcx = hw - 3.6, pcz = -hd + 0.6; desk(pcx, pcz, 0x6a4a2e); box(pcx + 0.62, 0, pcz - 0.1, 0.2, 0.45, 0.45, 0x1a1a20); box(pcx, 0.76, pcz + 0.12, 0.46, 0.02, 0.15, 0x222228); box(pcx + 0.38, 0.76, pcz + 0.14, 0.07, 0.02, 0.1, 0x222228);
+        item(pcx, pcz + 1.6, JOBS.isTrespass(b) ? '🔒 남의 컴퓨터 (비밀번호가 걸려 있다)' : '💻 컴퓨터 (인터넷 뱅킹 · 폰 쇼핑)', () => { if (JOBS.isTrespass(b)) { toast('🔒 비밀번호를 모른다'); sfx('error'); } else COMPUTER.open(); }, 1.5);
+      }
       // 2층
       bed(-hw + 1.6, lz0 + 1.6, C(RP([0x5a7ab8, 0xb85a7a, 0x5ab88a])), LY); bed(-hw + 4, lz0 + 1.6, 0xd8c070, LY);
       box(hw - 3, LY, lz0 + 0.5, 1.6, 2.0, 0.6, 0x6a4a2a, true); box(0, LY, lz0 + 0.5, 2, 1.0, 0.6, 0x8a6a4a, true);
@@ -424,7 +474,9 @@ const INTERIOR = {
         if (k > 0) { // 위층: 사무실 / 객실 / 병실
           furn = true; const rr = mulberry32(hashStr('fl' + b.id + ':' + k));
           const style = ['hotel', 'apartment'].includes(kind) ? 'rooms' : kind === 'hospital' ? 'ward' : 'office';
-          if (style === 'office') { for (let lz = -hd0 + 4.4; lz < hd0 - 2; lz += 3) for (let lx = -hw0 + 4; lx < hw0 - 3.5; lx += 3.2) { if (rr() < 0.15) continue; box(lx, y, lz, 1.6, 0.76, 0.8, 0xd8d4cc, true); box(lx, y + 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, y + 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); box(lx, y, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); } }
+          const TN = tenOf(k);
+          if (TN) shopFloor(TN, y, rr);
+          else if (style === 'office') { for (let lz = -hd0 + 4.4; lz < hd0 - 2; lz += 3) for (let lx = -hw0 + 4; lx < hw0 - 3.5; lx += 3.2) { if (rr() < 0.15) continue; box(lx, y, lz, 1.6, 0.76, 0.8, 0xd8d4cc, true); box(lx, y + 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, y + 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); box(lx, y, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); } }
           else if (style === 'ward') { for (let lx = -hw0 + 4; lx < hw0 - 4; lx += 2.6) for (const lz of [-hd0 + 1.6, hd0 - 1.8]) { box(lx, y, lz, 1.0, 0.55, 2.0, 0xe8eef2, true); box(lx, y + 0.55, lz, 0.95, 0.12, 1.9, 0x9ad0f0); } }
           else { for (let lx = -hw0 + 4.2; lx < hw0 - 4; lx += 3.4) { box(lx, y, -hd0 + 1.4, 1.5, 0.5, 2.1, 0x6a4a2a, true); box(lx, y + 0.5, -hd0 + 1.4, 1.45, 0.16, 2.0, C(rr() < 0.5 ? 0x5a7ab8 : 0xb85a7a)); box(lx + 1.7, y, -hd0 + 1.5, 0.08, 2.4, 2.6, 0xe8e0d0, true); } for (let lx = -hw0 + 4.5; lx < hw0 - 4; lx += 4.5) sofa(lx, hd0 - 2, C(0x6a7a8a), y); }
           box(-hw0 + 3.6, y, hd0 - 1, 0.6, 0.9, 0.6, 0x3a8a3a); box(hw0 - 4, y, hd0 - 0.8, 0.4, 1.2, 0.4, 0xcfe8f4);
