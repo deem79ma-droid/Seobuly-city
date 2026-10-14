@@ -169,15 +169,15 @@ const ADMIN = {
 UI.openHelp = function () {
   const row = (k, d) => `<div style="display:flex;gap:10px;align-items:baseline;padding:3px 0"><span style="min-width:112px;text-align:right">${k.split('|').map(x => `<kbd>${x}</kbd>`).join(' ')}</span><span style="opacity:.9">${d}</span></div>`;
   const sec = t => `<div style="margin:12px 0 4px;font-weight:700;color:#ffd34a;font-size:12.5px;letter-spacing:.04em">${t}</div>`;
-  const pc = sec('이동') + row('W|A|S|D', '이동 (방향키도 가능)') + row('Shift', '달리기') + row('Space', '점프') + row('V', '1인칭 / 3인칭')
-    + sec('전투') + row('좌클릭', '공격') + row('우클릭', '조준') + row('1~8|휠|Q', '무기 선택 · 이전 무기') + row('R', '재장전')
+  const pc = sec('이동') + row('W|A|S|D', '이동 (방향키도 가능)') + row('Shift', '달리기') + row('Space', '점프') + row('V', '1인칭 / 3인칭') + row('휠', '🔍 확대 / 축소')
+    + sec('전투') + row('좌클릭', '공격') + row('우클릭', '조준') + row('1~8|Shift+휠|Q', '무기 선택 · 이전 무기') + row('R', '재장전')
     + sec('상호작용 · 탈것') + row('E', '상호작용 · 탑승 · 하차 (전부 E 하나로)') + row('F', '탑승 / 하차 (예비 키)') + row('Space', '차: 핸드브레이크') + row('H|L', '경적 · 경찰차 사이렌')
     + sec('택시 · 구역') + row('P', '휴대폰 ▶ 택시 호출 (16개 구역 중 목적지 선택)') + row('E', '길가의 노란 택시 잡기 · 내 택시 타기 · 세워주세요') + row('Shift', '택시: 빨리 가 주세요') + row('M', '지도 (숫자 = 구역 번호)')
     
     + sec('건물 · 감옥 · 중력') + row('E', '모든 건물 문 앞: 들어가기 (문으로 걸어 들어가도 입장) · 실내: 물건 사용 / 나가기') + row('E', '높은 건물 실내 🛗 엘리베이터 → 옥상 (4m 넘게 떨어지면 낙하 피해, 물은 안전)') + row('E', '수감 중: 감방 문 앞에서 탈옥 시도 (실패 시 형량 +30초, 성공 시 수배 ★3)')
     + sec('경찰 · 건물') + row('J', '🚨 경찰 신고 (나를 공격한 사람·갱단원)') + row('E', '엘리베이터 호출 · 층 선택 / 계단은 걸어서 오르내리기') + sec('차 · 옷 · 사망') + row('E', '🅿️ 주차장 정산기에서 차 소환 (1인 1대)') + row('E', '👕 옷가게 계산대에서 옷 사기 · 내 옷장') + row('💀', '사망하면 현금·무기·탄약·아이템·산 옷을 모두 잃는다') + sec('기타') + row('U', '끼임 탈출 · 뒤집힌 차 복구') + row('G|X', '춤 · 춤 멈추기') + row('T|Enter', '채팅') + row('M', '지도') + row('P|Tab|Esc', '휴대폰 메뉴') + row('F1', '이 도움말') + row('F2', '관리자')
     + `<div style="margin-top:12px;opacity:.7;font-size:12px">🪧 매물 표지판에서 땅을 사고 건축을 의뢰 (최대 15층) · 🪓 도끼로 나무를 베어 판매 · 🐎 디산베이 목장에서 말</div>`;
-  const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
+  const tc = sec('터치') + row('조이스틱', '왼쪽: 이동 (끝까지 밀면 달리기)') + row('드래그', '오른쪽 화면: 시점') + row('핀치', '오른쪽 화면 두 손가락: 🔍 확대 / 축소') + row('🔥', '공격') + row('🎯', '조준') + row('⬆', '점프 / 차: 브레이크') + row('✋', '상호작용 · 탑승 · 하차') + row('📱', '휴대폰 메뉴 (끼임 탈출도 여기)');
   UI.openMenu('🎮 조작법', IS_TOUCH ? tc : pc, []);
 };
 UI.openSens = function () {

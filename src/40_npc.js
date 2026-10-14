@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101412
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -140,9 +140,11 @@ function hostUpdatePeds(dt) {
     // Ignore respawn/teleport states and small slopes; host alone applies damage.
     if (p.state !== 'dead' && p.state !== 'parked' && p.state !== 'club') {
       const h = groundHeight(p.x, p.z, p.y + 1);
-      if (Number.isFinite(p.fallGroundY)) {
+      const mv = Number.isFinite(p.fallX) ? Math.hypot(p.x - p.fallX, p.z - p.fallZ) : 99; p.fallX = p.x; p.fallZ = p.z;
+      // 순간이동(재배치·출동·가게 문 앞 이동·연행)이나 가파른 비탈은 낙하가 아니다 → 진짜 절벽에서 떨어질 때만 (예전엔 멀쩡히 걷던 NPC가 갑자기 낙하 피해로 죽었다)
+      if (Number.isFinite(p.fallGroundY) && mv < 2.5) {
         const drop = p.fallGroundY - h;
-        if (drop > 3.5 && drop < 120) {
+        if (drop > 3.5 && drop < 120 && drop > mv * 3) {
           const damage = Math.min(180, Math.round((drop - 3.5) * 11));
           if (damage > 0) pedDamage(p, damage, null, { kind: 'fall' });
         }
@@ -457,6 +459,13 @@ function initAnimals() {
   for (const [k, n, r] of [['rabbit', 12, 15], ['fox', 5, 25], ['pheasant', 8, 15], ['squirrel', 6, 12]]) for (let i = 0; i < n; i++) { const sp = nearRoad(6, 35); if (sp) add(k, B(sp[0], sp[1], r), { wild: true, amb: 'wild' }); }
   for (let i = 0; i < 4; i++) add('deer', B(HUNT.x + 70, HUNT.z + 30, 30), { wild: true }); // 사냥꾼 오두막 앞 들판
   for (let i = 0; i < 4; i++) add('rabbit', B(HUNT.x + 30, HUNT.z - 40, 20), { wild: true });
+  // ---- ⛰️ 산 4곳 (운령산·송림산·망성산·천해산): 사슴·산양·토끼·여우·다람쥐·꿩·까마귀 + 멧돼지 (예전엔 산 위에 동물이 하나도 없었다) ----
+  const mt = mulberry32(8484);
+  const mspot = M => { for (let k = 0; k < 40; k++) { const a = mt() * TAU, rr = Math.sqrt(mt()) * M.r * 0.85; const x = M.x + Math.cos(a) * rr, z = M.z + Math.sin(a) * rr; if (terrainH(x, z) > LAND + 2 && coastDist(x, z) > 20 && roadDistAt(x, z) > 6) return [x, z]; } return null; };
+  for (const M of MOUNTAINS) {
+    for (const [k, n, rr] of [['deer', 6, 40], ['goat', 5, 30], ['rabbit', 6, 20], ['fox', 3, 40], ['squirrel', 5, 20], ['pheasant', 4, 25], ['crow', 3, 40]]) for (let i = 0; i < n; i++) { const sp = mspot(M); if (sp) add(k, B(sp[0], sp[1], rr), { wild: true, amb: 'mtn' }); }
+    for (let i = 0; i < 2; i++) { const sp = mspot(M); if (sp) add('boar', B(sp[0], sp[1], 50), { wild: true }); }
+  }
 }
 // 야생 동물 공격 성향: r 감지 거리(밤에 rn) · dmg 한 번 피해 · kill 즉사 확률 · cool 공격 간격
 const WILD = { wolf: { r: 18, rn: 32, dmg: 13, kill: 0, cool: 0.9, eat: true }, boar: { r: 9, rn: 11, dmg: 30, kill: 0.18, cool: 1.7 }, bear: { r: 13, rn: 16, dmg: 28, kill: 0.15, cool: 1.3 } };
@@ -469,7 +478,7 @@ function wildAggro(a, pl) {
 // ---- 주변 동물: 모든 플레이어에게서 멀어진 길동물(개·고양이)과 디산베이 초식동물(사슴·토끼·여우…)은
 //      플레이어 근처의 자기 서식지로 옮겨 온다 (NPC처럼) → 도시를 걸어도, 디산베이 길을 달려도 늘 근처에 동물이 있다.
 //      늑대·멧돼지·곰은 자기 영역에 그대로 있다. 한 사람 근처에 너무 몰리지 않게 상한(도시 8 · 디산베이 10).
-const AMB_CAP = { city: 8, wild: 10 }, AMB_R = { city: 170, wild: 220 }; let _ambT = 0;
+const AMB_CAP = { city: 8, wild: 10, mtn: 10 }, AMB_R = { city: 170, wild: 220, mtn: 220 }; let _ambT = 0;
 function ambientSpot(kind, pl) {
   for (let k = 0; k < 12; k++) {
     const ang = Math.random() * TAU, r = kind === 'city' ? rnd(35, 120) : rnd(60, 180); const x = pl.x + Math.sin(ang) * r, z = pl.z + Math.cos(ang) * r;
@@ -482,6 +491,10 @@ function ambientSpot(kind, pl) {
       const px = clamp(x, st.x0, st.x1), pz = clamp(z, st.z0, st.z1); const dd = Math.hypot(px - pl.x, pz - pl.z); if (dd < 25 || dd > 140) continue;
       return { x: px, z: pz, b: { x0: Math.max(st.x0, px - 12), x1: Math.min(st.x1, px + 12), z0: Math.max(st.z0, pz - 12), z1: Math.min(st.z1, pz + 12), stray: true } };
     }
+    if (kind === 'mtn') { // 산에 있는 사람 근처 산비탈로
+      const M = mountainAt(pl.x, pl.z); if (!M || Math.hypot(x - M.x, z - M.z) > M.r * 0.95 || terrainH(x, z) < LAND + 2 || coastDist(x, z) < 20 || roadDistAt(x, z) < 5) continue;
+      return { x, z, b: { x0: x - 30, x1: x + 30, z0: z - 30, z1: z + 30, wild: true } };
+    }
     if (regionAt(x, z) !== 'disanbay' || terrainH(x, z) < LAND + 1 || coastDist(x, z) < 30 || roadDistAt(x, z) < 5) continue;
     return { x, z, b: { x0: x - 30, x1: x + 30, z0: z - 30, z1: z + 30, wild: true } };
   }
@@ -489,7 +502,7 @@ function ambientSpot(kind, pl) {
 }
 function ambientAnimals() {
   const pls = playersList().filter(p => !p.inside); if (!pls.length) return;
-  const near = pls.map(pl => { const c = { city: 0, wild: 0 }; for (const a of ANIMALS) if (a.amb && a.state !== 'dead' && Math.abs(a.x - pl.x) < AMB_R[a.amb] && Math.abs(a.z - pl.z) < AMB_R[a.amb]) c[a.amb]++; return c; });
+  const near = pls.map(pl => { const c = { city: 0, wild: 0, mtn: 0 }; for (const a of ANIMALS) if (a.amb && a.state !== 'dead' && Math.abs(a.x - pl.x) < AMB_R[a.amb] && Math.abs(a.z - pl.z) < AMB_R[a.amb]) c[a.amb]++; return c; });
   let moved = 0;
   for (const a of ANIMALS) {
     if (!a.amb || a.owner || a.state === 'follow' || a.state === 'attack' || nearestPlayerDist(a.x, a.z) < 300) continue;

@@ -1,4 +1,4 @@
-// @v 2026101323
+// @v 2026101412
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -267,19 +267,21 @@ class Vehicle {
   integrate(dt) {
     const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
     const vx = s * this.speed - c * this.side, vz = c * this.speed + s * this.side; // right = (-cos, sin)
-    this.x += vx * dt; this.z += vz * dt;
-    // collisions with world
+    // collisions with world — 빠르면 잘게 나눠 움직이며 검사 (얇은 벽(클럽 벽 등)을 차가 뚫고 지나가던 버그)
     let hitImpact = 0;
     const r = this.radius; const fo = this.kind === 'car' ? this.M.L / 2 - this.M.W / 2 : 0.55;
-    for (const sgn of [1, -1]) {
-      const cx = this.x + s * fo * sgn, cz = this.z + c * fo * sgn;
-      const res = resolveCircle(cx, cz, r, this.y + 0.3, 1.2);
-      if (res.hit) {
-        const dx = res.x - cx, dz = res.z - cz; this.x += dx; this.z += dz;
-        const vn = vx * res.nx + vz * res.nz; if (vn < -0.5) {
-          hitImpact = Math.max(hitImpact, -vn);
-          const nvx = vx - 1.35 * vn * res.nx, nvz = vz - 1.35 * vn * res.nz; this.speed = nvx * s + nvz * c; this.side = -(nvx * c) + nvz * s; this.speed *= 0.7;
-          if (res.c && res.c.type === 'pole' && Math.abs(vn) > 6) {}
+    const nSub = Math.min(12, Math.max(1, Math.ceil(Math.hypot(vx, vz) * dt / 0.35))); let hitW = false;
+    for (let st = 0; st < nSub && !hitW; st++) {
+      this.x += vx * dt / nSub; this.z += vz * dt / nSub;
+      for (const sgn of [1, -1]) {
+        const cx = this.x + s * fo * sgn, cz = this.z + c * fo * sgn;
+        const res = resolveCircle(cx, cz, r, this.y + 0.3, 1.2);
+        if (res.hit) {
+          const dx = res.x - cx, dz = res.z - cz; this.x += dx; this.z += dz;
+          const vn = vx * res.nx + vz * res.nz; if (vn < -0.5) {
+            hitImpact = Math.max(hitImpact, -vn); hitW = true;
+            const nvx = vx - 1.35 * vn * res.nx, nvz = vz - 1.35 * vn * res.nz; this.speed = nvx * s + nvz * c; this.side = -(nvx * c) + nvz * s; this.speed *= 0.7;
+          }
         }
       }
     }

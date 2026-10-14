@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101412
 
 // ================= PLAYER =================
 const ME = {
@@ -41,7 +41,10 @@ const ME = {
     if ((wasWanted > 0 || this.warrant) && !ADMIN.on) { this.wanted = Math.max(wasWanted, this.warrant ? 2 : 0); UI.updateStars(); toast('🚔 병원 앞에 경찰이 기다리고 있었다…', 3200); setTimeout(() => { if (!this.jail && !this.dead && !ADMIN.on && !COURT.pending) { announce('🚔 체포', '죽는다고 수배가 풀리지 않는다'); LAW.arrest(); } }, 3600); }
   },
 };
-const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45 };
+const CAM = { yaw: 0, pitch: 0.12, dist: 4.4, fp: false, shake: 0, lookT: 0, fov: 62, sh: 0.45, zoom: 1 };
+// 🔍 확대/축소: 마우스 휠 · 폰은 두 손가락 핀치 (0.35 = 가깝게 ~ 2.6 = 멀리)
+function camZoom(f) { CAM.zoom = clamp(CAM.zoom * f, 0.35, 2.6); try { localStorage.setItem('sbc3d_zoom', CAM.zoom.toFixed(2)); } catch (e) { } }
+try { const z = +localStorage.getItem('sbc3d_zoom'); if (z) CAM.zoom = clamp(z, 0.35, 2.6); } catch (e) { }
 const KEYS = {}; const INP = { mx: 0, mz: 0, run: false, fire: false, aim: false, touchRun: false, joyMag: 0 };
 let pointerLocked = false;
 // 한글 입력 상태(ㅈㄴㅁㅇ… 또는 IME 'Process')에서도 WASD·단축키가 동작하도록, 글자키는 물리 키(e.code)로 맞춘다
@@ -79,7 +82,7 @@ function initInput() {
   cv.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement === cv; });
   addEventListener('mousemove', e => { if (!pointerLocked || UI.menuOpen) return; const s = (INP.aim ? 0.0011 : 0.0022) * (G.sens || 1); CAM.yaw -= e.movementX * s; CAM.pitch = clamp(CAM.pitch + e.movementY * s, -1.25, 1.3); CAM.lookT = G.t; });
-  addEventListener('wheel', e => { if (!G.started) return; if (ME.vehicle) return; cycleWeapon(e.deltaY > 0 ? 1 : -1); });
+  addEventListener('wheel', e => { if (!G.started || winOpen()) return; if (e.shiftKey && !ME.vehicle) { cycleWeapon(e.deltaY > 0 ? 1 : -1); return; } camZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: true }); // 휠 = 확대/축소 · Shift+휠 = 무기 바꾸기
 }
 function winOpen() { return !!(UI.menuOpen || UI.mapOpen || SHARE.isOpen() || CINE.locked()); }
 function readMoveInput() {
@@ -395,7 +398,7 @@ function updatePlayer(dt) {
   const acc = ME.grounded ? 14 : 2.5;
   ME.vx = damp(ME.vx, tvx, ME.knockT > 0 ? 1 : acc, dt); ME.vz = damp(ME.vz, tvz, ME.knockT > 0 ? 1 : acc, dt);
   if (ME.sitBench) { const b = ME.sitBench; ME.x = b.x - Math.sin(b.yaw) * 0.05; ME.z = b.z - Math.cos(b.yaw) * 0.05; ME.yaw = b.yaw; ME.vx = ME.vz = 0; }
-  ME.x += ME.vx * dt; ME.z += ME.vz * dt;
+  { const n = Math.min(8, Math.max(1, Math.ceil(Math.hypot(ME.vx, ME.vz) * dt / 0.3))); for (let i = 0; i < n; i++) { ME.x += ME.vx * dt / n; ME.z += ME.vz * dt / n; if (n > 1) { const q = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = q.x; ME.z = q.z; } } } // 빠르게 밀려날 때 얇은 벽을 뚫지 않게
   ME.spd = Math.hypot(ME.vx, ME.vz);
   if (ME.aiming || (ME.combatT > G.t && ME.fireT > -0.3 && !WEAPONS[ME.weapon].melee)) ME.yaw = dampAng(ME.yaw, CAM.yaw, 20, dt);
   else if (ME.spd > 0.3 && !ME.sitBench) ME.yaw = dampAng(ME.yaw, Math.atan2(ME.vx, ME.vz), 12, dt);
@@ -474,6 +477,7 @@ function updateCamera(dt) {
     tx = ME.x; ty = ME.y + (ME.swim ? 0.9 : ME.sitBench ? 1.2 : 1.6); tz = ME.z; dist = ME.aiming ? 2.0 : 4.3; sh = ME.aiming ? 0.62 : 0.38;
     if (ME.dead) { CAM.yaw += dt * 0.3; dist = 6; CAM.pitch = damp(CAM.pitch, 0.6, 2, dt); }
   }
+  if (!ME.aiming && !ME.dead) dist *= CAM.zoom;
   if (CAM.fp || scope) { dist = 0; sh = 0; }
   CAM.dist = damp(CAM.dist, dist, 10, dt); CAM.sh = damp(CAM.sh, sh, 10, dt);
   const cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch);

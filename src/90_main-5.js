@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101413
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -234,7 +234,7 @@ function frame(dt, noRender) {
     v.mesh.visible = vis; if (vis && v.small) { const far = d2 > lod2; if (far !== v.lodFar) { v.lodFar = far; for (const m of v.small) m.visible = !far; } }
     if (vis) { v.visual(dt); if (v.npcDriver && v.npcDriver.root.visible && d2 < 80 * 80) v.npcDriver.update(dt, { state: 'drive', steer: v.steer / (v.M.steer || 0.5), speed: 0 }); }
   }
-  renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt); HUMAN.tick(dt);
+  renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
   updateCamera(dt); CINE.update(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다

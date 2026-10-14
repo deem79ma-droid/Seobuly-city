@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101412
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -413,9 +413,10 @@ const UI = {
     joy.addEventListener('touchend', jend); joy.addEventListener('touchcancel', jend);
     // look
     const look = $('#look'); let lid = null, lx = 0, ly = 0;
-    look.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); const t = e.changedTouches[0]; lid = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
-    look.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === lid) { const s = INP.aim ? 0.0035 : 0.0062; CAM.yaw -= (t.clientX - lx) * s; CAM.pitch = clamp(CAM.pitch + (t.clientY - ly) * s, -1.25, 1.3); lx = t.clientX; ly = t.clientY; CAM.lookT = G.t; } }, { passive: false });
-    const lend = e => { for (const t of e.changedTouches) if (t.identifier === lid) lid = null; }; look.addEventListener('touchend', lend); look.addEventListener('touchcancel', lend);
+    let pin = 0; const pinD = e => { const a = e.touches[0], b = e.touches[1]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }; // 🔍 두 손가락 핀치 = 확대/축소
+    look.addEventListener('touchstart', e => { e.preventDefault(); AU.init(); if (e.touches.length >= 2) { pin = pinD(e); lid = null; return; } const t = e.changedTouches[0]; lid = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
+    look.addEventListener('touchmove', e => { e.preventDefault(); if (pin && e.touches.length >= 2) { const d = pinD(e); if (d > 10) { camZoom(pin / d); pin = d; } return; } for (const t of e.changedTouches) if (t.identifier === lid) { const s = INP.aim ? 0.0035 : 0.0062; CAM.yaw -= (t.clientX - lx) * s; CAM.pitch = clamp(CAM.pitch + (t.clientY - ly) * s, -1.25, 1.3); lx = t.clientX; ly = t.clientY; CAM.lookT = G.t; } }, { passive: false });
+    const lend = e => { if (e.touches.length < 2) pin = 0; for (const t of e.changedTouches) if (t.identifier === lid) lid = null; }; look.addEventListener('touchend', lend); look.addEventListener('touchcancel', lend);
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
@@ -445,14 +446,20 @@ function fastTravel(r) {
 }
 // ---------- customizer (lobby + clothes shop) ----------
 function buildCustomizer(el, o, onChange) {
-  el.innerHTML = '';
-  const fields = [['body', '체형', OPT.body], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['face', '얼굴형', OPT.face], ['eyes', '눈매', OPT.eyes], ['brow', '눈썹', OPT.brow], ['nose', '코', OPT.nose], ['mark', '피부 특징', OPT.mark], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['acc', '액세서리', OPT.acc], ['beard', '수염', OPT.beard]];
+  el.innerHTML = ''; const resetR = []; // 성별을 바꾸면 키·몸무게를 그 성별 기본값으로
+  const fields = [['body', '성별', OPT.body], ['build', '체형', OPT.build], ['skin', '피부', null, OPT.skin], ['eyeColor', '눈 색', OPT.eyeColor], ['face', '얼굴형', OPT.face], ['eyes', '눈매', OPT.eyes], ['brow', '눈썹', OPT.brow], ['nose', '코', OPT.nose], ['mark', '피부 특징', OPT.mark], ['hair', '헤어', OPT.hair], ['hairColor', '머리색', null], ['top', '상의', OPT.top], ['topColor', '상의 색', null], ['bottom', '하의', OPT.bottom], ['bottomColor', '하의 색', null], ['shoes', '신발 색', null], ['hat', '모자', OPT.hat], ['hatColor', '모자 색', null], ['glasses', '안경', OPT.glasses], ['acc', '액세서리', OPT.acc], ['beard', '수염', OPT.beard]];
   for (const [k, label, opts] of fields) {
     const f = document.createElement('div'); f.className = 'f'; f.innerHTML = `<label>${label}</label>`;
     let inp; if (opts) { inp = document.createElement('select'); for (const [v, n] of opts) { const op = document.createElement('option'); op.value = v; op.textContent = n; inp.appendChild(op); } }
     else { inp = document.createElement('input'); inp.type = 'color'; }
-    inp.value = o[k] || (opts ? opts[0][0] : '#888888'); inp.oninput = inp.onchange = () => { o[k] = inp.value; onChange(o); };
+    inp.value = o[k] || (opts ? opts[0][0] : '#888888'); inp.oninput = inp.onchange = () => { o[k] = inp.value; if (k === 'body') { delete o.height; delete o.weight; for (const fn of resetR) fn(); } onChange(o); };
     f.appendChild(inp); el.appendChild(f);
+    if (k === 'build') for (const [rk, rl, mn, mx, un] of [['height', '키', 145, 200, 'cm'], ['weight', '몸무게', 38, 140, 'kg']]) { // 📏 키 · 몸무게 슬라이더
+      const g = document.createElement('div'); g.className = 'f'; const lb = document.createElement('label'); const ri = document.createElement('input'); ri.type = 'range'; ri.min = mn; ri.max = mx; ri.step = 1;
+      const cur = () => bodyOf(o)[rk === 'height' ? 'h' : 'w']; const show = () => { lb.textContent = `${rl} ${ri.value}${un}`; };
+      ri.value = cur(); show(); resetR.push(() => { ri.value = cur(); show(); }); ri.oninput = ri.onchange = () => { o[rk] = +ri.value; show(); onChange(o); };
+      g.append(lb, ri); el.appendChild(g);
+    }
   }
 }
 function applyQualityLive() {
