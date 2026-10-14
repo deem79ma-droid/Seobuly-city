@@ -1,4 +1,4 @@
-// @v 2026101412
+// @v 2026101417
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
@@ -264,7 +264,7 @@ function pedDamage(p, amt, from, opts = {}) {
   if (opts.kind === 'car' && p.hp > 0) { p.state = 'knocked'; p.timer = 2.2; }
   if (p.hp <= 0) {
     p.state = 'dead'; p.timer = 25; p.spd = 0; p.target = null;
-    const amtCash = p.kind.startsWith('gang') ? Math.floor(rnd(80, 600)) : p.kind === 'police' ? Math.floor(rnd(50, 200)) : Math.floor(rnd(20, 260));
+    const amtCash = p.kind.startsWith('gang') ? Math.floor(rnd(30, 200)) : p.kind === 'police' ? Math.floor(rnd(20, 70)) : Math.floor(rnd(5, 80));
     spawnPickup(p.x + rnd(-0.5, 0.5), p.z + rnd(-0.5, 0.5), amtCash);
     if (fromPlayer) notifyPlayer(from, { t: 'kill', k: p.kind });
     if (fromPlayer) NPCMEM.witness(p.x, p.z, from, p.kind === 'gangA' || p.kind === 'gangB' ? 3 : 8, p);
@@ -561,7 +561,7 @@ function hostUpdateAnimals(dt) {
 }
 function animalDamage(a, amt, from, opts = {}) {
   if (!a || a.state === 'dead') return; a.hp -= amt; FX.impact({ x: a.x, y: a.y + 0.6, z: a.z }, 'blood');
-  if (a.hp <= 0) { a.state = 'dead'; a.timer = 60; if (a.owner) { notifyPlayer(a.owner, { t: 'petDead' }); a.owner = null; } if (from && !String(from).startsWith('n') && (a.farm || a.wild)) notifyPlayer(from, { t: 'meat', k: a.kind }); return; }
+  if (a.hp <= 0) { a.state = 'dead'; a.timer = 60; LAWX.hostAnimalKilled(a, from); if (a.owner) { notifyPlayer(a.owner, { t: 'petDead' }); a.owner = null; } if (from && !String(from).startsWith('n') && (a.farm || a.wild)) notifyPlayer(from, { t: 'meat', k: a.kind }); return; }
   if ((a.S.predator || (a.wild && WILD[a.kind])) && from && !String(from).startsWith('n') && a.hp > a.maxHp * 0.3) { a.state = 'attack'; a.timer = 15; a.target = { kind: from === ME.id ? 'me' : 'player', id: from }; }
   else if (a.state !== 'follow') { a.state = 'flee'; a.timer = 6; const tp = from === ME.id ? ME : G.players.get(from); if (tp) { a.fx = tp.x; a.fz = tp.z; } else { a.fx = a.x + 1; a.fz = a.z; } }
 }

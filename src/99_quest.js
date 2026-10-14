@@ -1,4 +1,4 @@
-// @v 2026101324
+// @v 2026101417
 // ================= 튜토리얼 · 업적 · 의뢰 게시판 · 현상금 · 랭킹 =================
 // 처음 하는 사람은 튜토리얼 7단계를 따라가며 보상을 받는다.
 // 업적 26개는 조건을 채우면 자동으로 달성 + 보상. 의뢰 게시판(광장 분수 옆 · 휴대폰)에서 배달·사진·사냥·타임어택 의뢰를 받는다.
@@ -97,9 +97,9 @@ const QUEST = {
     this.updateHud();
   },
   tutDone(st) {
-    ME.money += st.r; sfx('levelup'); toast(`튜토리얼 ${st.t} 완료 +${fmtMoney(st.r)}`, 3000);
+    const tr = Math.round(st.r * 0.2 / 100) * 100; ME.money += tr; sfx('levelup'); toast(`튜토리얼 ${st.t} 완료 +${fmtMoney(tr)}`, 3000);
     this.tut++;
-    if (this.tut >= TUT_STEPS.length) { this.tut = 'done'; this.S().tut = 1; ME.money += 20000; setTimeout(() => CINE.big('튜토리얼 완료', '보너스 +₩20,000 · 이제 진짜 서불리 시민이다', '#7fd88a', 3600), 600); NET.send({ t: 'chat', m: `${ME.name}님이 튜토리얼을 마쳤다`, sys: 1, quiet: 1 }); }
+    if (this.tut >= TUT_STEPS.length) { this.tut = 'done'; this.S().tut = 1; ME.money += 3000; setTimeout(() => CINE.big('튜토리얼 완료', '보너스 +₩3,000 · 이제 진짜 서불리 시민이다', '#7fd88a', 3600), 600); NET.send({ t: 'chat', m: `${ME.name}님이 튜토리얼을 마쳤다`, sys: 1, quiet: 1 }); }
     else { const nx = TUT_STEPS[this.tut]; setTimeout(() => CINE.big(`튜토리얼 ${this.tut + 1}/${TUT_STEPS.length}`, `${nx.t} — ${nx.h}`, '#ffd34a', 3600), 900); this.startStep(); }
     this.updateHud(); saveGame();
   },
@@ -136,7 +136,7 @@ const QUEST = {
   checkAch() {
     if (ADMIN.on) return; const S = this.S(); ME.ach = ME.ach || [];
     for (const a of ACH) { if (ME.ach.includes(a.id)) continue; let ok = false; try { ok = !!a.ok(S); } catch (e) { } if (!ok) continue;
-      ME.ach.push(a.id); const r = a.r ?? 3000; ME.money += r; sfx('levelup');
+      ME.ach.push(a.id); const r = Math.round((a.r ?? 3000) * 0.15 / 100) * 100; ME.money += r; sfx('levelup');
       CINE.big(`업적 달성 · ${a.n}`, `${a.d} · +${fmtMoney(r)}`, '#ffd34a', 3000);
       NET.send({ t: 'chat', m: `${ME.name}님이 업적 [${a.n}] 달성`, sys: 1 }); saveGame(); break; }
   },
@@ -168,7 +168,7 @@ const QUEST = {
     T = T || JOBS.roadPoint(a.x + 500, a.z); const d = D(T, a);
     return { kind: 'race', title: `${whereTxt(T.x, T.z)}까지`, T: { x: T.x, z: T.z, n: '결승점' }, time: Math.round(25 + d / 15), reward: Math.round((3000 + d * 6) / 100) * 100, dist: Math.round(d) };
   },
-  refreshOffers(force) { if (!force && this.offers.length && Date.now() < this.offerT) return; this.offers = ['deliver', 'photo', pick(['hunt', 'race']), pick(['race', 'deliver', 'photo'])].map(k => this.gen(k)); this.offerT = Date.now() + 8 * 60000; },
+  refreshOffers(force) { if (!force && this.offers.length && Date.now() < this.offerT) return; this.offers = ['deliver', 'photo', pick(['hunt', 'race']), pick(['race', 'deliver', 'photo'])].map(k => { const o = this.gen(k); o.reward = Math.max(300, Math.round(o.reward * 0.3 / 100) * 100); return o; }); /* 의뢰 보상도 줄였다 */ this.offerT = Date.now() + 8 * 60000; },
   openBoard() {
     this.refreshOffers(); const M = this.mission;
     const items = [];

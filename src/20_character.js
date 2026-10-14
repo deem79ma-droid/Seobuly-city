@@ -1,4 +1,4 @@
-// @v 2026101413
+// @v 2026101414
 
 // ================= CHARACTERS =================
 const OPT = {
@@ -198,7 +198,7 @@ class Character {
     this.var = new THREE.Group(); // nothing — variable parts are created in setOutfit
   }
   setOutfit(o) {
-    this.outfit = Object.assign({}, o); const P = this.P;
+    this.outfit = Object.assign({}, o); const P = this.P; this._lids = [];
     // clear old meshes
     if (this.meshes) for (const m of this.meshes) m.parent && m.parent.remove(m);
     this.meshes = []; const add = (parent, m, shadow = true, det = false) => { parent.add(m); this.meshes.push(m); m.castShadow = shadow; if (det) m.userData.det = true; return m; };
@@ -275,18 +275,19 @@ class Character {
     add(H, M(CG.head, skin, 0, 0.1, 0, (f ? 0.95 : 1.0) * FC[0], FC[1], FC[2]));
     add(H, M(CG.sph, skin, 0, 0.045 - (FC[4] - 1) * 0.04, 0.018, (f ? 0.078 : 0.088) * FC[3], 0.07 * FC[4], 0.085)); // 턱 (얼굴형마다 다르게)
     if (o.face === 'square') for (const sx of [1, -1]) add(H, M(CG.sph, skin, 0.055 * sx, 0.035, 0.03, 0.04, 0.035, 0.05)); // 각진 턱선
+    this._eyes = []; this._brows = []; this._mouth = []; const EY = m => { this._eyes.push([m, m.position.y, m.scale.y]); return m; }; // 깜빡임·표정용
     const eyeCol = o.eyeColor || (f ? '#4a6a8a' : '#3a2a1a');
     const irisMat = cmat(eyeCol, 0.25, 0.05), highlightMat = cmat('#ffffff', 0.05, 0.8), lashM = cmat('#18100c', 0.6);
     for (const s of [1, -1]) {
       const ES = { normal: [1, 1, 0], big: [1.18, 1.22, 0], narrow: [1.1, 0.62, 0], round: [1.02, 1.3, 0], droopy: [1.08, 0.9, -0.22], sharp: [1.1, 0.82, 0.25] }[o.eyes] || [1, 1, 0];
-      const ew = addD(H, M(CG.eyeW, cmat('#fbf8f4', 0.25), 0.042 * s, 0.112, 0.094, 1.3 * ES[0], (f ? 1.12 : 0.98) * ES[1], 0.8)); ew.rotation.z = ES[2] * s; // 흰자 (눈 모양)
-      addD(H, M(CG.iris, irisMat, 0.042 * s, 0.111, 0.1055, 1.3 * Math.min(1.1, ES[0]), 1.35 * Math.min(1.1, ES[1]), 0.6)); // 홍채
-      addD(H, M(CG.pupil, cmat('#0c0c0e', 0.2), 0.042 * s, 0.111, 0.111, 1.25, 1.35 * Math.min(1, ES[1]), 0.6)); // 동공
-      addD(H, M(CG.highlight, highlightMat, 0.047 * s, 0.1165, 0.1125)); // 눈 반짝임
-      addD(H, M(CG.lid, lashM, 0.042 * s, 0.112 + 0.0175 * (f ? 1.12 : 0.98) * ES[1], 0.1005, (f ? 1.12 : 1.0) * ES[0], f ? 1.7 : 1.0, 1)).rotation.z = 0.08 * s + ES[2] * s; // 윗눈꺼풀 · 속눈썹
+      const ew = EY(addD(H, M(CG.eyeW, cmat('#fbf8f4', 0.25), 0.042 * s, 0.112, 0.094, 1.3 * ES[0], (f ? 1.12 : 0.98) * ES[1], 0.8))); ew.rotation.z = ES[2] * s; // 흰자 (눈 모양)
+      EY(addD(H, M(CG.iris, irisMat, 0.042 * s, 0.111, 0.1055, 1.3 * Math.min(1.1, ES[0]), 1.35 * Math.min(1.1, ES[1]), 0.6))); // 홍채
+      EY(addD(H, M(CG.pupil, cmat('#0c0c0e', 0.2), 0.042 * s, 0.111, 0.111, 1.25, 1.35 * Math.min(1, ES[1]), 0.6))); // 동공
+      EY(addD(H, M(CG.highlight, highlightMat, 0.047 * s, 0.1165, 0.1125))); // 눈 반짝임
+      { const lid = addD(H, M(CG.lid, lashM, 0.042 * s, 0.112 + 0.0175 * (f ? 1.12 : 0.98) * ES[1], 0.1005, (f ? 1.12 : 1.0) * ES[0], f ? 1.7 : 1.0, 1)); lid.rotation.z = 0.08 * s + ES[2] * s; this._lids = this._lids || []; this._lids.push([lid, lid.position.y]); } // 윗눈꺼풀 · 속눈썹
       if (f) addD(H, M(CG.box, lashM, 0.069 * s, 0.1325, 0.0935, 0.014, 0.006, 0.006)).rotation.z = -0.55 * s; // 눈꼬리 속눈썹
       { const BR = { normal: [1, 1, 0], thick: [1.15, 1.9, 0.02], thin: [0.95, 0.55, 0], arched: [1.05, 1.0, -0.22], straight: [1.15, 1.25, 0.1] }[o.brow] || [1, 1, 0];
-        const bw = addD(H, M(CG.brow, hairM, 0.044 * s, 0.153 + (o.brow === 'arched' ? 0.003 : 0), 0.099, (f ? 1.05 : 1.2) * BR[0], (f ? 1.0 : 1.6) * BR[1], 1)); bw.rotation.z = ((f ? -0.14 : -0.06) + BR[2] * -1 + (o.brow === 'straight' ? 0.06 : 0)) * s; } // 눈썹
+        const bw = addD(H, M(CG.brow, hairM, 0.044 * s, 0.153 + (o.brow === 'arched' ? 0.003 : 0), 0.099, (f ? 1.05 : 1.2) * BR[0], (f ? 1.0 : 1.6) * BR[1], 1)); bw.rotation.z = ((f ? -0.14 : -0.06) + BR[2] * -1 + (o.brow === 'straight' ? 0.06 : 0)) * s; this._brows.push([bw, bw.rotation.z, bw.position.y, s]); } // 눈썹
       add(H, M(CG.ear, skin, 0.108 * s, 0.1, -0.002, 0.55, 1.05, 0.75));
       if (f) addD(H, M(CG.sph, cmat(new THREE.Color(o.skin).lerp(new THREE.Color('#ff8a9a'), 0.35).getStyle(), 0.7), 0.06 * s, 0.07, 0.083, 0.02, 0.011, 0.008)); // 볼 홍조
     }
@@ -295,8 +296,8 @@ class Character {
     if (o.mark === 'mole') addD(H, M(CG.sph, cmat('#3a2418', 0.8), 0.035, 0.05, 0.1, 0.0035, 0.0035, 0.002));
     if (o.mark === 'blush') for (const sx of [1, -1]) addD(H, M(CG.sph, cmat(new THREE.Color(o.skin).lerp(new THREE.Color('#ff7a8a'), 0.4).getStyle(), 0.7), 0.06 * sx, 0.07, 0.084, 0.022, 0.012, 0.008));
     { const lipC = f ? '#c8566a' : new THREE.Color(o.skin).lerp(new THREE.Color('#9a4a4a'), 0.45).getStyle(); const lipM = cmat(lipC, 0.45);
-      addD(H, M(CG.lip, lipM, 0, 0.047, 0.1, f ? 1.1 : 1.0, 0.3, 0.42)); addD(H, M(CG.lip, lipM, 0, 0.038, 0.099, f ? 0.95 : 0.9, 0.36, 0.42)); // 윗입술 · 아랫입술
-      addD(H, M(CG.box, cmat('#4a2222', 0.6), 0, 0.0425, 0.1075, f ? 0.036 : 0.034, 0.003, 0.004)); } // 입술 사이
+      const ul = addD(H, M(CG.lip, lipM, 0, 0.047, 0.1, f ? 1.1 : 1.0, 0.3, 0.42)), ll = addD(H, M(CG.lip, lipM, 0, 0.038, 0.099, f ? 0.95 : 0.9, 0.36, 0.42)); // 윗입술 · 아랫입술
+      const gap = addD(H, M(CG.box, cmat('#4a2222', 0.6), 0, 0.0425, 0.1075, f ? 0.036 : 0.034, 0.003, 0.004)); this._mouth = [[ul, ul.position.y, ul.scale.x], [ll, ll.position.y, ll.scale.x], [gap, gap.position.y, gap.scale.x, gap.scale.y]]; } // 입술 사이
     // hair
     const hh = o.hair;
     if (hh === 'short' || hh === 'spiky' || hh === 'curly' || hh === 'long' || hh === 'ponytail') { const c = add(H, M(CG.cap(0.52, 0.127), hairM, 0, 0.115, -0.012, f ? 0.98 : 1.02, 1.05, 1.06)); c.rotation.x = -0.28; }
@@ -469,6 +470,19 @@ class Character {
     P.hipL.rotation.set(c.lHx, 0, c.lHz); P.hipR.rotation.set(c.rHx, 0, c.rHz); P.knL.rotation.x = c.lK; P.knR.rotation.x = c.rK; P.anL.rotation.x = c.lA; P.anR.rotation.x = c.rA;
     this.body.rotation.x = c.bodyX; this.body.position.y = c.bodyY; this.body.rotation.y = (s.spin || 0);
     if (st === 'swim') this.body.position.y = 0;
+    this.face(dt, s, st);
+  }
+  // 😀 얼굴: 눈 깜빡임 · 맞으면 찡그림 · 춤추면 웃음 · 죽으면 눈 감음 (가까이 있을 때만)
+  face(dt, s, st) {
+    if (!this._eyes || this.detail === false) return;
+    this.flash = Math.max(0, (this.flash || 0) - dt); if ((this._blT = (this._blT ?? Math.random() * 4) - dt) <= -0.13) this._blT = 1.8 + Math.random() * 3.5;
+    const dead = st === 'dead', hurt = this.flash > 0.02 || s.action === 'hit', happy = !dead && !hurt && (s.dance >= 0 || st === 'dance');
+    const target = dead || this._blT < 0 ? 0.08 : hurt ? 0.5 : happy ? 0.72 : 1; this._eo = this._eo === undefined ? 1 : this._eo + (target - this._eo) * Math.min(1, dt * (target < this._eo ? 30 : 14)); const k = this._eo;
+    for (const [m, y0, sy] of this._eyes) { m.scale.y = sy * Math.max(0.05, k); m.position.y = 0.112 + (y0 - 0.112) * k; }
+    if (this._lids) for (const [m, y0] of this._lids) m.position.y = 0.112 + (y0 - 0.112) * k;
+    for (const [m, rz, y0, sd] of this._brows) { m.rotation.z = rz + (hurt ? 0.3 * sd : happy ? -0.08 * sd : 0); m.position.y = y0 + (hurt ? -0.004 : happy ? 0.003 : 0); }
+    const M3 = this._mouth; if (M3 && M3.length === 3) { const [u, l, g] = M3; const w = happy ? 1.2 : hurt ? 0.85 : 1, op = hurt ? 0.006 : happy ? 0.002 : 0;
+      u[0].scale.x = u[2] * w; l[0].scale.x = l[2] * w; l[0].position.y = l[1] - op; g[0].scale.x = g[2] * w; g[0].scale.y = g[3] * (1 + op * 900); g[0].position.y = g[1] - op * 0.5; }
   }
   dancePose(p, d, t, s) {
     const b = s.beat ?? t * 2.07 * TAU / 2; // ~124bpm

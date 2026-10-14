@@ -1,8 +1,8 @@
-// @v 2026101412
+// @v 2026101417
 
 // ================= PLAYER =================
 const ME = {
-  id: 'me', name: '플레이어', x: 0, y: LAND, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, grounded: true, hp: 100, armor: 0, stamina: 100, money: 50000,
+  id: 'me', name: '플레이어', x: 0, y: LAND, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, grounded: true, hp: 100, armor: 0, stamina: 100, money: 3000,
   wanted: 0, wantedCool: 0, weapon: 'fist', weapons: { fist: 1 }, ammo: {}, mag: {}, inv: { wood: 0, meat: 0, food: 2, medkit: 1, drink: 0, ticket: 0 },
   skills: { shoot: 0, fight: 0, drive: 0, fit: 0, swim: 0, study: 0 }, garage: [], outfit: null, vehicle: null, seat: null, dead: false, deadT: 0, spawn: null,
   char: null, grudge: {}, drunk: 0, dance: -1, action: null, actionT: 1, aiming: false, swim: false, knockT: 0, sitBench: null, reloadT: 0, fireT: 0, punchSide: 0,
@@ -54,6 +54,8 @@ function initInput() {
   addEventListener('keydown', e => {
     if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter' && document.activeElement.id === 'chatIn') { if (e.isComposing || e.keyCode === 229) { const ci = document.activeElement; if (!ci._imeWait) { ci._imeWait = true; ci.addEventListener('compositionend', () => setTimeout(() => { ci._imeWait = false; if (!ci.classList.contains('hidden')) UI.sendChat(); }, 0), { once: true }); } } else UI.sendChat(); } if (e.key === 'Escape') { document.activeElement.blur(); UI.closeChat(); } return; }
     if (!G.started) return; const k = keyOf(e); KEYS[k] = true; KEYS[e.code] = true;
+    if (PHOTO.on) { PHOTO.key(k, true); if (k === ' ' || k === 'tab' || k === 'enter') e.preventDefault(); return; } // 📸 사진 모드: 키를 가로챈다
+    if (k === 'k' && !e.repeat && !UI.menuOpen) { PHOTO.enter(); return; }
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
     if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
@@ -71,23 +73,25 @@ function initInput() {
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
   });
-  addEventListener('keyup', e => { KEYS[keyOf(e)] = false; KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
+  addEventListener('keyup', e => { if (PHOTO.on) PHOTO.key(keyOf(e), false); KEYS[keyOf(e)] = false; KEYS[e.key.toLowerCase()] = false; KEYS[e.code] = false; });
   addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; INP.fire = false; INP.aim = false; });
   cv.addEventListener('mousedown', e => {
     if (!G.started || IS_TOUCH) return; AU.init();
     if (!pointerLocked) { cv.requestPointerLock && cv.requestPointerLock(); return; }
+    if (PHOTO.on) return;
     if (e.button === 0) INP.fire = true; if (e.button === 2) INP.aim = true;
   });
   addEventListener('mouseup', e => { if (e.button === 0) INP.fire = false; if (e.button === 2) INP.aim = false; });
   cv.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement === cv; });
   addEventListener('mousemove', e => { if (!pointerLocked || UI.menuOpen) return; const s = (INP.aim ? 0.0011 : 0.0022) * (G.sens || 1); CAM.yaw -= e.movementX * s; CAM.pitch = clamp(CAM.pitch + e.movementY * s, -1.25, 1.3); CAM.lookT = G.t; });
-  addEventListener('wheel', e => { if (!G.started || winOpen()) return; if (e.shiftKey && !ME.vehicle) { cycleWeapon(e.deltaY > 0 ? 1 : -1); return; } camZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: true }); // 휠 = 확대/축소 · Shift+휠 = 무기 바꾸기
+  addEventListener('wheel', e => { if (!G.started || winOpen()) return; if (PHOTO.on) { PHOTO.wheel(e.deltaY); return; } if (e.shiftKey && !ME.vehicle) { cycleWeapon(e.deltaY > 0 ? 1 : -1); return; } camZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: true }); // 휠 = 확대/축소 · Shift+휠 = 무기 바꾸기
 }
 function winOpen() { return !!(UI.menuOpen || UI.mapOpen || SHARE.isOpen() || CINE.locked()); }
 function readMoveInput() {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return { x: 0, z: 0 };
   if (winOpen()) { INP.mx = INP.mz = 0; INP.joyMag = 0; if (UI.joyReset) UI.joyReset(); return { x: 0, z: 0 }; }
+  if (PHOTO.on) return { x: 0, z: 0 }; // 사진 모드: 조이스틱·WASD는 카메라를 움직인다
   let x = 0, z = 0;
   if (KEYS['w'] || KEYS['arrowup']) z += 1; if (KEYS['s'] || KEYS['arrowdown']) z -= 1; if (KEYS['a'] || KEYS['arrowleft']) x -= 1; if (KEYS['d'] || KEYS['arrowright']) x += 1;
   if (INP.joyMag > 0.05) { x = INP.mx; z = INP.mz; }
@@ -146,7 +150,7 @@ function dealDamage(tg, amt, from, opts = {}) {
 function sendDmg(msg) { NET.send(msg); if (G.isHost && typeof POLICE !== 'undefined') POLICE.hostSee(msg, ME.id); }
 function notifyPlayer(id, msg) { if (id === ME.id) handlePersonal(msg); else { msg.to = id; NET.send(msg); } }
 function handlePersonal(m) {
-  if (m.t === 'wanted') { addWanted(clamp(+m.add | 0, 0, 5)); if (m.c === 'assault') JOBS.crime('assault', true); } // 폭행은 범죄 기록도 남는다
+  if (m.t === 'wanted') { addWanted(clamp(+m.add | 0, 0, 5)); if (m.c === 'assault') JOBS.crime('assault', true); else if (m.c === 'animal') { JOBS.crime('animal'); toast('🐾 목격자가 동물 학대로 신고했다', 3500); } } // 폭행은 범죄 기록도 남는다
   if (m.t === 'grudge') { ME.grudge[m.g] = G.t + 90; if (!ME._gT || G.t - ME._gT > 10) { toast(m.g === 'gangA' ? '🔴 레드 크루가 너를 노린다!' : '🔵 블루 독스가 너를 노린다!'); ME._gT = G.t; } }
   if (m.t === 'kill') { ME.kills++; JOBS.onKill(m.k); }
   if (m.t === 'robRes') onRobResult(m);
@@ -249,10 +253,10 @@ function meleeResolve() {
 }
 const FALLING = [];
 function chopTree(t, power) {
-  if (!t || !t.alive) return;
+  if (!t || !t.alive) return; LAWX.chopWarn(t);
   if (t.type === 'rock') { sfx('hit', t.x, t.z); FX.impact({ x: t.x, y: t.y + 1, z: t.z }, 'spark'); return; }
   t.hp -= power; sfx('chop', t.x, t.z); FX.impact({ x: t.x, y: t.y + 1.2, z: t.z }, 'wood'); CAM.shake = 0.15;
-  if (t.hp <= 0) { fellTree(t, ME.yaw); const n = t.type === 'pine' || t.type === 'oak' ? 4 : 2; ME.inv.wood += n; toast(`🪵 목재 +${n} (총 ${ME.inv.wood})`); JOBS.onTree(n); NET.send({ t: 'tree', i: t.idx, y: ME.yaw }); UI.updateInv(); }
+  if (t.hp <= 0) { LAWX.felled(t); fellTree(t, ME.yaw); const n = t.type === 'pine' || t.type === 'oak' ? 4 : 2; ME.inv.wood += n; toast(`🪵 목재 +${n} (총 ${ME.inv.wood})`); JOBS.onTree(n); NET.send({ t: 'tree', i: t.idx, y: ME.yaw }); UI.updateInv(); }
 }
 function fellTree(t, dir) {
   if (!t.alive) return; setTreeVisible(t, false); sfx('tree', t.x, t.z); t.cutAt = G.t;
@@ -325,7 +329,8 @@ let curInteract = null;
 function findInteract() {
   if (ME.jail) return LAW.interact();
   if (ME.sleep && SLEEP.on) return SLEEP.interact();
-  if (ME.dead) return null;
+  if (ME.dead || PHOTO.on) return null;
+  { const fi = FISH.current(); if (fi) return fi; } // 낚시 중
   if (ME.vehicle && ME.vehicle.taxiCab) return { label: TAXI.phase === 'ride' ? '🚕 여기서 세워주세요 (요금 정산 후 하차)' : '🚕 택시에서 내리기', key: 'E', fn: () => TAXI.stopHere() };
   if (ME.vehicle) return { label: ME.seat === 'd' ? (ME.vehicle.kind === 'horse' ? '말에서 내리기' : '하차') : '하차', key: 'E', fn: () => exitVehicle() };
   let best = null, bd = 99;
@@ -333,7 +338,7 @@ function findInteract() {
   INTERIOR.interacts(cand); if (INTERIOR.cur) { for (const [id, rp] of G.players) { if (!sameSpace(rp)) continue; const d = Math.hypot(rp.x - ME.x, rp.z - ME.z); if (d < 2.2) cand(d + 0.2, { label: `🤝 ${rp.name}`, key: 'E', fn: () => UI.openPlayer(rp) }); } return best; }
   for (const f of FACILITIES) { const d = Math.hypot(f.x - ME.x, f.z - ME.z); if (d < 2.6) cand(d - 0.5, f.bld ? { label: `🚪 ${f.icon} ${f.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(f.bld) } : { label: `${f.icon} ${f.name}`, key: 'E', fn: () => UI.openFacility(f) }); }
   { const nd = INTERIOR.nearDoor(); if (nd && !nd.b.fac) cand(nd.d - 0.3, HOUSE.isHome(nd.b) && !ADMIN.on ? { label: HOUSE.label(nd.b), key: 'E', fn: () => HOUSE.door(nd.b) } : { label: `🚪 ${nd.b.kind === 'restaurant' ? FOOD.shop(nd.b).ic + ' ' + FOOD.shop(nd.b).name : nd.b.name} 들어가기`, key: 'E', fn: () => INTERIOR.enter(nd.b) }); }
-  JOBS.interact(cand);
+  JOBS.interact(cand); FISH.interact(cand);
   for (const p of PLOTS) { const d = Math.hypot(p.signPos[0] - ME.x, p.signPos[1] - ME.z); const inside = Math.abs(ME.x - p.x) < p.w / 2 + 2 && Math.abs(ME.z - p.z) < p.d / 2 + 2; if (d < 4 || (inside && p.state === 'done')) cand(d, { label: p.state === 'done' ? `🏠 ${p.ownerName || ''}의 ${BUILD_DESIGNS[p.design]?.name || '건물'}` : p.owner ? `🏗️ ${p.ownerName}의 땅` : `🪧 매물 (${fmtMoney(p.price)})`, key: 'E', fn: () => UI.openPlot(p) }); }
   const v = nearestVehicle(2.8);
   if (v && v.taxiCab) cand(1.0, v.taxiOwner === ME.id ? { label: '🚕 내가 부른 택시 타기', key: 'E', vehicle: 1, fn: () => TAXI.board() } : { label: '🚕 다른 손님이 부른 택시', key: 'E', vehicle: 1, fn: () => toast('🚕 다른 손님이 부른 택시다') });

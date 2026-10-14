@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101416
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -494,6 +494,7 @@ const NET = {
         break;
       }
       case 'gift': { if (!f || !NET.rate('g' + f, 5, 60)) break; ME.money += 1000; sfx('cash'); const rp = G.players.get(f); toast(`${rp ? rp.name : '누군가'}님이 ₩1,000을 보냈다`); break; } // 플레이어끼리 송금 (금액 고정 · 분당 5번)
+      case 'sms': if (m.to === ME.id) SMS.recv(m, f); break; // 💬 휴대폰 문자
       case 'chat': { if (!NET.rate((m.sys ? 's' : 'c') + (f || '?'), m.sys ? 10 : 6, 6)) break; if (m.sys) UI.chatLine(null, m.m); else { const rp = G.players.get(f); UI.chatLine(rp ? displayName(f, rp.name) : '?', m.m); if (rp) rp.char.say(m.m); } break; }
       case 'shot': { const a = { x: m.a[0], y: m.a[1], z: m.a[2] }, b = { x: m.b[0], y: m.b[1], z: m.b[2] }; showShot(a, b, m.w, m.i); const rp = G.players.get(f); if (rp) { rp.act = 'shoot'; rp.actT = 0; } break; }
       case 'act': { const rp = G.players.get(f); if (rp) { rp.act = m.a; rp.actT = 0; if (PUNCH_MOVES[m.a] && sameSpace(rp)) sfx('whoosh', rp.x, rp.z, 0.7); } break; }
@@ -547,7 +548,7 @@ const NET = {
       case 'adopt': if (G.isHost) { const a = ANIMALS[m.a]; if (a && !a.owner) { a.owner = f; a.state = 'follow'; notifyPlayer(f, { t: 'adopted', a: a.id }); } } break;
       case 'pet': { const a = ANIMALS[m.a]; if (a) FX.emoji('💕', a.x, a.y + 1.2, a.z); break; }
       case 'outfit': { const rp = G.players.get(f); if (rp) setRemoteOutfit(rp, m.o); break; }
-      case 'pedAct': if (G.isHost) { const p = PEDS[m.id]; if (p && p.state !== 'dead') { if (m.a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = m.d; } if (m.a === 'talk') { p.state = 'talk'; p.timer = 4; const rp = G.players.get(f); if (rp) p.yaw = Math.atan2(rp.x - p.x, rp.z - p.z); NPCMEM.talk(p, f); } if (m.a === 'rob') hostRob(p, f); } } break;
+      case 'pedAct': if (G.isHost) { const p = PEDS[m.id]; if (p && p.state !== 'dead') { if (m.a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = m.d; } if (m.a === 'talk') { p.state = 'talk'; p.timer = 4; const rp = G.players.get(f); if (rp) p.yaw = Math.atan2(rp.x - p.x, rp.z - p.z); NPCMEM.talk(p, f); } if (m.a === 'rob') hostRob(p, f); if (m.a === 'flee') { const rp = G.players.get(f); p.state = 'flee'; p.timer = 10; p.fx = rp ? rp.x : p.x; p.fz = rp ? rp.z : p.z; p.dance = -1; } } } break;
     }
   },
 };

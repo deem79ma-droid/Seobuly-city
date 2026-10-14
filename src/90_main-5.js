@@ -1,4 +1,4 @@
-// @v 2026101413
+// @v 2026101417
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -31,7 +31,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), law: LAW.save(), card: CARD.bal, phone: PHONE.id, keys: HOUSE.keys(), ...QUEST.save() }; } catch (e) { return; }
+  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), law: LAW.save(), card: CARD.bal, phone: PHONE.id, ...CAREER.save(), keys: HOUSE.keys(), ...QUEST.save() }; } catch (e) { return; }
   if (ACCT.on) { ACCT.data = o; ACCT.push(o); return; } // 로그인: 서버에 저장
   try { localStorage.setItem('sbc3d_save', JSON.stringify(o)); } catch (e) { }
 }
@@ -174,9 +174,9 @@ async function loadWorld() {
   for (const p of PLOTS) syncPlotVisual(p);
   if (G.isHost) { loadPlots(); ECON.load(); }
   // player
-  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 50000, debt: Math.max(0, Number(sv.debt) || 0), weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
+  const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 3000, debt: Math.max(0, Number(sv.debt) || 0), weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
-  JOBS.load(sv); QUEST.load(sv); CARD.load(sv); PHONE.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
+  JOBS.load(sv); QUEST.load(sv); CARD.load(sv); PHONE.load(sv); CAREER.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
   const sx = G.isHost ? 10 : -10; ME.x = sx; ME.z = 52; ME.y = groundHeight(ME.x, ME.z); ME.yaw = Math.PI; CAM.yaw = Math.PI;
   setLoad(1, '완료!'); await tick();
@@ -237,7 +237,7 @@ function frame(dt, noRender) {
   renderPeds(dt, _cam); renderAnimals(dt, _cam); renderRemotes(dt);
   updateConstruction(dt, _cam); updateFalling(dt);
   for (const p of PICKUPS.values()) { p.mesh.rotation.y += dt * 2; p.mesh.position.y = p.y + Math.sin(G.t * 3) * 0.1; }
-  updateCamera(dt); CINE.update(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
+  if (PHOTO.on) PHOTO.update(dt); else { updateCamera(dt); CINE.update(dt); } FISH.tick(dt); LAWX.tick(dt); CAREER.tick(dt); clubRoofTick(); GRENADE.update(dt); TRAFFIC_LAW.tick(dt); QUEST.tick(dt); // 컷신이 있으면 카메라를 덮어쓴다
   const fx = ME.vehicle ? ME.vehicle : ME; updateEnv(dt, { x: fx.x, y: fx.y, z: fx.z }); updateGrass(camera.position.x, camera.position.z);
   // headlight spot for my car
   const cl = ENV.carLight; if (ME.vehicle && ENV.night > 0.3 && ME.vehicle.kind !== 'horse') { const v = ME.vehicle; cl.intensity = 220; cl.position.set(v.x + Math.sin(v.yaw) * 2, v.y + 1, v.z + Math.cos(v.yaw) * 2); cl.target.position.set(v.x + Math.sin(v.yaw) * 25, v.y - 1, v.z + Math.cos(v.yaw) * 25); } else cl.intensity = 0;
@@ -245,7 +245,7 @@ function frame(dt, noRender) {
   _iT -= dt; if (_iT <= 0) { _iT = 0.15; curInteract = UI.menuOpen ? null : findInteract(); UI.setPrompt(curInteract); }
   _mT -= dt; if (_mT <= 0) { _mT = 0.1; UI.drawMini(); if (UI.mapOpen && Math.floor(G.t * 2) % 2 === 0) UI.drawBigMap(); }
   _tT -= dt; if (_tT <= 0) { _tT = 0.3; UI.updateTouch(); }
-  const dc = Math.hypot(ME.x - CLUB.x, ME.z - CLUB.z); MUSIC.vol = clamp(1 - dc / 130, 0, 1); MUSIC.tick();
+  const dc = Math.hypot(ME.x - CLUB.x, ME.z - CLUB.z); MUSIC.vol = clamp(1 - dc / 130, 0, 1); if (BGM.tenseOn) MUSIC.vol *= 0.3; /* 긴박할 땐 클럽 음악을 줄인다 */ MUSIC.tick();
   if (!ME.vehicle) ENG.set(false, 0);
   NET.tick(dt);
   if (noRender) return;

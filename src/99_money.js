@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101417
 
 // ================= 💳 카드 · 📱 스테이온 휴대폰 · 💻 집 컴퓨터 · 🧑‍💼 알바 =================
 // 카드: 죽어도 그대로 남고 아무도 뺏을 수 없다. 대신 한도(₩1,000,000)까지만 넣어 둘 수 있다.
@@ -74,13 +74,13 @@ const COMPUTER = {
 
 // ---- 🧑‍💼 알바 ----
 const PART = {
-  SHIFT: 12,
-  label(name, pay) { return `🧑‍💼 ${name} 알바 (${this.SHIFT}초 근무 · ${fmtMoney(pay)})`; },
-  work(name, pay) {
+  SHIFT: 25, K: 0.35, // 예전엔 12초에 ₩550~750이라 너무 쉬웠다
+  label(name, pay) { return `🧑‍💼 ${name} 알바 (${this.SHIFT}초 근무 · ${fmtMoney(Math.round(pay * this.K / 10) * 10)})`; },
+  work(name, pay) { pay = Math.round(pay * this.K / 10) * 10;
     if (JOBS.chan) { toast('이미 일하는 중이다'); return; }
     if (ME.stamina < 15) { toast('😮‍💨 너무 지쳤다 — 조금 쉬었다가 하자'); sfx('error'); return; }
     toast(`🧑‍💼 ${name} 알바 시작 — ${this.SHIFT}초 동안 자리를 지키자`, 2400);
-    JOBS.channel(this.SHIFT, `🧑‍💼 ${name} 알바 중`, () => JOBS.pay(pay, `${name} 알바`));
+    JOBS.channel(this.SHIFT, `🧑‍💼 ${name} 알바 중`, () => { JOBS.pay(pay, `${name} 알바`, 'part'); ME.stamina = Math.max(0, ME.stamina - 12); });
   },
 };
 // 건물 층마다 들어선 가게·상점·센터 (층 번호와 건물로 정해진다 → 누가 와도 같은 가게)

@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101417
 // ================= 도시: 경제 · 대통령 선거 · 정책 · 뉴스 · 법원 · NPC 기억 =================
 // 공유 상태(대통령·정책·집값·뉴스)는 방장이 관리하고 모두에게 보낸다. 서버가 있으면 방 저장에 같이 남는다.
 
@@ -207,7 +207,7 @@ const COURT = {
   onNet(m, f) {
     if (m.t === 'lawReq' && m.to === ME.id && JOBS.id === 'lawyer' && NET.rate('lr' + f, 2, 60)) { UI.openMenu('⚖️ 변론 의뢰', `<b>${m.n}</b>이(가) 재판 변론을 요청했다 (구형 ${m.s}초) · 수임료 ₩20,000`, [{ ic: '✅', t: '수락', p: '', fn: () => { this._feeFrom = { f, until: G.t + 120 }; NET.send({ t: 'lawAns', to: f, ok: 1 }); } }, { ic: '❌', t: '거절', p: '', fn: () => NET.send({ t: 'lawAns', to: f, ok: 0 }) }]); }
     if (m.t === 'lawAns' && m.to === ME.id && this.pending) { clearTimeout(this._wait); this._wait = null; if (m.ok) { const fee = Math.min(ME.money, 20000); ME.money -= fee; NET.send({ t: 'lawFee', to: f, amt: fee }); this.verdict(null, true); } else { toast('변호사가 거절했다'); this.menu(); } }
-    if (m.t === 'lawFee' && m.to === ME.id && this._feeFrom && this._feeFrom.f === f && G.t < this._feeFrom.until && !(this._feeFrom = null)) JOBS.pay(Math.min(20000, Math.max(0, +m.amt || 0)) / ECON.payMul('lawyer') / (1 - ECON.taxRate()), '변론 수임료');
+    if (m.t === 'lawFee' && m.to === ME.id && this._feeFrom && this._feeFrom.f === f && G.t < this._feeFrom.until && !(this._feeFrom = null)) JOBS.pay(Math.min(20000, Math.max(0, +m.amt || 0)) / ECON.payMul('lawyer') / (1 - ECON.taxRate()), '변론 수임료', 'raw');
   },
 };
 // 법원 건물 (이벤트광장 서쪽)

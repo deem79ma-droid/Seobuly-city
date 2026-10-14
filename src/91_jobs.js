@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101417
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -13,9 +13,14 @@ const CRIMES = {
   escape: { name: '탈옥', s: 60 },
   assault: { name: '폭행', s: 30 },
   rob: { name: '강도', s: 60 },
+  stalk: { name: '스토킹', s: 90 },
+  animal: { name: '동물 학대', s: 60 },
+  threat: { name: '총기 협박', s: 60 },
+  logging: { name: '불법 벌목', s: 45 },
 };
 const JOB_LIST = [
   { id: 'none', icon: '🙂', name: '무직', d: '자유롭게 생활' },
+  { id: 'paper', icon: '🗞️', name: '신문 배달', d: '누구나 (신용불량·범죄자도 가능) · 동네 집집마다 신문 넣기 · 한 부당 조금씩' },
   { id: 'police', icon: '👮', name: '경찰', clean: 1, d: '근무 수당 · 순찰 · 수배자 체포(E) · 갱단원 제압 수당', u: { top: 'police', topColor: '#22305a', bottom: 'slacks', bottomColor: '#1a2240', hat: 'police', hatColor: '#1a2240', shoes: '#111111' } },
   { id: 'soldier', icon: '🪖', name: '군인', clean: 1, d: '근무 수당 · 군부대 경계 근무 · 부대 출입 허가', u: { top: 'jacket', topColor: '#4a5a32', bottom: 'cargo', bottomColor: '#3e4a2a', hat: 'helmet', hatColor: '#4a5a32', shoes: '#1a1a12' } },
   { id: 'doctor', icon: '🩺', name: '의사', clean: 1, d: '근무 수당 · 🤕 환자 치료 · 다친 플레이어 치료(E)', u: { top: 'doctor', topColor: '#ffffff', bottom: 'slacks', bottomColor: '#4a6a8a', hat: 'none' } },
@@ -138,7 +143,7 @@ const HUNT = {
     const ring = addDoorRing(this.x, this.z, 0xff8a2a); this.ring = ring;
   },
   menu() {
-    const hunter = JOBS.id === 'hunter'; const price = hunter ? 900 : 350; const n = ME.inv.meat | 0;
+    const hunter = JOBS.id === 'hunter'; const price = hunter ? 300 : 120; const n = ME.inv.meat | 0;
     UI.openMenu('사냥꾼 오두막', '디산베이 숲 입구 · <b>늑대는 무리로</b>, <b>멧돼지는 돌진</b>, <b>곰</b>은 한 방에 죽일 수 있다. 차 안에선 안전.', [
       { ic: '', t: hunter ? '사냥꾼 그만두기' : '사냥꾼 등록', p: '', d: hunter ? '무직이 된다' : '포상금 · 고기 2배 · 고기 매입가 ↑', fn: () => { JOBS.set(hunter ? 'none' : 'hunter'); if (!hunter && !ME.weapons.rifle && !ME.weapons.shotgun && !ME.weapons.sniper) { ME.weapons.shotgun = 1; ME.mag.shotgun = WEAPONS.shotgun.mag; ME.ammo.shotgun = (ME.ammo.shotgun || 0) + WEAPONS.shotgun.mag * 2; UI.buildHotbar && UI.buildHotbar(); toast('사냥용 산탄총을 지급받았다', 3500); saveGame(); } } },
       { ic: '', t: `고기 팔기 (${n}개)`, p: `개당 ${fmtMoney(price)}`, dis: !n, disMsg: '고기가 없다', fn: () => { ME.money += n * price; ME.inv.meat = 0; sfx('cash'); toast(`고기 ${n}개 판매 +${fmtMoney(n * price)}`); UI.updateInv && UI.updateInv(); saveGame(); } },
@@ -174,7 +179,7 @@ const JOBS = {
     else if (!hunter && pay && !this._hTip) { this._hTip = 1; toast('사냥꾼 직업이면 포상금을 받는다 (디산베이 사냥꾼 오두막)', 4000); }
     UI.updateInv && UI.updateInv();
   },
-  pay(n, why) { const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); },
+  pay(n, why, key) { if (key !== 'raw') n = CAREER.adjust(key || this.id, n); const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); },
   // 일하는 시간: 가만히 sec초 있어야 돈이 들어온다 (딸깍 방지)
   channel(sec, label, fn) { if (this.chan) return; this.chan = { end: G.t + sec, dur: sec, x: ME.x, z: ME.z, label, fn }; sfx('ui'); this.updateHud(); },
   chanTick() { const c = this.chan; if (!c) return; if (ME.dead || ME.vehicle || ME.jail || Math.hypot(ME.x - c.x, ME.z - c.z) > 1.5) { this.chan = null; toast('❌ 중단됐다 — 끝날 때까지 가만히 있어야 해'); this.updateHud(); return; } if ((this._cT = (this._cT || 0) - G.dt) <= 0) { this._cT = 0.25; this.updateHud(); } if (G.t >= c.end) { this.chan = null; ME.stamina = Math.max(0, ME.stamina - 12); c.fn(); this.updateHud(); } },
@@ -216,6 +221,7 @@ const JOBS = {
     if (!silent && ECON.jobLocked(id)) { toast('📉 채용 중단 — 경기가 나빠 지금은 이 일자리가 없다', 3500); sfx('error'); return; }
     if (j.clean && this.criminal()) { toast(`🦹 범죄 기록이 있어 ${j.name}이(가) 될 수 없다 (남은 형량 ${Math.ceil(this.record)}초)`, 3500); sfx('error'); return; }
     if (ME.jail) { toast('🔒 수감 중에는 직업을 바꿀 수 없다'); return; }
+    if (!silent) { const w = CAREER.why(id); if (w) { toast(w, 4000); sfx('error'); return; } if (!CAREER.payFee(id)) return; } // 경력 · 자격 비용 · 신용
     this.closeStall(true); this.id = id; this.task = null; this.payT = 0;
     if (!ADMIN.on) WARDROBE.apply(); this.newTask();
     if (!silent) { if (id !== 'none') setTimeout(() => CINE_EV.job(Object.assign({}, j, { id })), 150); announce(`${j.icon} ${j.name}`, id === 'none' ? '직업을 그만뒀다' : j.d); sfx('levelup'); NET.send({ t: 'chat', m: `💼 ${ME.name} → ${j.icon} ${j.name}`, sys: 1 }); }
@@ -223,7 +229,7 @@ const JOBS = {
   },
   openMenu() {
     const cr = this.criminal();
-    const items = JOB_LIST.map(j => ({ ic: j.icon, t: j.name + (this.id === j.id ? ' (현재)' : ''), p: '', d: j.d + (j.clean ? ' · 범죄 기록 없어야 함' : ''), dis: (j.clean && cr) || this.id === j.id || ECON.jobLocked(j.id), disMsg: this.id === j.id ? '이미 이 직업이다' : ECON.jobLocked(j.id) ? '📉 채용 중단 (일자리 감소)' : `🦹 범죄자 신분 — 남은 형량 ${Math.ceil(this.record)}초`, fn: () => this.set(j.id) }));
+    const items = JOB_LIST.map(j => ({ ic: j.icon, t: j.name + (this.id === j.id ? ' (현재)' : ''), p: '', d: j.d + (j.clean ? ' · 범죄 기록 없어야 함' : '') + (j.id !== 'none' ? CAREER.reqText(j.id) : ''), dis: (j.clean && cr) || this.id === j.id || ECON.jobLocked(j.id) || !!CAREER.why(j.id), disMsg: this.id === j.id ? '이미 이 직업이다' : ECON.jobLocked(j.id) ? '📉 채용 중단 (일자리 감소)' : CAREER.why(j.id) ? CAREER.why(j.id) : `🦹 범죄자 신분 — 남은 형량 ${Math.ceil(this.record)}초`, fn: () => this.set(j.id) }));
     if (this.id === 'selfemp') items.unshift({ ic: '🏪', t: this.stall ? '노점 닫기' : '여기서 노점 열기', p: '', d: '사람 많은 곳 · 낮 · 내 건물 안일수록 잘 팔린다', fn: () => this.stall ? this.closeStall() : this.openStall() });
     UI.openMenu('💼 직업', `현재: <b>${this.cur.icon} ${this.cur.name}</b>${cr ? ` · <b style="color:#ff6a3a">🦹 범죄자 (남은 형량 ${Math.ceil(this.record)}초)</b>` : ''}`, items);
   },
@@ -238,6 +244,7 @@ const JOBS = {
     else if (id === 'realtor') { const c = PLOTS.filter(p => p.state === 'empty' && p.signPos).map(p => [p, Math.hypot(p.signPos[0] - a.x, p.signPos[1] - a.z)]).filter(q => q[1] > 60 && q[1] < 800); if (c.length) { const [p, d] = pick(c); this.task = { kind: 'plot', x: p.signPos[0], z: p.signPos[1], label: '📋 매물 감정', r: 4, e: 1, dist: d }; } }
     else if (id === 'lawyer' && COURT.site) this.task = { kind: 'court', x: COURT.site.x, z: COURT.site.z, label: '⚖️ 법원 (E: 법률 상담)', r: 8, passive: 1 };
     else if (id === 'hunter') this.task = { kind: 'hunt', x: HUNT.x, z: HUNT.z - 160, label: '🎯 디산베이 사냥터 — 늑대·멧돼지는 먼저 덤빈다', r: 260, passive: 1 };
+    else if (id === 'paper') { for (let k = 0; k < 20; k++) { const an = Math.random() * TAU, d = rnd(45, 160); const p = this.roadPoint(a.x + Math.sin(an) * d, a.z + Math.cos(an) * d); const dd = Math.hypot(p.x - a.x, p.z - a.z); if (dd > 30 && dd < 220) { this.task = { kind: 'paper', x: p.x, z: p.z, label: `🗞️ 신문 넣기 (오늘 ${this.paperN || 0}부)`, r: 4, e: 1 }; break; } } }
     else if (id === 'farmer') this.task = { kind: 'farm', x: FARM.cx, z: FARM.cz, label: '🌾 농장', r: 22, passive: 1 };
     else if (id === 'delivery') { const p = this.roadPoint(-40, -800); this.task = { kind: 'pickup', x: p.x, z: p.z, label: '📦 물류단지에서 상차', r: 4, e: 1 }; }
     else if (id === 'gangA' || id === 'gangB') { const d = DISTRICTS[id === 'gangA' ? 10 : 11]; const p = this.roadPoint(d.cx + rnd(-120, 120), d.cz + rnd(-120, 120)); this.task = { kind: 'collect', x: p.x, z: p.z, label: `💰 자릿세 수금 (${d.name})`, r: 4, e: 1 }; }
@@ -258,6 +265,7 @@ const JOBS = {
       const d = Math.hypot(t.x - ME.x, t.z - ME.z);
       if (d < t.r) {
         if (t.kind === 'plot') cand(d - 0.4, { label: '📋 매물 감정하기 (부동산중개인)', key: 'E', fn: () => this.channel(5, '📋 매물 감정 중', () => { this.pay(900 + t.dist * 2, '매물 감정 수수료'); this.later(); }) });
+        if (t.kind === 'paper') cand(d - 0.4, { label: '🗞️ 신문 넣기', key: 'E', fn: () => this.channel(1.5, '🗞️ 신문 넣는 중', () => { this.paperN = (this.paperN || 0) + 1; this.pay(140, '신문 배달'); this.newTask(); }) });
         if (t.kind === 'pickup') cand(d - 0.4, { label: '📦 택배 상차', key: 'E', fn: () => this.channel(3, '📦 상차 중', () => this.loadParcel()) });
         if (t.kind === 'drop') cand(d - 0.4, { label: `📦 ${t.name} 배달 완료`, key: 'E', fn: () => this.channel(3, '📦 하차 중', () => { this.pay(600 + t.dist * 1.1, '배달 완료'); this.later(); }) });
         if (t.kind === 'collect') cand(d - 0.4, { label: '💰 자릿세 걷기', key: 'E', fn: () => this.channel(4, '💰 수금 중', () => { this.pay(rnd(700, 1500) * ECON.crimeMul(), '자릿세 수금'); if (Math.random() < 0.35) { addWanted(1); JOBS.witness(2); } this.later(); }) });

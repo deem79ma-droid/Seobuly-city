@@ -1,4 +1,4 @@
-// @v 2026101412
+// @v 2026101417
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -33,7 +33,7 @@ const UI = {
     if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
-  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`목재 ${i.wood}`); if (i.meat) parts.push(`고기 ${i.meat}`); if (i.grenade) parts.push(`수류탄 ${i.grenade} (B)`); if (i.food) parts.push(`도시락 ${i.food}`); if (i.medkit) parts.push(`구급상자 ${i.medkit}`); if (i.drink) parts.push(`음료 ${i.drink}`); if (i.card) parts.push(`출소카드 ${i.card}`); if (ME.keys && ME.keys.length) parts.push(`열쇠 ${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
+  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`목재 ${i.wood}`); if (i.meat) parts.push(`고기 ${i.meat}`); if (i.grenade) parts.push(`수류탄 ${i.grenade} (B)`); if (i.food) parts.push(`도시락 ${i.food}`); if (i.medkit) parts.push(`구급상자 ${i.medkit}`); if (i.drink) parts.push(`음료 ${i.drink}`); if (i.card) parts.push(`출소카드 ${i.card}`); if (i.rod) parts.push('낚싯대'); if (i.fish) parts.push(`물고기 ${i.fish}`); if (ME.keys && ME.keys.length) parts.push(`열쇠 ${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
   buildHotbar() { const hb = $('#hotbar'); hb.innerHTML = ''; WEAPON_ORDER.forEach((w, i) => { if (!ME.weapons[w]) return; const s = document.createElement('span'); s.textContent = `${i + 1} ${WEAPONS[w].name}`; s.className = ME.weapon === w ? 'on' : ''; hb.appendChild(s); }); },
   updateWeapon() { const W = WEAPONS[ME.weapon]; $('#wName').textContent = `${W.icon} ${W.name}`; $('#wAmmo').textContent = W.melee ? (W.chop ? '나무를 베면 목재 획득' : '') : `${ME.mag[ME.weapon] || 0} / ${ME.ammo[ME.weapon] || 0}${ME.reloadT > 0 ? ' · 재장전…' : ''}`; this.buildHotbar(); },
   damageFlash(a) { const e = $('#dmgFlash'); e.style.transition = 'none'; e.style.opacity = Math.min(0.9, 0.3 + a); requestAnimationFrame(() => { e.style.transition = 'opacity .5s'; e.style.opacity = 0; }); },
@@ -96,8 +96,8 @@ const UI = {
         { ic: '🧪', t: '건강검진 (스태미나 회복)', p: 200, fn: () => { ME.stamina = 100; } }]); break;
       case 'dealer': this.openDealer(f); break;
       case 'factory': this.openMenu('🏭 공장', '목재·고기 매입, 아르바이트', [
-        { ic: '🪵', t: `목재 판매 (${ME.inv.wood}개)`, p: '개당 ₩180', free: true, dis: !ME.inv.wood, disMsg: '목재가 없다 — 도끼로 나무를 베자', fn: () => { const a = ME.inv.wood * 180; ME.money += a; ME.inv.wood = 0; sfx('cash'); toast(`💰 +${fmtMoney(a)}`); } },
-        { ic: '🥩', t: `고기 판매 (${ME.inv.meat}개)`, p: '개당 ₩350', dis: !ME.inv.meat, disMsg: '고기가 없다', fn: () => { const a = ME.inv.meat * 350; ME.money += a; ME.inv.meat = 0; sfx('cash'); toast(`💰 +${fmtMoney(a)}`); } },
+        { ic: '🪵', t: `목재 판매 (${ME.inv.wood}개)`, p: '개당 ₩60', free: true, dis: !ME.inv.wood, disMsg: '목재가 없다 — 도끼로 나무를 베자', fn: () => { const a = ME.inv.wood * 60; ME.money += a; ME.inv.wood = 0; sfx('cash'); toast(`💰 +${fmtMoney(a)}`); } },
+        { ic: '🥩', t: `고기 판매 (${ME.inv.meat}개)`, p: '개당 ₩120', dis: !ME.inv.meat, disMsg: '고기가 없다', fn: () => { const a = ME.inv.meat * 120; ME.money += a; ME.inv.meat = 0; sfx('cash'); toast(`💰 +${fmtMoney(a)}`); } },
         { ic: '⚙️', t: '공장 아르바이트', p: '타이밍 미니게임', d: '성공할 때마다 ₩300', fn: () => { this.factoryGame(); return true; } }]); break;
       case 'school': this.openMenu('🏫 학교', '스킬을 배우자 (최대 5레벨)', [
         { ic: '🚗', t: `운전 교육 (Lv ${ME.skills.drive})`, p: 2000, d: '차량 핸들링 향상', fn: () => skillUp('drive', '운전') },
@@ -212,7 +212,7 @@ const UI = {
   },
   // ---------- peds / animals / players ----------
   openPed(p) {
-    const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { pedAction(p, 'talk'); } } /* NPC가 기억·상황에 맞게 대답한다 (방장이 정함) */, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { const d = Math.floor(Math.random() * 8); ME.dance = d; pedAction(p, 'dance', d); } }];
+    const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { pedAction(p, 'talk'); } } /* NPC가 기억·상황에 맞게 대답한다 (방장이 정함) */, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { LAWX.askDance(p, Math.floor(Math.random() * 8)); } }]; // 거절할 수도 있다
     if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { if (p.char) p.char.say('뭐, 뭐예요?!', 1.4); pedAction(p, 'rob'); } }); // 반응은 방장이 정한다: 돈 없음·순순히·도망치며 신고·반격·총
     if (p.kind === 'police' && (ME.wanted || JOBS.criminal())) items.push({ ic: '🙇', t: '자수하기', p: 0, d: '재판을 받고 감옥에서 복역', fn: () => { toast('🙇 자수했다'); LAW.arrest(); } });
     if (p.kind === 'police' && ADMIN.on) items.push({ ic: '🔓', t: '수감자 무료 석방 (관리자)', p: 0, fn: () => ADMIN.freeOther() });
@@ -277,9 +277,13 @@ const UI = {
       { ic: '❓', t: '조작법 (F1)', p: 0, fn: () => setTimeout(() => this.openHelp(), 30) },
       { ic: '🛠️', t: '관리자', p: 0, d: ADMIN.enabled() ? (ADMIN.on ? '로그인됨' : '비밀번호 필요') : '이 빌드에선 비활성', fn: () => setTimeout(() => ADMIN.open(), 30) },
       ...QUEST.phoneItems(),
+      SMS.phoneItem(),
+      CAREER.phoneItem(),
+      BGM.phoneItem(),
+      { ic: '📸', t: '사진 모드', p: 0, d: IS_TOUCH ? '글자 없이 풍경·친구 찍기' : 'K 키 · 글자 없이 풍경·친구 찍기', fn: () => setTimeout(() => PHOTO.enter(), 60) },
     ];
     // 휴대폰 탭: 주요 · 생활 · 사회 · 설정
-    const TAB_OF = t => /직업|의뢰|장소|지도|차 부르기|택시|튜토리얼|가이드/.test(t) ? 'main' : /구급|도시락|반려|춤|시점|저장/.test(t) ? 'life' : /정치|일보|랭킹|업적|현상금|신고|초대/.test(t) ? 'social' : 'set';
+    const TAB_OF = t => /직업|경력|의뢰|장소|지도|차 부르기|택시|튜토리얼|가이드/.test(t) ? 'main' : /구급|도시락|반려|춤|시점|저장|사진/.test(t) ? 'life' : /정치|일보|랭킹|업적|현상금|신고|초대|문자/.test(t) ? 'social' : 'set';
     const TABS = [['main', '주요'], ['life', '생활'], ['social', '사회'], ['set', '설정']];
     this.openMenu('📱 ' + PH.n, desc, ALL.filter(it => TAB_OF(it.t) === tab), { phone: PH.id, after: box => { const bar = document.createElement('div'); bar.className = 'ctabs'; for (const [k, n] of TABS) { const b = document.createElement('button'); b.type = 'button'; b.className = 'ctab' + (k === tab ? ' on' : ''); b.textContent = n; b.onclick = () => { sfx('ui'); this.openPhone(k); }; bar.appendChild(b); } box.insertBefore(bar, box.querySelector('.items')); } });
   },
@@ -424,7 +428,7 @@ const UI = {
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
   },
 };
-function pedAction(p, a, d) { if (G.isHost) { if (a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = d; } if (a === 'talk') { p.state = 'talk'; p.timer = 4; p.yaw = Math.atan2(ME.x - p.x, ME.z - p.z);  NPCMEM.talk(p, ME.id); } if (a === 'rob') hostRob(p, ME.id); } else NET.send({ t: 'pedAct', id: p.id, a, d }); }
+function pedAction(p, a, d) { if (G.isHost) { if (a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = d; } if (a === 'talk') { p.state = 'talk'; p.timer = 4; p.yaw = Math.atan2(ME.x - p.x, ME.z - p.z);  NPCMEM.talk(p, ME.id); } if (a === 'rob') hostRob(p, ME.id); if (a === 'flee') { p.state = 'flee'; p.timer = 10; p.fx = ME.x; p.fz = ME.z; p.dance = -1; } } else NET.send({ t: 'pedAct', id: p.id, a, d }); }
 function spawnOwned(g, nx, nz) {
   let v = vehicles.get(g.id);
   const r = edgeNearPoint(nx, nz, 4, 30) || edgeNearPoint(nx, nz, 20, 80);
