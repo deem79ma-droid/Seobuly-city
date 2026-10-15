@@ -1,4 +1,4 @@
-// @v 2026101502
+// @v 2026101503
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
@@ -1461,6 +1461,13 @@ function buildTerrainMesh() {
     if (R === 'disanbay' && n > 0.2) { r += 0.08; g += 0.02; }
     if (R === 'kualp') { const t = smooth(10, 50, h + n * 14); r = lerp(r, 0.92, t); g = lerp(g, 0.95, t); b = lerp(b, 0.98, t); }
     if (R === 'chiga') { const t = smooth(0.1, 0.5, vnoise(x * 0.012, z * 0.012)); r = lerp(r, 0.78, t * 0.4); g = lerp(g, 0.58, t * 0.4); b = lerp(b, 0.36, t * 0.4); }
+    if (R === 'kualp' || R === 'chiga') { // 소구역별 지표 색: 빙호(얼음) · 설봉(암반) · 오아시스(초록) · 메사(붉은 사암)
+      const dz = districtAt(x, z);
+      if (dz === 19) { const t = 0.6 + n * 0.2; r = lerp(r, 0.7, t); g = lerp(g, 0.87, t); b = lerp(b, 0.97, t); }
+      else if (dz === 18) { const t = 0.3 + n * 0.25; r = lerp(r, 0.6, t); g = lerp(g, 0.64, t); b = lerp(b, 0.7, t); }
+      else if (dz === 21) { const t = Math.max(0, 0.75 - Math.hypot(x + 800, z - 2420) / 440); r = lerp(r, 0.38, t); g = lerp(g, 0.56, t); b = lerp(b, 0.24, t); }
+      else if (dz === 22) { const t = 0.55 + n * 0.25; r = lerp(r, 0.76, t); g = lerp(g, 0.34, t); b = lerp(b, 0.18, t); }
+    }
     const rd = roadDistF[hmIdx(hi, hj)];
     if ((R === 'disanbay' || R === 'simone') && rd < 4) { const t = smooth(4, 0, rd); r = lerp(r, 0.45, t); g = lerp(g, 0.4, t); b = lerp(b, 0.32, t); }
     if (R === 'chiga' && (slope > 0.5 || h > 12 + n * 4)) { const t = Math.max(smooth(0.5, 0.9, slope), smooth(12, 30, h)); r = lerp(r, 0.64 + n * 0.05, t); g = lerp(g, 0.38 + n * 0.04, t); b = lerp(b, 0.26, t); }

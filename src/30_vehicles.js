@@ -1,4 +1,4 @@
-// @v 2026101420
+// @v 2026101503
 
 // ================= FX (particles, tracers, flashes) =================
 const FX = {
@@ -244,7 +244,7 @@ class Vehicle {
     else if (this.kind === 'heli') { this.mesh = buildHeliMesh(this.M, this.color, this); this.rpm = 0; }
     else { this.animal = new Animal('horse', opts.seed ?? 0.3); this.mesh = this.animal.root; this.seat = new THREE.Vector3(0, this.animal.bodyY + 0.12 - 0.95 + 0.25, 0.05); }
     this.mesh.position.set(x, this.y, z); this.mesh.rotation.y = yaw; scene.add(this.mesh);
-    this.radius = this.kind === 'car' ? this.M.W / 2 : this.kind === 'heli' ? 1.6 : 0.45;
+    this.radius = this.kind === 'car' ? this.M.W / 2 : this.kind === 'heli' ? (this.M.jet ? 3 : 1.6) : 0.45;
     vehicles.set(id, this);
   }
   circles() { const f = this.kind === 'car' ? this.M.L / 2 - this.M.W / 2 : 0.55; const s = Math.sin(this.yaw), c = Math.cos(this.yaw); return [[this.x + s * f, this.z + c * f], [this.x - s * f, this.z - c * f]]; }
@@ -264,10 +264,12 @@ class Vehicle {
       slopeVehicle(this, dt); // 오르막은 힘들고 내리막은 빨라진다
       const wb = this.kind === 'car' ? (M.wb[0] - M.wb[1]) : 1.4;
       let yawRate = this.speed * Math.tan(this.steer) / wb;
-      const maxRate = (M.grip * 1.7) / Math.max(4, spdAbs); yawRate = clamp(yawRate, -maxRate, maxRate);
+      if ((this._gkT = (this._gkT || 0) - dt) <= 0) { this._gkT = 0.5; this._gk = (this.kind === 'car' || this.kind === 'bike') && this.y < 400 ? RULES.grip(this.x, this.z) : 1; } // 쿠알프스드 눈길: 접지력 감소
+      const gk = this._gk ?? 1;
+      const maxRate = (M.grip * gk * 1.7) / Math.max(4, spdAbs); yawRate = clamp(yawRate, -maxRate, maxRate);
       if (inp.hand && this.kind === 'car') { yawRate *= 1.5; this.side += this.speed * yawRate * dt * 0.7; this.speed -= Math.sign(this.speed) * 6 * dt; }
       this.yaw += yawRate * dt;
-      this.side = damp(this.side, 0, inp.hand ? 1.5 : M.grip * 0.9, dt);
+      this.side = damp(this.side, 0, inp.hand ? 1.5 : M.grip * gk * 0.9, dt);
       this.yawRate = yawRate;
     }
     this.brake = !!inp.brake || (inp.throttle < 0 && this.speed > 0.5);
