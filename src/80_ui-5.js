@@ -1,4 +1,4 @@
-// @v 2026101418
+// @v 2026101502
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -22,18 +22,18 @@ const UI = {
     { const god = adminGod(); const hb = $('#hpBar'); if (hb.classList.contains('inf') !== god) hb.classList.toggle('inf', god); $('#hpBar i').style.width = (god ? 100 : clamp(ME.hp, 0, 100)) + '%'; } $('#arBar i').style.width = clamp(ME.armor, 0, 100) + '%'; $('#arBar').style.display = ME.armor > 0 ? '' : 'none'; $('#stBar i').style.width = ME.stamina + '%';
     const AP = ME.vehicle ? ME.vehicle : anchorOf(ME); const R = regionAt(AP.x, AP.z); const RG = REGIONS[R];
     const regionChanged = R !== this.lastRegion;
-    if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') announce(RG.name, RG.desc); }
+    if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') { announce(RG.name, RG.desc); const rl = REGION_RULES[R]; if (rl) setTimeout(() => toast('규정: ' + RULES.line(R) + (rl.tip ? ' · ' + rl.tip : ''), 5000), 1800); } }
     const px = AP.x, pz = AP.z; const dId = districtAt(px, pz);
     if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
     this.updateStars(); this.updateInv();
-    const v = ME.vehicle; $('#speedo').classList.toggle('hidden', !v); if (v) { const kmh = Math.round(Math.abs(v.speed) * 3.6), lim = v.kind === 'heli' || v.kind === 'horse' ? 0 : TRAFFIC_LAW.limit(v.x, v.z); $('#speedo').style.color = lim && kmh > lim + 10 ? '#ff5a5a' : ''; $('#speedo').innerHTML = `${kmh}<small>km/h · ${v.M.name}${v.kind === 'heli' ? ' · 고도 ' + Math.max(0, Math.round(v.y - (v.groundY ?? v.y))) + 'm' : ''}${lim ? ' · 제한 ' + lim : ''} · ${seatCount(v)}인승${v.hp < v.M.hp * 0.3 ? ' · 파손' : ''}</small>`; }
+    const v = ME.vehicle; $('#speedo').classList.toggle('hidden', !v); if (v) { const kmh = Math.round(Math.abs(v.speed) * 3.6), lim = v.kind === 'heli' || v.kind === 'horse' ? 0 : TRAFFIC_LAW.limit(v.x, v.z); $('#speedo').style.color = lim && kmh > lim + 10 ? '#ff5a5a' : ''; $('#speedo').innerHTML = `${kmh}<small>km/h · ${v.M.name}${v.kind === 'heli' ? ' · 고도 ' + Math.max(0, Math.round(v.y - (v.groundY ?? v.y))) + 'm' + (v.M.jet ? ' · 미사일 ' + (v.mis ?? 6) : '') : ''}${lim ? ' · 제한 ' + lim : ''} · ${seatCount(v)}인승${v.hp < v.M.hp * 0.3 ? ' · 파손' : ''}</small>`; }
     $('#cross').classList.toggle('hidden', !(ME.aiming || (!WEAPONS[ME.weapon].melee && !ME.vehicle)) || ME.dead);
     if (IS_TOUCH) { const tb = $('#topL').getBoundingClientRect().bottom; const ch = $('#chat'); const top = Math.round(tb + 6) + 'px'; if (ch.style.top !== top) ch.style.top = top; } // 모바일: 채팅/방 코드 안내가 왼쪽 위 정보창과 겹치지 않게 정보창 바로 아래에
   },
   updateStars(flash) { let s = ''; for (let i = 0; i < 5; i++) s += `<span class="${i < ME.wanted ? 'on' : ''}">★</span>`; $('#stars').innerHTML = ME.wanted ? s : ''; },
-  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`목재 ${i.wood}`); if (i.meat) parts.push(`고기 ${i.meat}`); if (i.grenade) parts.push(`수류탄 ${i.grenade} (B)`); if (i.food) parts.push(`도시락 ${i.food}`); if (i.medkit) parts.push(`구급상자 ${i.medkit}`); if (i.drink) parts.push(`음료 ${i.drink}`); if (i.card) parts.push(`출소카드 ${i.card}`); if (i.rod) parts.push('낚싯대'); if (i.fish) parts.push(`물고기 ${i.fish}`); if (ME.keys && ME.keys.length) parts.push(`열쇠 ${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
+  updateInv() { const i = ME.inv; const parts = []; if (i.wood) parts.push(`목재 ${i.wood}`); if (i.meat) parts.push(`고기 ${i.meat}`); if (i.grenade) parts.push(`수류탄 ${i.grenade} (B)`); if (i.tbomb) parts.push(`시한폭탄 ${i.tbomb} (N)`); if (i.mine) parts.push(`지뢰 ${i.mine} (O)`); if (i.food) parts.push(`도시락 ${i.food}`); if (i.medkit) parts.push(`구급상자 ${i.medkit}`); if (i.drink) parts.push(`음료 ${i.drink}`); if (i.card) parts.push(`출소카드 ${i.card}`); if (i.rod) parts.push('낚싯대'); if (i.fish) parts.push(`물고기 ${i.fish}`); if (ME.keys && ME.keys.length) parts.push(`열쇠 ${ME.keys.length}`); $('#inv').textContent = parts.join('  ') || '인벤토리 비어있음'; },
   buildHotbar() { const hb = $('#hotbar'); hb.innerHTML = ''; WEAPON_ORDER.forEach((w, i) => { if (!ME.weapons[w]) return; const s = document.createElement('span'); s.textContent = `${i + 1} ${WEAPONS[w].name}`; s.className = ME.weapon === w ? 'on' : ''; hb.appendChild(s); }); },
   updateWeapon() { const W = WEAPONS[ME.weapon]; $('#wName').textContent = `${W.icon} ${W.name}`; $('#wAmmo').textContent = W.melee ? (W.chop ? '나무를 베면 목재 획득' : '') : `${ME.mag[ME.weapon] || 0} / ${ME.ammo[ME.weapon] || 0}${ME.reloadT > 0 ? ' · 재장전…' : ''}`; this.buildHotbar(); },
   damageFlash(a) { const e = $('#dmgFlash'); e.style.transition = 'none'; e.style.opacity = Math.min(0.9, 0.3 + a); requestAnimationFrame(() => { e.style.transition = 'opacity .5s'; e.style.opacity = 0; }); },
@@ -84,8 +84,12 @@ const UI = {
     sfx('door'); const skillUp = (k, name) => { if (ME.skills[k] >= 5) { toast('이미 최고 레벨!'); return; } ME.skills[k]++; sfx('levelup'); toast(`📈 ${name} 레벨 ${ME.skills[k]}`); };
     const heal = (n) => { ME.hp = Math.min(100, ME.hp + n); };
     switch (f.type) {
+      case 'govt': GOV.govtMenu(f); break;
+      case 'stats': GOV.statsMenu(f); break;
       case 'police': this.openMenu('🚓 경찰서', `${REGIONS[f.region].name} 경찰서. 현재 수배 ★${ME.wanted}`, [
-        { ic: '🙇', t: '자수하기 (감옥에서 형량 복역)', p: 0, d: JOBS.criminal() ? `남은 형량 ${Math.ceil(JOBS.record)}초 · 복역하면 범죄자 신분 해제` : '범죄 기록이 없다', dis: !JOBS.criminal() && !ME.wanted, disMsg: '범죄 기록도 수배도 없다', fn: () => { LAW.arrest(); } },
+        { ic: '🙇', t: '자수하기 (감옥에서 형량 복역)', p: 0, d: JOBS.criminal() ? `남은 형량 ${Math.ceil(JOBS.record)}초 · 복역하면 범죄자 신분 해제` : '범죄 기록이 없다', dis: !JOBS.criminal() && !ME.wanted, disMsg: '범죄 기록도 수배도 없다', fn: () => { LAW._surr = true; LAW.arrest(); LAW._surr = false; } },
+        { ic: '규', t: '지역 규정집', p: 0, d: '지역별 제한속도 · 벌금 · 형량 · 총기 규정', fn: () => { RULES.card(); } },
+        { ic: '법', t: '법전 보기', p: 0, d: '죄목별 등급 · 벌금 · 형량', fn: () => { POLICE.showCard('서불리 법전', '', '죄목 · 형량 · 벌금', lawbookHtml()); } },
         { ic: '💸', t: '벌금 내고 수배 해제', p: ME.wanted * 10000 || 0, d: '가벼운 위반만 (★1~2 · 범죄 기록 없음) · ★당 ₩10,000', dis: !ME.wanted || ME.wanted > 2 || JOBS.criminal(), disMsg: !ME.wanted ? '수배 중이 아니다' : '중범죄는 벌금으로 안 된다 — 자수해서 복역해야 한다', fn: () => { ME.wanted = 0; ME.wantedCool = 0; UI.updateStars(); toast('✅ 벌금 납부 — 수배 해제'); } },
         { ic: '🪪', t: `출소카드 구입 (보유 ${ME.inv.card | 0})`, p: 25000, d: '수감 중 E 로 즉시 출소 · 남은 형량(범죄 기록)은 그대로', stay: true, fn: () => { ME.inv.card = (ME.inv.card | 0) + 1; toast('🪪 출소카드 +1'); } },
         { ic: '📞', t: '갱단 원한 해제 상담', p: 5000, d: '레드/블루 갱이 더 이상 노리지 않음', fn: () => { ME.grudge = {}; toast('🤝 갱단 원한이 풀렸다'); } },
@@ -127,9 +131,9 @@ const UI = {
     }
   },
   openDealer(f) {
-    const list = ['bicycle', 'hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike', 'heli'];
+    const list = ['bicycle', 'hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike', 'heli', 'jet'];
     this.openMenu('🚗 자동차 판매점', `구매한 차는 차고에 저장되고 휴대폰으로 언제든 부를 수 있다 · 보유 ${ME.garage.length}대`, list.map(k => {
-      const M = VMODELS[k]; return { ic: M.bicycle ? '🚲' : M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h · ${M.seats || 4}인승${M.kind === 'heli' ? ' · 하늘을 난다' : ''}`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
+      const M = VMODELS[k]; return { ic: M.bicycle ? '🚲' : M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h · ${M.seats || 4}인승${M.jet ? ' · 미사일 6발 · 1인승' : M.kind === 'heli' ? ' · 하늘을 난다' : ''}`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
     }));
   },
   openGarage(x, z) {
@@ -141,6 +145,8 @@ const UI = {
     for (const w of WEAPON_ORDER) { const W = WEAPONS[w]; if (!W.price) continue; if (!ME.weapons[w]) items.push({ ic: W.icon, t: W.name, p: W.price, d: W.melee ? '근접 무기' : `탄창 ${W.mag}발 포함`, fn: () => { ME.weapons[w] = 1; if (!W.melee) { ME.mag[w] = W.mag; ME.ammo[w] = (ME.ammo[w] || 0) + W.mag; } selectWeapon(w); this.buildHotbar(); saveGame(); setTimeout(() => CINE_EV.gun(W.name), 150); } }); else if (!W.melee) items.push({ ic: '📦', t: `${W.name} 탄약`, p: W.ammoPrice, d: `+${W.mag * 2}발 (보유 ${ME.ammo[w] || 0})`, stay: true, fn: () => { ME.ammo[w] = (ME.ammo[w] || 0) + W.mag * 2; UI.updateWeapon(); this.openGun(); return true; } }); }
     items.push({ ic: '🦺', t: '방탄조끼', p: 2500, d: ME.armor > 0 ? '이미 입고 있다' : '목숨 +1 (피해 100을 대신 받고 부서짐 · 죽으면 잃음)', dis: ME.armor > 0, disMsg: '이미 방탄조끼를 입고 있다', fn: () => { ME.armor = 100; toast('🦺 방탄조끼 착용 — 피해 100까지 대신 막아 준다'); } });
     items.push({ ic: '', t: '수류탄 3개', p: 4500, d: `B 키로 던지기 · 2.4초 뒤 폭발 · 보유 ${ME.inv.grenade | 0}개`, stay: true, fn: () => { ME.inv.grenade = (ME.inv.grenade | 0) + 3; UI.updateInv && UI.updateInv(); this.openGun(); return true; } });
+    items.push({ ic: '', t: '시한폭탄 1개', p: 12000, d: `N 키 · 던지면 차·땅에 붙고 6초 뒤 큰 폭발 · 보유 ${ME.inv.tbomb | 0}개`, stay: true, fn: () => { ME.inv.tbomb = (ME.inv.tbomb | 0) + 1; UI.updateInv && UI.updateInv(); this.openGun(); return true; } });
+    items.push({ ic: '', t: '지뢰 2개', p: 9000, d: `O 키 · 발밑에 설치 · 2초 뒤부터 밟으면 폭발 · 보유 ${ME.inv.mine | 0}개`, stay: true, fn: () => { ME.inv.mine = (ME.inv.mine | 0) + 2; UI.updateInv && UI.updateInv(); this.openGun(); return true; } });
     this.openMenu('🔫 총포사', '무기와 탄약 · 경찰 앞에서 쏘면 수배된다', items);
   },
   openClothes() { WARDROBE.open(); },
@@ -214,7 +220,7 @@ const UI = {
   openPed(p) {
     const items = [{ ic: '💬', t: '대화하기', p: 0, fn: () => { pedAction(p, 'talk'); } } /* NPC가 기억·상황에 맞게 대답한다 (방장이 정함) */, { ic: '💃', t: '같이 춤추기', p: 0, fn: () => { LAWX.askDance(p, Math.floor(Math.random() * 8)); } }]; // 거절할 수도 있다
     if (p.kind === 'civ') items.push({ ic: '😠', t: '돈 내놔! (협박)', p: 0, d: '수배될 수 있다', fn: () => { if (p.char) p.char.say('뭐, 뭐예요?!', 1.4); pedAction(p, 'rob'); } }); // 반응은 방장이 정한다: 돈 없음·순순히·도망치며 신고·반격·총
-    if (p.kind === 'police' && (ME.wanted || JOBS.criminal())) items.push({ ic: '🙇', t: '자수하기', p: 0, d: '재판을 받고 감옥에서 복역', fn: () => { toast('🙇 자수했다'); LAW.arrest(); } });
+    if (p.kind === 'police' && (ME.wanted || JOBS.criminal())) items.push({ ic: '🙇', t: '자수하기', p: 0, d: '재판을 받고 감옥에서 복역', fn: () => { toast('자수했다'); LAW._surr = true; LAW.arrest(); LAW._surr = false; } });
     if (p.kind === 'police' && ADMIN.on) items.push({ ic: '🔓', t: '수감자 무료 석방 (관리자)', p: 0, fn: () => ADMIN.freeOther() });
     if (p.kind === 'medic') items.push({ ic: '💉', t: '응급치료', p: 500, fn: () => { ME.hp = 100; } });
     this.openMenu(p.kind === 'police' ? '👮 경찰' : p.kind.startsWith('gang') ? (p.kind === 'gangA' ? '🔴 레드 크루' : '🔵 블루 독스') : p.kind === 'medic' ? '🧑‍⚕️ 의사' : '🧑 시민', '', items);
@@ -248,7 +254,7 @@ const UI = {
   },
   openPhoneNow(tab) {
     tab = tab || this.phoneTab || 'main'; this.phoneTab = tab; const PH = PHONE.cur();
-    const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone'];
+    const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone', 'kualp', 'chiga'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
     const desc = `<small style="opacity:.75">${PH.n} · ${PH.g} · 💳 ${fmtMoney(CARD.bal)}</small><br>${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`;
     const ALL = [
@@ -295,7 +301,7 @@ const UI = {
   // ---------- maps ----------
   buildWorldImage() {
     const W = Math.floor(HM.W / 1), H = Math.floor(HM.H / 1); const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); const id = x.createImageData(W, H);
-    const RC = { plaza: [70, 110, 60], seoburi: [92, 102, 110], jiolle: [80, 112, 70], kaengjibe: [110, 96, 70], disanbay: [74, 112, 54], simone: [90, 130, 80], sea: [50, 90, 120] };
+    const RC = { plaza: [70, 110, 60], seoburi: [92, 102, 110], jiolle: [80, 112, 70], kaengjibe: [110, 96, 70], disanbay: [74, 112, 54], simone: [90, 130, 80], kualp: [200, 220, 235], chiga: [190, 160, 100], sea: [50, 90, 120] };
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const k = hmIdx(i, j); const h = hmData[k]; const o = (j * W + i) * 4; const wx = HM.x0 + i * HM.res, wz = HM.z0 + j * HM.res;
       let c3; if (h < -0.2) c3 = [28, 62, 96]; else if (h < LAND - 0.3) c3 = [196, 180, 130]; else { c3 = RC[regionAt(wx, wz)].slice(); if (h > 60) { const t = clamp((h - 60) / 60, 0, 1); c3 = c3.map((v, ii) => lerp(v, [140, 140, 140][ii], t)); } if (h > 115) c3 = [235, 238, 242]; const sh = clamp((h - LAND) * 0.6, -10, 40); c3 = c3.map(v => v + sh); }
@@ -388,8 +394,11 @@ const UI = {
     hold(B.aim, () => { INP.aim = !INP.aim; B.aim.dataset.on = INP.aim ? 1 : 0; }, () => { if (INP.aim) B.aim.classList.add('on'); });
     hold(B.use, () => { if (ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else doInteract(); });
     hold(B.car, () => toggleVehicle());
-    hold(B.run, () => { if (ME.vehicle && ME.vehicle.kind === 'car') { INP.drift = true; return; } INP.touchRun = !INP.touchRun; }, () => { INP.drift = false; if (INP.touchRun) B.run.classList.add('on'); });
-    B.nade = mk('tNade', 'B', 'right:146px;bottom:196px', 'sm', '수류탄'); hold(B.nade, () => GRENADE.throw());
+    hold(B.run, () => { if (ME.vehicle && ME.vehicle.kind === 'car') { INP.drift = true; return; } if (ME.vehicle && ME.vehicle.kind === 'heli') { INP.heliDown = true; return; } INP.touchRun = !INP.touchRun; }, () => { INP.drift = false; INP.heliDown = false; if (INP.touchRun) B.run.classList.add('on'); });
+    B.nade = mk('tNade', 'B', 'right:146px;bottom:196px', 'sm', '수류탄'); hold(B.nade, () => GRENADE.throw('g'));
+    B.tbomb = mk('tTb', 'N', 'right:146px;bottom:256px', 'sm', '시한폭탄'); hold(B.tbomb, () => GRENADE.throw('tb'));
+    B.mine = mk('tMine', 'O', 'right:206px;bottom:196px', 'sm', '지뢰'); hold(B.mine, () => GRENADE.plant());
+    B.back = mk('tBack', 'Z', 'right:206px;bottom:256px', 'sm', '뒤보기'); hold(B.back, () => { INP.lookBack = !INP.lookBack; });
     hold(B.wpn, () => cycleWeapon(1)); hold(B.rel, () => startReload());
     hold(B.phone, () => this.openPhone()); hold(B.map, () => this.openMap()); hold(B.chat, () => this.openChat()); hold(B.dance, () => this.openDance()); hold(B.cam, () => { CAM.fp = !CAM.fp; });
     this.touchBtns = B;
@@ -423,8 +432,8 @@ const UI = {
   },
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
-    const heli = inV && ME.vehicle.kind === 'heli'; B.jump.innerHTML = heli ? '▲<small>상승</small>' : inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.run.innerHTML = heli ? '▼<small>하강</small>' : inV && ME.vehicle.kind === 'car' ? 'DRIFT<small>드리프트</small>' : 'RUN<small>달리기</small>'; if (B.nade) B.nade.style.display = (ME.inv.grenade | 0) > 0 && !inV ? '' : 'none'; B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
-    B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun);
+    const heli = inV && ME.vehicle.kind === 'heli'; B.jump.innerHTML = heli ? '▲<small>상승</small>' : inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.run.innerHTML = heli ? '▼<small>하강</small>' : inV && ME.vehicle.kind === 'car' ? 'DRIFT<small>드리프트</small>' : 'RUN<small>달리기</small>'; const pass = inV && ME.seat !== 'd'; /* 동승자는 차 안에서도 던질 수 있다 */ const canT = !inV || pass; if (B.nade) B.nade.style.display = (ME.inv.grenade | 0) > 0 && canT ? '' : 'none'; if (B.tbomb) B.tbomb.style.display = (ME.inv.tbomb | 0) > 0 && canT ? '' : 'none'; if (B.mine) B.mine.style.display = (ME.inv.mine | 0) > 0 && !inV ? '' : 'none'; if (B.back) { B.back.style.display = inV && !DRIVE.on() ? '' : 'none'; B.back.classList.toggle('on', !!INP.lookBack); } B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
+    B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun || !!INP.heliDown);
   },
 };
 function pedAction(p, a, d) { if (G.isHost) { if (a === 'dance') { p.state = 'dance'; p.timer = 15; p.dance = d; } if (a === 'talk') { p.state = 'talk'; p.timer = 4; p.yaw = Math.atan2(ME.x - p.x, ME.z - p.z);  NPCMEM.talk(p, ME.id); } if (a === 'rob') hostRob(p, ME.id); if (a === 'flee') { p.state = 'flee'; p.timer = 10; p.fx = ME.x; p.fz = ME.z; p.dance = -1; } } else NET.send({ t: 'pedAct', id: p.id, a, d }); }

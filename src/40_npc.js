@@ -1,7 +1,7 @@
-// @v 2026101420
+// @v 2026101502
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
-const PEDS = []; const N_PED = 50; const PICKUPS = new Map(); let pickupSeq = 1;
+const PEDS = []; const N_PED = 100; const PICKUPS = new Map(); let pickupSeq = 1;
 const PED_LINES = { // 자아 있는 대사
 
   civ: ['안녕하세요!', '오늘 날씨 좋네요', '서불리 집값 미쳤어…', '캥지베 쪽은 가지 마세요', '이벤트광장 클럽 가봤어요?', '시모느 아일랜드 놀러가고 싶다', '배고프다…', '디산베이 공기 좋아요', '말 타봤어요? 디산베이 목장에 있어요'],
@@ -31,10 +31,10 @@ function pedSetIdentity(p, kind, seed) {
   if (p.char) p.char.setOutfit(p.outfit);
   p.weapon = kind === 'police' ? 'pistol' : (kind === 'gangA' || kind === 'gangB') ? (r() < 0.65 ? (r() < 0.6 ? 'pistol' : 'smg') : 'bat') : 'fist';
   if (p.char) p.char.setWeapon(p.weapon === 'fist' ? 'fist' : null);
-  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = pick(['plaza','seoburi','jiolle','kaengjibe','disanbay']); p.phone = false; p.job = null; p.goal = null; p.lx = undefined; p.homeX = p.x; p.homeZ = p.z;
+  p.hp = kind === 'police' ? 140 : kind.startsWith('gang') ? 120 : 90; p.state = 'walk'; p.target = null; p.raid = false; p.dance = -1; p.fear = 0; p.personality = r() < 0.33 ? 'calm' : r() < 0.66 ? 'busy' : 'social'; p.homeRegion = GOV.homeOf(p.id); p.phone = false; p.job = null; p.goal = null; p.lx = undefined; p.homeX = p.x; p.homeZ = p.z;
 }
 function pedEnsureChar(p) {
-  if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); p.char.npcVoice = true; scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
+  if (p.char) return; p.char = new Character(p.outfit || randomOutfit(mulberry32(p.seed || 1))); p.char.npcVoice = true; p.char.setName('NPC' + (p.id + 1), '#cfd8e8'); scene.add(p.char.root); p.char.root.visible = false; p.char.setShadow(false); p.shadowOn = false;
 }
 function placePedOnEdge(p, e, t, side, dir) {
   const E = EDGES[e]; const a = NODES[E.a], b = NODES[E.b]; p.e = e; p.t = t; p.side = side; p.dir = dir;
@@ -201,32 +201,41 @@ function targetPos(tg) {
 }
 function pedFight(p, dt) {
   const tp = targetPos(p.target); if (!tp) { p.state = p.raid ? 'raid' : 'walk'; p.target = null; if (!p.raid) snapToNearestEdge(p); return; }
-  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : 3, 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
+  if (p.hitAt && G.t >= p.hitAt) { p.hitAt = 0; if (Math.hypot(tp.x - p.x, tp.z - p.z) < 2.2) { dealDamage(p.target, p.weapon === 'bat' ? 18 : (p.kind === 'police' ? 1 : 3), 'n' + p.id, { kind: 'melee', w: p.weapon === 'bat' ? 'bat' : 'fist' }); sfx('punch', p.x, p.z); } }
   const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz);
   const W = WEAPONS[p.weapon]; const ranged = !W.melee; const want = ranged ? (p.kind === 'police' ? 14 : 11) : 1.3;
   p.yaw = dampAng(p.yaw, Math.atan2(dx, dz), 8, dt);
-  if (d > want) { p.spd = d > 25 ? 5.5 : 3.8; p.x += Math.sin(p.yaw) * p.spd * dt; p.z += Math.cos(p.yaw) * p.spd * dt; }
+  const cop = p.kind === 'police';
+  // 👮 경찰 너프: 달리는 플레이어보다 느리고, 10초 이상 멀리 놓치면 추적을 포기한다 (끝까지 쫓아와 죽이지 않는다)
+  if (cop) { if (d > 55) { p.loseT = (p.loseT || 0) + dt; if (p.loseT > 10) { p.loseT = 0; p.state = 'walk'; p.target = null; if (p.char) p.char.say('놓쳤다… 무전으로 수배 전파!', 3); snapToNearestEdge(p); return; } } else p.loseT = 0; }
+  if (d > want) { p.spd = cop ? (d > 25 ? 4.6 : 3.4) : (d > 25 ? 5.5 : 3.8); p.x += Math.sin(p.yaw) * p.spd * dt; p.z += Math.cos(p.yaw) * p.spd * dt; }
   else if (ranged && d < want * 0.5) { p.spd = 2; p.x -= Math.sin(p.yaw) * 2 * dt; p.z -= Math.cos(p.yaw) * 2 * dt; }
   else { p.spd = 0; if (ranged) { const st = Math.sin(G.t * 0.7 + p.id) * 1.6; p.x += Math.cos(p.yaw) * st * dt; p.z -= Math.sin(p.yaw) * st * dt; } }
   const r = resolveCircle(p.x, p.z, 0.3, p.y, 1.7); p.x = r.x; p.z = r.z; p.y = groundHeight(p.x, p.z, p.y + 1);
   p.aiming = ranged && d < 60;
   // police: low wanted → melee only
   const tgtWanted = p.target.kind === 'me' ? ME.wanted : p.target.kind === 'player' ? (G.players.get(p.target.id)?.wanted || 0) : 9;
-  const useGun = ranged && !(p.kind === 'police' && tgtWanted < 3 && p.target.kind !== 'ped');
+  const useGun = ranged && !(p.kind === 'police' && tgtWanted < 4 && p.target.kind !== 'ped'); // 경찰 총은 ★4부터
   if (p.fireT <= 0) {
     if (useGun && d < 70) {
       p.fireT = W.rate * (W.auto ? rnd(1, 3) : rnd(2.5, 5)); p.act = 'shoot'; p.actT = 0;
       // LOS
       _v1.set(p.x, p.y + 1.45, p.z); _v2.set(tp.x - p.x, (tp.y + 1.2) - (p.y + 1.45), tp.z - p.z); const L = _v2.length(); _v2.divideScalar(L);
       const hitW = rayColliders(_v1.x, _v1.y, _v1.z, _v2.x, _v2.y, _v2.z, L);
-      const acc = clamp(0.75 - d / 90, 0.12, 0.7) * (tp.veh ? 0.6 : 1);
+      const acc = clamp(0.75 - d / 90, 0.12, 0.7) * (tp.veh ? 0.6 : 1) * (cop ? 0.45 : 1);
       const hit = !hitW.c && Math.random() < acc;
       const end = hit ? { x: tp.x, y: tp.y + 1.2, z: tp.z } : { x: tp.x + rnd(-2, 2), y: tp.y + rnd(0.2, 2.5), z: tp.z + rnd(-2, 2) };
       if (hitW.c && hitW.t < L) { end.x = _v1.x + _v2.x * hitW.t; end.y = _v1.y + _v2.y * hitW.t; end.z = _v1.z + _v2.z * hitW.t; }
       const mz = { x: p.x + Math.sin(p.yaw) * 0.5, y: p.y + 1.45, z: p.z + Math.cos(p.yaw) * 0.5 };
       showShot(mz, end, W.sfx, hit ? (p.target.kind === 'ped' ? 'blood' : 'blood') : 'dust');
       NET.send({ t: 'shot', a: [mz.x, mz.y, mz.z], b: [end.x, end.y, end.z], w: p.weapon, i: hit ? 'blood' : 'dust' });
-      if (hit) dealDamage(p.target, shotDamage(p.weapon, false), 'n' + p.id, { kind: 'gun', w: p.weapon, head: false });
+      if (hit) {
+        if (cop && p.target.kind === 'me') { // 경찰은 죽이지 않는다 — 체력이 바닥나기 전에 체포로 끝낸다
+          const dm = shotDamage(p.weapon, false) * 0.6; if (ME.hp - dm <= 25 && !ME.jail && !ME.dead) { if (p.char) p.char.say('🚔 더 이상 저항하지 마! 체포한다!', 3); LAW.arrest(); return; }
+          dealDamage(p.target, dm, 'n' + p.id, { kind: 'melee', w: p.weapon }); // melee로 넘겨 shotDamage 재계산 방지
+        } else if (cop && p.target.kind === 'player') { const rp = G.players.get(p.target.id); const dm = shotDamage(p.weapon, false) * 0.6; if (!rp || (rp.hp ?? 100) - dm > 25) dealDamage(p.target, dm, 'n' + p.id, { kind: 'melee', w: p.weapon }); }
+        else dealDamage(p.target, shotDamage(p.weapon, false), 'n' + p.id, { kind: 'gun', w: p.weapon, head: false });
+      }
     } else if (d < 1.8) {
       p.fireT = 0.7; p.act = Math.random() < 0.5 ? 'punchR' : 'punchL'; p.actT = 0;
       if (p.weapon === 'bat') p.act = 'bat';
@@ -391,9 +400,9 @@ function hostUpdateTraffic(dt) {
     // police chase
     let targetSpeed = E.bridge ? 20 : (E.region === 'disanbay' ? 17 : 12.5);
     if (v.model === 'police') {
-      let wantedP = null; for (const pl of players) if (pl.wanted >= 1 && Math.hypot(pl.x - v.x, pl.z - v.z) < 160) wantedP = pl; // ★1부터 순찰차가 쫓아온다
+      let wantedP = null; for (const pl of players) if (pl.wanted >= 2 && Math.hypot(pl.x - v.x, pl.z - v.z) < 110) wantedP = pl; // ★2부터, 110m 안에서만 순찰차가 쫓아온다 (너프)
       v.siren = !!wantedP;
-      if (wantedP) { tgt = { x: wantedP.x, z: wantedP.z }; targetSpeed = Math.hypot(wantedP.x - v.x, wantedP.z - v.z) < 12 ? 0 : 26; }
+      if (wantedP) { tgt = { x: wantedP.x, z: wantedP.z }; targetSpeed = Math.hypot(wantedP.x - v.x, wantedP.z - v.z) < 14 ? 0 : 21; }
     }
     const desired = Math.atan2(tgt.x - v.x, tgt.z - v.z); const ad = angDiff(v.yaw, desired);
     let steer = clamp(ad * 2.2, -1, 1);
@@ -412,14 +421,14 @@ function hostUpdateTraffic(dt) {
     // stuck recovery
     if (Math.abs(v.speed) < 0.3 && targetSpeed > 3) { v.ai.stuck += dt; if (v.ai.stuck > 6) { v.ai.parked = true; v.mesh.visible = false; } } else v.ai.stuck = 0;
     // hitting peds/players
-    if (Math.abs(v.speed) > 4) runOverCheck(v, 'n');
+    if (Math.abs(v.speed) > 4 && !(v.model === 'police' && v.siren)) runOverCheck(v, 'n'); // 경찰차는 사람을 치지 않는다
   }
 }
 function runOverCheck(v, by) {
   const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw); const sp = Math.abs(v.speed);
   const hit = (x, z) => { const dx = x - v.x, dz = z - v.z; const f = dx * fx + dz * fz, l = dx * fz - dz * fx; return Math.abs(f) < v.M.L / 2 + 0.3 && Math.abs(l) < v.M.W / 2 + 0.3; };
   if (v.kind === 'horse') return;
-  for (const q of PEDS) { if (q.state === 'dead' || q.state === 'parked' || q.state === 'knocked') continue; if (Math.abs(q.x - v.x) > 5 || Math.abs(q.z - v.z) > 5) continue; if (hit(q.x, q.z)) { const tg = { kind: 'ped', id: q.id }; dealDamage(tg, sp * 4.5, by === 'me' ? ME.id : 'n', { kind: 'car' }); q.x += fx * 2; q.z += fz * 2; if (G.isHost) { q.state = q.hp > 0 ? 'knocked' : 'dead'; q.timer = q.hp > 0 ? 2.5 : 25; } sfx('punch', q.x, q.z); FX.impact({ x: q.x, y: q.y + 1, z: q.z }, 'blood'); v.speed *= 0.85; } }
+  for (const q of PEDS) { if (q.state === 'dead' || q.state === 'parked' || q.state === 'knocked') continue; if (Math.abs(q.x - v.x) > 5 || Math.abs(q.z - v.z) > 5) continue; if (hit(q.x, q.z)) { if (by === 'me') JOBS.crime('hitrun', true); const tg = { kind: 'ped', id: q.id }; dealDamage(tg, sp * 4.5, by === 'me' ? ME.id : 'n', { kind: 'car' }); q.x += fx * 2; q.z += fz * 2; if (G.isHost) { q.state = q.hp > 0 ? 'knocked' : 'dead'; q.timer = q.hp > 0 ? 2.5 : 25; } sfx('punch', q.x, q.z); FX.impact({ x: q.x, y: q.y + 1, z: q.z }, 'blood'); v.speed *= 0.85; } }
   if (by !== 'me' && !ME.dead && !ME.vehicle && hit(ME.x, ME.z) && Math.abs(ME.y - v.y) < 2) { ME.takeDamage(sp * 3.5, 'car'); ME.knock(fx * sp * 0.6, fz * sp * 0.6); }
   // 내가 운전한 차에 다른 플레이어가 치임 (같은 공간·1초에 한 번) → 피해는 맞은 쪽이 적용, 사고 기록은 신고 수사에 쓰인다
   if (by === 'me') for (const [id, rp] of G.players) { if (rp.dead || rp.veh || !sameSpace(rp) || Math.abs(rp.y - v.y) > 2 || !hit(rp.x, rp.z)) continue; if (G.t < (rp._carHitT || 0)) continue; rp._carHitT = G.t + 1; dealDamage({ kind: 'player', id }, sp * 3.5, ME.id, { kind: 'car', w: 'car' }); FX.impact({ x: rp.x, y: rp.y + 1, z: rp.z }, 'blood'); sfx('punch', rp.x, rp.z); v.speed *= 0.85; }
@@ -447,6 +456,11 @@ function initAnimals() {
   for (let p = 0; p < 6; p++) { const [x, z] = spot(-1520, -780); const n = 3 + (p % 2); for (let i = 0; i < n; i++) add('wolf', B(x, z, 70), { wild: true, pack: p }); }
   for (let i = 0; i < 12; i++) { const [x, z] = spot(-1520, -760); add('boar', B(x, z, 60), { wild: true }); }
   for (let i = 0; i < 3; i++) { const [x, z] = spot(-1560, -1300); add('bear', B(x, z, 80), { wild: true }); }
+  // ---- 쿠알프스드 설원: 늑대 · 곰 · 사슴 · 말코손바닥사슴 / 치가커렌 사막: 낙타 · 타조 · 여우 ----
+  const spotR = (reg, xa, xb, za, zb, hmax) => { for (let k = 0; k < 60; k++) { const x = lerp(xa, xb, w()), z = lerp(za, zb, w()); const h = terrainH(x, z); if (regionAt(x, z) === reg && h > LAND + 1 && h < hmax && roadDistAt(x, z) > 25 && landF(x, z) > 0.99 && !insideAnyBlock(x, z)) return [x, z]; } return null; };
+  for (let p = 0; p < 4; p++) { const q = spotR('kualp', -1300, 1000, -3000, -1700, 140); if (!q) continue; const n = 3 + (p % 2); for (let i = 0; i < n; i++) add('wolf', B(q[0], q[1], 70), { wild: true, pack: 20 + p }); }
+  for (const [k, n, rr] of [['bear', 3, 80], ['deer', 10, 70], ['moose', 5, 90], ['fox', 5, 60], ['rabbit', 8, 40]]) for (let i = 0; i < n; i++) { const q = spotR('kualp', -1300, 1000, -3000, -1700, 140); if (q) add(k, B(q[0], q[1], rr), { wild: true, amb: 'wild' }); }
+  for (const [k, n, rr] of [['camel', 12, 90], ['ostrich', 7, 70], ['fox', 4, 60], ['crow', 4, 50]]) for (let i = 0; i < n; i++) { const q = spotR('chiga', -1200, 1300, 1500, 3000, 40); if (q) add(k, B(q[0], q[1], rr), { wild: true, amb: 'wild' }); }
   // ---- 순한 동물들: 숲 · 호수 · 농장 · 광장 · 공원 · 시모느 바닷가 ----
   const v = mulberry32(9393);
   for (const [k, n, r] of [['fox', 6, 60], ['rabbit', 12, 40], ['squirrel', 10, 30], ['raccoon', 5, 40], ['badger', 4, 40], ['moose', 4, 90], ['pheasant', 7, 40], ['crow', 6, 50]]) for (let i = 0; i < n; i++) { const [x, z] = spot(-1500, -770); add(k, B(x, z, r), { wild: true, amb: 'wild' }); }

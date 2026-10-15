@@ -1,23 +1,33 @@
-// @v 2026101417
+// @v 2026101501
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
 // 범죄(차량 탈취 · 가택 침입 · 군부대 침입 · 살인)를 저지르면 형량만큼 '범죄자 신분'이 된다.
 //   - 형량은 감옥에서만 줄어든다 (밖에서는 그대로 → 자수하거나 잡혀서 복역해야 끝난다)
 //   - 범죄자는 이름표에 🦹 표시, 경찰 NPC가 알아보면 수배, 합법 직업에서 해고
+// c: 1 경범(벌금 위주) · 2 중범 · 3 중죄 / f: 벌금(수감 시 추가 징수 기준) / s: 형량(초)
 const CRIMES = {
-  car: { name: '차량 탈취', s: 60 },
-  home: { name: '가택 침입', s: 90 },
-  army: { name: '군부대 침입', s: 240 },
-  murder: { name: '살인', s: 120 },
-  escape: { name: '탈옥', s: 60 },
-  assault: { name: '폭행', s: 30 },
-  rob: { name: '강도', s: 60 },
-  stalk: { name: '스토킹', s: 90 },
-  animal: { name: '동물 학대', s: 60 },
-  threat: { name: '총기 협박', s: 60 },
-  logging: { name: '불법 벌목', s: 45 },
+  assault: { name: '폭행', s: 30, f: 5000, c: 1 },
+  logging: { name: '불법 벌목', s: 45, f: 8000, c: 1 },
+  animal: { name: '동물 학대', s: 60, f: 10000, c: 1 },
+  car: { name: '차량 탈취', s: 60, f: 15000, c: 2 },
+  threat: { name: '총기 협박', s: 60, f: 20000, c: 2 },
+  rob: { name: '강도', s: 60, f: 30000, c: 2 },
+  escape: { name: '탈옥', s: 60, f: 30000, c: 2 },
+  home: { name: '가택 침입', s: 90, f: 20000, c: 2 },
+  stalk: { name: '스토킹', s: 90, f: 20000, c: 2 },
+  hitrun: { name: '뺑소니', s: 80, f: 25000, c: 2 },
+  gunfire: { name: '공공장소 총기 발포', s: 50, f: 20000, c: 2 },
+  bomb: { name: '폭발물 사용', s: 150, f: 50000, c: 3 },
+  murder: { name: '살인', s: 120, f: 50000, c: 3 },
+  army: { name: '군부대 침입', s: 240, f: 80000, c: 3 },
 };
+const CRIME_CLASS = { 1: '경범죄', 2: '중범죄', 3: '강력범죄' };
+// 법전: 죄목별 등급·벌금·형량 표 (경찰서 메뉴)
+function lawbookHtml() {
+  const rows = Object.values(CRIMES).sort((x, y) => x.c - y.c || x.s - y.s).map(c => `<div class="vr"><span>[${CRIME_CLASS[c.c]}] ${c.name}</span><b>${c.s}초 · 벌금 ${fmtMoney(c.f)}</b></div>`).join('');
+  return rows + '<div class="vr"><span>재범 가중</span><b>같은 죄 반복 시 +25%씩 (최대 2배)</b></div><div class="vr"><span>자수 감경</span><b>수배 없이 자수하면 형량 30% 감경</b></div><div class="vr"><span>상습범</span><b>전과 3범 이상 벌금 1.5배</b></div><div class="vr"><span>합의</span><b>경상 1회 · 초범은 경고</b></div>';
+}
 const JOB_LIST = [
   { id: 'none', icon: '🙂', name: '무직', d: '자유롭게 생활' },
   { id: 'paper', icon: '🗞️', name: '신문 배달', d: '누구나 (신용불량·범죄자도 가능) · 동네 집집마다 신문 넣기 · 한 부당 조금씩' },
@@ -26,6 +36,9 @@ const JOB_LIST = [
   { id: 'doctor', icon: '🩺', name: '의사', clean: 1, d: '근무 수당 · 🤕 환자 치료 · 다친 플레이어 치료(E)', u: { top: 'doctor', topColor: '#ffffff', bottom: 'slacks', bottomColor: '#4a6a8a', hat: 'none' } },
   { id: 'realtor', icon: '🏠', name: '부동산중개인', clean: 1, d: '빈 땅(🪧)을 찾아가 매물 감정 · 먼 매물일수록 수수료 ↑', u: { top: 'suit', topColor: '#2a2a4a', bottom: 'slacks', bottomColor: '#22223a', shoes: '#2a1a10' } },
   { id: 'lawyer', icon: '⚖️', name: '변호사', clean: 1, d: '법원에서 법률 상담 · 재판 받는 플레이어 변론 수임 (₩20,000)', u: { top: 'suit', topColor: '#1c1c22', bottom: 'slacks', bottomColor: '#1c1c22', glasses: 'glasses' } },
+  { id: 'civil', icon: '🏛️', name: '공무원', clean: 1, d: '정부청사 민원 처리 · 근무 수당 · 시험과 경력 필요', u: { top: 'suit', topColor: '#3a4a5a', bottom: 'slacks', bottomColor: '#2a3340', shoes: '#1a1a1a' } },
+  { id: 'statoff', icon: '📊', name: '통계청 직원', clean: 1, d: '통계청 집계 업무 · 주민 등록 현황(도시별 인구) 열람 가능', u: { top: 'suit', topColor: '#2f4a44', bottom: 'slacks', bottomColor: '#24352f', glasses: 'glasses' } },
+  { id: 'minister', icon: '🎖️', name: '장관', clean: 1, d: '장관 집무실 · 정책 건의 · 비상 방송 · 군 경계태세 · 높은 월급', u: { top: 'suit', topColor: '#14141c', bottom: 'slacks', bottomColor: '#14141c', shoes: '#0a0a0a' } },
   { id: 'farmer', icon: '🌾', name: '농부', d: '디산베이 목장 밭에서 작물 수확 · 다시 자라면 또 수확', u: { top: 'tshirt', topColor: '#c8b48a', bottom: 'jeans', bottomColor: '#3a4a6a', hat: 'fedora', hatColor: '#c8a050' } },
   { id: 'selfemp', icon: '🏪', name: '자영업자', d: '아무 데서나 노점을 열고 장사 · 사람 많은 곳·낮·내 건물 안일수록 잘 팔린다' },
   { id: 'delivery', icon: '📦', name: '택배기사', d: '지올르 물류단지에서 상차 → 목적지 배달 · 거리만큼 수입', u: { top: 'vest', topColor: '#ff8a1a', hat: 'cap', hatColor: '#ff8a1a' } },
@@ -145,7 +158,7 @@ const HUNT = {
   menu() {
     const hunter = JOBS.id === 'hunter'; const price = hunter ? 300 : 120; const n = ME.inv.meat | 0;
     UI.openMenu('사냥꾼 오두막', '디산베이 숲 입구 · <b>늑대는 무리로</b>, <b>멧돼지는 돌진</b>, <b>곰</b>은 한 방에 죽일 수 있다. 차 안에선 안전.', [
-      { ic: '', t: hunter ? '사냥꾼 그만두기' : '사냥꾼 등록', p: '', d: hunter ? '무직이 된다' : '포상금 · 고기 2배 · 고기 매입가 ↑', fn: () => { JOBS.set(hunter ? 'none' : 'hunter'); if (!hunter && !ME.weapons.rifle && !ME.weapons.shotgun && !ME.weapons.sniper) { ME.weapons.shotgun = 1; ME.mag.shotgun = WEAPONS.shotgun.mag; ME.ammo.shotgun = (ME.ammo.shotgun || 0) + WEAPONS.shotgun.mag * 2; UI.buildHotbar && UI.buildHotbar(); toast('사냥용 산탄총을 지급받았다', 3500); saveGame(); } } },
+      { ic: '', t: hunter ? '사냥꾼 그만두기' : '사냥꾼 등록', p: '', d: hunter ? '무직이 된다' : '포상금 · 고기 2배 · 고기 매입가 ↑', fn: () => { JOBS.apply(hunter ? 'none' : 'hunter'); } },
       { ic: '', t: `고기 팔기 (${n}개)`, p: `개당 ${fmtMoney(price)}`, dis: !n, disMsg: '고기가 없다', fn: () => { ME.money += n * price; ME.inv.meat = 0; sfx('cash'); toast(`고기 ${n}개 판매 +${fmtMoney(n * price)}`); UI.updateInv && UI.updateInv(); saveGame(); } },
       { ic: '', t: '사냥 팁', p: '', d: '밤에는 늑대가 더 멀리서 알아챈다 · 체력 30% 아래로 떨어진 동물은 도망친다', fn: () => toast('멀리서 저격하고, 무리에 둘러싸이면 차로 도망쳐라', 4000) },
     ]);
@@ -179,7 +192,7 @@ const JOBS = {
     else if (!hunter && pay && !this._hTip) { this._hTip = 1; toast('사냥꾼 직업이면 포상금을 받는다 (디산베이 사냥꾼 오두막)', 4000); }
     UI.updateInv && UI.updateInv();
   },
-  pay(n, why, key) { if (key !== 'raw') n = CAREER.adjust(key || this.id, n); const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); },
+  pay(n, why, key) { if (key !== 'raw') n = CAREER.adjust(key || this.id, n); const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); GOV.promoCheck(); },
   // 일하는 시간: 가만히 sec초 있어야 돈이 들어온다 (딸깍 방지)
   channel(sec, label, fn) { if (this.chan) return; this.chan = { end: G.t + sec, dur: sec, x: ME.x, z: ME.z, label, fn }; sfx('ui'); this.updateHud(); },
   chanTick() { const c = this.chan; if (!c) return; if (ME.dead || ME.vehicle || ME.jail || Math.hypot(ME.x - c.x, ME.z - c.z) > 1.5) { this.chan = null; toast('❌ 중단됐다 — 끝날 때까지 가만히 있어야 해'); this.updateHud(); return; } if ((this._cT = (this._cT || 0) - G.dt) <= 0) { this._cT = 0.25; this.updateHud(); } if (G.t >= c.end) { this.chan = null; ME.stamina = Math.max(0, ME.stamina - 12); c.fn(); this.updateHud(); } },
@@ -189,9 +202,11 @@ const JOBS = {
   crime(kind, quiet) {
     if (ADMIN.on) return; const c = CRIMES[kind]; if (!c) return;
     if (quiet) { if (G.t < (this._qc || 0)) return; this._qc = G.t + 15; } // 폭행처럼 자주 생기는 건 15초에 한 번만
-    const was = this.criminal(); this.record += c.s; this.witness(kind === 'army' ? 6 : kind === 'murder' ? 8 : 3);
-    if (quiet) toast(`🦹 ${c.name} — 형량 +${c.s}초 (총 ${Math.ceil(this.record)}초)`, 3000);
-    else { announce('🦹 범죄 기록', `${c.name} · 형량 +${c.s}초 (총 ${Math.ceil(this.record)}초)`); NET.send({ t: 'chat', m: `🚨 ${ME.name} — ${c.name}`, sys: 1 }); }
+    const was = this.criminal(); this.cnt = this.cnt || {}; const n = this.cnt[kind] = (this.cnt[kind] || 0) + 1; this.priorsN = (this.priorsN | 0) + 1;
+    const rm = (typeof RULES !== 'undefined' ? RULES.at(ME.x, ME.z).crime : 1) || 1; const mul = 1 + Math.min(1, (n - 1) * 0.25); const add = Math.round(c.s * mul * rm / 5) * 5; this.record += add; /* 지역 규정 배율 적용 */
+    if (n >= 2 && !quiet) toast(`상습 ${c.name} ${n}회째 — 형량 가중 x${mul.toFixed(2)}`, 3000); this.witness(kind === 'army' ? 6 : kind === 'murder' ? 8 : 3);
+    if (quiet) toast(`🦹 ${c.name} — [${CRIME_CLASS[c.c]}] 형량 +${add}초 (총 ${Math.ceil(this.record)}초)`, 3000);
+    else { announce('🦹 범죄 기록', `[${CRIME_CLASS[c.c]}] ${c.name} · 형량 +${add}초 (총 ${Math.ceil(this.record)}초)`); NET.send({ t: 'chat', m: `🚨 ${ME.name} — ${c.name}`, sys: 1 }); }
     if (this.cur.clean) { const old = this.cur.name; this.set('none', true); toast(`💼 범죄 기록 때문에 ${old}에서 해고됐다`, 4000); }
     if (kind === 'army') CINE_EV.army(); if (!was) CINE_EV.criminal(c.name); if (!was) toast('🦹 이제 범죄자 신분이다 — 형량은 감옥에서만 줄어든다 · 경찰이 알아보면 쫓아온다 (경찰서에서 자수 가능)', 5000);
     this.updateHud(); saveGame();
@@ -222,14 +237,42 @@ const JOBS = {
     if (j.clean && this.criminal()) { toast(`🦹 범죄 기록이 있어 ${j.name}이(가) 될 수 없다 (남은 형량 ${Math.ceil(this.record)}초)`, 3500); sfx('error'); return; }
     if (ME.jail) { toast('🔒 수감 중에는 직업을 바꿀 수 없다'); return; }
     if (!silent) { const w = CAREER.why(id); if (w) { toast(w, 4000); sfx('error'); return; } if (!CAREER.payFee(id)) return; } // 경력 · 자격 비용 · 신용
-    this.closeStall(true); this.id = id; this.task = null; this.payT = 0;
+    if (!silent) { CAREER.jt = Date.now() / 1000; }
+    this.closeStall(true); this.id = id; this.task = null; this.payT = 0; this.pend = null; GOV.lastRank = -1; GOV.promoCheck();
+    if (!silent && id === 'hunter' && !ME.weapons.rifle && !ME.weapons.shotgun && !ME.weapons.sniper) { ME.weapons.shotgun = 1; ME.mag.shotgun = WEAPONS.shotgun.mag; ME.ammo.shotgun = (ME.ammo.shotgun || 0) + WEAPONS.shotgun.mag * 2; UI.buildHotbar && UI.buildHotbar(); toast('사냥용 산탄총을 지급받았다', 3500); }
     if (!ADMIN.on) WARDROBE.apply(); this.newTask();
     if (!silent) { if (id !== 'none') setTimeout(() => CINE_EV.job(Object.assign({}, j, { id })), 150); announce(`${j.icon} ${j.name}`, id === 'none' ? '직업을 그만뒀다' : j.d); sfx('levelup'); NET.send({ t: 'chat', m: `💼 ${ME.name} → ${j.icon} ${j.name}`, sys: 1 }); }
     this.updateHud(); saveGame();
   },
+  // ---- 지원 · 심사 (바로 취업되지 않는다) ----
+  //  1) 마지막 이직 후 등급별 대기시간  2) 경력·자격·신용 조건  3) 등급별 서류 심사(합격률)  4) 불합격하면 5분간 재지원 불가
+  fmtWait(s) { s = Math.ceil(s); return s >= 60 ? `${Math.floor(s / 60)}분 ${s % 60}초` : `${s}초`; },
+  apply(id) {
+    const j = JOB_BY[id]; if (!j) return;
+    if (id === 'none') { this.set('none'); return; }
+    if (this.id === id) { toast('이미 이 직업이다'); return; }
+    if (ADMIN.on) { this.set(id); return; }
+    if (this.pend) { toast(`📨 이미 ${JOB_BY[this.pend.id].name} 지원서 심사 중이다 (${Math.ceil(this.pend.end - G.t)}초)`); return; }
+    if (ME.jail) { toast('🔒 수감 중에는 지원할 수 없다'); return; }
+    if (j.clean && this.criminal()) { toast(`🦹 범죄 기록이 있어 ${j.name}이(가) 될 수 없다`, 3500); sfx('error'); return; }
+    if (ECON.jobLocked(id)) { toast('📉 채용 중단 — 경기가 나빠 지금은 이 일자리가 없다', 3500); sfx('error'); return; }
+    const t = JOB_TIER[id] ?? 1, now = Date.now() / 1000;
+    const w = CAREER.jt ? CAREER.jt + TIER_COOL[t] - now : 0; if (w > 0) { toast(`⏳ 직업을 바꾼 지 얼마 안 됐다 — ${this.fmtWait(w)} 뒤에 지원 가능`, 4000); sfx('error'); return; }
+    const fl = (CAREER.fail[id] || 0) + REAPPLY_LOCK - now; if (fl > 0) { toast(`📭 불합격 직후다 — ${this.fmtWait(fl)} 뒤에 다시 지원 가능`, 4000); sfx('error'); return; }
+    const why = CAREER.why(id); if (why) { toast(why, 4000); sfx('error'); return; }
+    const rev = TIER_REVIEW[t]; if (!rev) { this.set(id); return; }
+    this.pend = { id, end: G.t + rev }; toast(`📨 ${j.name} 지원서 접수 — 서류 심사 ${rev}초 (합격률 ${Math.round(TIER_PASS[t] * 100)}%)`, 4500); sfx('ui'); this.updateHud();
+  },
+  resolveApply() {
+    const P = this.pend; this.pend = null; if (!P) return; const j = JOB_BY[P.id], t = JOB_TIER[P.id] ?? 1;
+    if (ME.jail || ME.dead && false) { this.updateHud(); return; }
+    if (CAREER.why(P.id) || (j.clean && this.criminal())) { toast(`📭 ${j.name} 지원 취소 — 조건이 달라졌다`, 4000); this.updateHud(); return; }
+    if (Math.random() < TIER_PASS[t]) { toast(`📬 ${j.name} 합격!`, 3000); this.set(P.id); }
+    else { CAREER.fail[P.id] = Date.now() / 1000; announce('📭 불합격', `${j.name} 지원 — ${REAPPLY_LOCK / 60}분 뒤에 다시 지원할 수 있다`); sfx('error'); saveGame(); this.updateHud(); }
+  },
   openMenu() {
     const cr = this.criminal();
-    const items = JOB_LIST.map(j => ({ ic: j.icon, t: j.name + (this.id === j.id ? ' (현재)' : ''), p: '', d: j.d + (j.clean ? ' · 범죄 기록 없어야 함' : '') + (j.id !== 'none' ? CAREER.reqText(j.id) : ''), dis: (j.clean && cr) || this.id === j.id || ECON.jobLocked(j.id) || !!CAREER.why(j.id), disMsg: this.id === j.id ? '이미 이 직업이다' : ECON.jobLocked(j.id) ? '📉 채용 중단 (일자리 감소)' : CAREER.why(j.id) ? CAREER.why(j.id) : `🦹 범죄자 신분 — 남은 형량 ${Math.ceil(this.record)}초`, fn: () => this.set(j.id) }));
+    const items = JOB_LIST.map(j => ({ ic: j.icon, t: j.name + (this.id === j.id ? ' (현재)' : ''), p: '', d: j.d + (j.clean ? ' · 범죄 기록 없어야 함' : '') + (j.id !== 'none' ? CAREER.reqText(j.id) : ''), dis: (j.clean && cr) || this.id === j.id || ECON.jobLocked(j.id) || !!CAREER.why(j.id), disMsg: this.id === j.id ? '이미 이 직업이다' : ECON.jobLocked(j.id) ? '📉 채용 중단 (일자리 감소)' : CAREER.why(j.id) ? CAREER.why(j.id) : `🦹 범죄자 신분 — 남은 형량 ${Math.ceil(this.record)}초`, fn: () => this.apply(j.id) }));
     if (this.id === 'selfemp') items.unshift({ ic: '🏪', t: this.stall ? '노점 닫기' : '여기서 노점 열기', p: '', d: '사람 많은 곳 · 낮 · 내 건물 안일수록 잘 팔린다', fn: () => this.stall ? this.closeStall() : this.openStall() });
     UI.openMenu('💼 직업', `현재: <b>${this.cur.icon} ${this.cur.name}</b>${cr ? ` · <b style="color:#ff6a3a">🦹 범죄자 (남은 형량 ${Math.ceil(this.record)}초)</b>` : ''}`, items);
   },
@@ -240,6 +283,11 @@ const JOBS = {
     const id = this.id; this.task = null; const a = anchorOf(ME);
     if (id === 'police') { for (let k = 0; k < 30; k++) { const d = pick(DISTRICTS.filter(q => q.id !== 16)); const p = this.roadPoint(d.cx + rnd(-150, 150), d.cz + rnd(-150, 150)); const dd = Math.hypot(p.x - a.x, p.z - a.z); if (dd > 120 && dd < 700) { this.task = { kind: 'patrol', x: p.x, z: p.z, label: `🚓 순찰: ${d.name}`, r: 7 }; break; } } }
     else if (id === 'soldier') { const p = pick(ARMY.posts); this.task = { kind: 'post', x: p.x, z: p.z, label: '🪖 경계 근무 지점', r: 4 }; }
+    else if (id === 'civil' || id === 'minister' || id === 'statoff') {
+      const ty = id === 'statoff' ? 'stats' : 'govt'; const c = FACILITIES.filter(f => f.type === ty).map(f => [f, Math.hypot(f.x - a.x, f.z - a.z)]).sort((x, y) => x[1] - y[1])[0];
+      if (c) this.task = { kind: 'desk', x: c[0].x, z: c[0].z, label: id === 'statoff' ? '📊 통계청에서 집계 업무' : id === 'minister' ? '🎖️ 정부청사 결재 업무' : '🏛️ 정부청사 민원 업무', r: 6, e: 1 };
+      else this.task = { kind: 'wait', label: '🏛️ 근무지를 찾는 중…', retry: G.t + 6 };
+    }
     else if (id === 'doctor') this.pickPatient();
     else if (id === 'realtor') { const c = PLOTS.filter(p => p.state === 'empty' && p.signPos).map(p => [p, Math.hypot(p.signPos[0] - a.x, p.signPos[1] - a.z)]).filter(q => q[1] > 60 && q[1] < 800); if (c.length) { const [p, d] = pick(c); this.task = { kind: 'plot', x: p.signPos[0], z: p.signPos[1], label: '📋 매물 감정', r: 4, e: 1, dist: d }; } }
     else if (id === 'lawyer' && COURT.site) this.task = { kind: 'court', x: COURT.site.x, z: COURT.site.z, label: '⚖️ 법원 (E: 법률 상담)', r: 8, passive: 1 };
@@ -264,6 +312,7 @@ const JOBS = {
     if (t && t.e && !INTERIOR.cur) {
       const d = Math.hypot(t.x - ME.x, t.z - ME.z);
       if (d < t.r) {
+        if (t.kind === 'desk') cand(d - 0.4, { label: t.label.replace(/^\S+ /, '') + ' 시작', key: 'E', fn: () => this.channel(this.id === 'minister' ? 8 : 6, '업무 처리 중', () => { this.pay(this.id === 'minister' ? 2600 : this.id === 'statoff' ? 800 : 750, this.id === 'statoff' ? '통계 집계' : this.id === 'minister' ? '결재 수당' : '민원 처리'); this.later(); }) });
         if (t.kind === 'plot') cand(d - 0.4, { label: '📋 매물 감정하기 (부동산중개인)', key: 'E', fn: () => this.channel(5, '📋 매물 감정 중', () => { this.pay(900 + t.dist * 2, '매물 감정 수수료'); this.later(); }) });
         if (t.kind === 'paper') cand(d - 0.4, { label: '🗞️ 신문 넣기', key: 'E', fn: () => this.channel(1.5, '🗞️ 신문 넣는 중', () => { this.paperN = (this.paperN || 0) + 1; this.pay(140, '신문 배달'); this.newTask(); }) });
         if (t.kind === 'pickup') cand(d - 0.4, { label: '📦 택배 상차', key: 'E', fn: () => this.channel(3, '📦 상차 중', () => this.loadParcel()) });
@@ -272,6 +321,7 @@ const JOBS = {
         if (t.kind === 'patient') { const p = PEDS[t.ped]; cand(d - 0.4, { label: '🩺 환자 치료하기', key: 'E', fn: () => this.channel(4, '🩺 치료 중', () => { if (p && p.char) p.char.say(pick(['감사합니다 선생님!', '훨씬 나아졌어요', '살았다…']), 3); FX.emoji('💖', t.x, (p ? p.y : ME.y) + 2, t.z, 0.4); if (G.isHost) NPCMEM.help(ME.id, p); else NET.send({ t: 'pedHelp', id: t.ped }); this.pay(1300, '환자 치료'); this.later(); }) }); }
       }
     }
+    if (this.id === 'soldier' && !INTERIOR.cur) { const hq = GOV.armyHQ(); const d = Math.hypot(ME.x - hq.x, ME.z - hq.z); if (d < 16) cand(d - 4, { label: '🪖 사단 본부 (계급 · 훈련 · 보급)', key: 'E', fn: () => GOV.armyMenu() }); }
     if (this.id === 'farmer' && !INTERIOR.cur) for (const s of FARM.spots) { const d = Math.hypot(s.x - ME.x, s.z - ME.z); if (d < 2.4) cand(d - 0.2, s.ready ? { label: '🌾 수확하기', key: 'E', fn: () => this.channel(2.5, '🌾 수확 중', () => this.harvest(s)) } : { label: `🌱 자라는 중 (${Math.ceil(s.t - G.t)}초)`, key: 'E', fn: () => { } }); }
     if (this.stall) { const d = Math.hypot(this.stall.x - ME.x, this.stall.z - ME.z); if (d < 2.5) cand(d, { label: '🏪 노점 닫기', key: 'E', fn: () => this.closeStall() }); }
     // 다른 플레이어에게: 경찰 체포 / 의사 치료
@@ -312,7 +362,7 @@ const JOBS = {
   },
   // ---- 매 프레임 ----
   tick(dt) {
-    if (!this.hud) return;
+    if (!this.hud) return; GOV.tick(dt);
     // 범죄자 신분: 형량은 감옥에서만 1초/초 줄어든다 (밖에서는 안 줄어든다)
     if (this.record > 0 && ME.jail) { const was = this.record; this.record = Math.max(0, this.record - dt); if (was > 0 && this.record === 0) { toast('✅ 형량이 끝나 범죄자 신분에서 벗어났다', 4000); sfx('levelup'); saveGame(); } }
     // 경찰 NPC가 범죄자를 알아본다
@@ -323,7 +373,8 @@ const JOBS = {
         if (PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - a.x, q.z - a.z) < 30) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - a.x, v.z - a.z) < 40)) { this._spotCool = G.t + 20; addWanted(1); toast('🚨 경찰이 범죄자를 알아봤다!', 3000); }
       }
       // 근무 수당 (경찰·군인·의사)
-      if ((this.id === 'police' || this.id === 'soldier' || this.id === 'doctor') && !ME.jail && !ME.dead) { this.payT += 1; if (this.payT >= 120) { this.payT = 0; this.pay(this.id === 'soldier' ? 1000 : 900, '근무 수당 (2분)'); } }
+      if (DUTY_PAY[this.id] && !ME.jail && !ME.dead) { this.payT += 1; if (this.payT >= 120) { this.payT = 0; GOV.dutyPay(this.id); } }
+      if (this.pend && G.t >= this.pend.end) this.resolveApply();
       // 작물 다시 자람
       for (const s of FARM.spots) if (!s.ready && G.t >= s.t) { s.ready = true; if (s.mesh) s.mesh.visible = true; }
       this.updateHud();
@@ -365,6 +416,8 @@ const JOBS = {
   updateHud() {
     const h = this.hud; if (!h) return; const j = this.cur; const lines = [];
     if (this.id !== 'none') lines.push(`<b>${j.icon} ${j.name}</b>${this.stall ? ' · 🏪 영업 중' : ''}`);
+    if (this.pend) lines.push(`<b style="color:#8ad">📨 ${JOB_BY[this.pend.id].name} 지원 심사 중 · ${Math.max(0, Math.ceil(this.pend.end - G.t))}초</b>`);
+    if (this.id === 'soldier') lines[0] = `<b>${j.icon} ${GOV.rankName()}</b>${GOV.alertOn() ? ' · 🚨 경계태세' : ''}`;
     if (this.chan) { const c = this.chan; const pct = Math.min(100, Math.round((1 - (c.end - G.t) / c.dur) * 100)); lines.push(`<b style="color:#ffd34a">${c.label} ${pct}%</b>`); }
     const t = this.task; if (t && t.label && this.id !== 'none') { const d = t.x !== undefined ? Math.round(Math.hypot(t.x - ME.x, t.z - ME.z)) : null; lines.push(`<span style="opacity:.85">${t.label}${d !== null && !(t.passive && d < 40) ? ` · ${d}m` : ''}</span>`); }
     if (this.criminal()) { const s = Math.ceil(this.record); lines.push(`<b style="color:#ff6a3a">🦹 범죄자</b> · 형량 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}${ME.jail ? '' : ' <small style="opacity:.75">(감옥에서만 줄어듦)</small>'}`); }

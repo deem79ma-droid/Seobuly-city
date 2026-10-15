@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101502
 // ================= 도시: 경제 · 대통령 선거 · 정책 · 뉴스 · 법원 · NPC 기억 =================
 // 공유 상태(대통령·정책·집값·뉴스)는 방장이 관리하고 모두에게 보낸다. 서버가 있으면 방 저장에 같이 남는다.
 
@@ -13,7 +13,7 @@ const POLICIES = {
   stimulus: { ic: '📈', name: '경기 부양', d: '일자리 +25% · 집값 +10% · 물가 +20%', open: 1.25, house: 1.1, cost: 1.2 },
   dereg: { ic: '🏭', name: '기업 규제 완화', d: '택배·자영업·농부·벌목 수입 +20% · 세금 -3%p · 집값 +5%', biz: 1.2, tax: -0.03, house: 1.05 },
 };
-const PUBLIC_JOBS = ['police', 'soldier', 'doctor'], BIZ_JOBS = ['delivery', 'selfemp', 'farmer', 'lumber'];
+const PUBLIC_JOBS = ['police', 'soldier', 'doctor', 'civil', 'statoff', 'minister'], BIZ_JOBS = ['delivery', 'selfemp', 'farmer', 'lumber'];
 const TERM_MS = 30 * 60 * 1000, ELECTION_MS = 3 * 60 * 1000, AI_SHUFFLE_MS = 12 * 60 * 1000;
 
 const ECON = {

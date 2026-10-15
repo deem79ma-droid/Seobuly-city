@@ -1,4 +1,4 @@
-// @v 2026101417
+// @v 2026101501
 
 // ================= 💼 경력 · 취업 조건 · 갱단 회비 · 압류 =================
 // 돈은 밑바닥부터 꾸준히 일해야 겨우 모인다.
@@ -9,6 +9,10 @@
 //  - 갱단: 입단비 · 15분마다 회비. 못 내면 빚, 세 번 밀리거나 빚이 너무 커지면 전재산 압류
 const CAREER_REQ = {
   // tot: 전체 경력 · own: [다른 직업, 경력] · fee: 처음 한 번 내는 자격 비용 · credit: 신용불량이면 불가
+  farmer: { tot: 3 }, lumber: { tot: 5 }, delivery: { tot: 8 },
+  civil: { tot: 40, fee: 60000, feeN: '공무원 시험 응시료', credit: 1 },
+  statoff: { tot: 40, own: ['civil', 15], fee: 60000, feeN: '통계직 시험 응시료', credit: 1 },
+  minister: { tot: 150, own: ['civil', 60], credit: 1 },
   hunter: { tot: 10, fee: 30000, feeN: '사냥 면허' },
   selfemp: { tot: 15, fee: 100000, feeN: '창업 자금', credit: 1 },
   realtor: { tot: 30, fee: 50000, feeN: '중개사 자격증', credit: 1 },
@@ -20,11 +24,15 @@ const CAREER_REQ = {
 };
 // 직업별 수입 배율 (예전엔 너무 쉽게 벌렸다) — 전문직은 그대로, 단순 노동은 적게
 const CAREER_PAYK = { farmer: 0.3, lumber: 0.4, delivery: 0.45, selfemp: 0.45, realtor: 0.55, hunter: 0.5, gangA: 0.5, gangB: 0.5, paper: 1, police: 1, soldier: 1, doctor: 1.2, lawyer: 1, none: 0.5 };
+CAREER_PAYK.civil = 0.9; CAREER_PAYK.statoff = 0.95; CAREER_PAYK.minister = 1;
+// 직업 등급: 등급이 높을수록 이직 대기시간이 길고 서류 심사가 오래 걸리며 떨어질 수 있다
+const JOB_TIER = { paper: 0, farmer: 1, lumber: 1, delivery: 1, gangA: 1, gangB: 1, selfemp: 2, hunter: 2, realtor: 2, soldier: 2, civil: 2, statoff: 2, police: 3, doctor: 3, lawyer: 3, minister: 3 };
+const TIER_COOL = [60, 180, 360, 600], TIER_REVIEW = [0, 15, 40, 90], TIER_PASS = [1, 0.95, 0.85, 0.75], REAPPLY_LOCK = 300;
 const GANG_DUES = 30000, GANG_DUES_EVERY = 15 * 60;
 const CAREER = {
-  exp: {}, lic: {}, duesT: 0, miss: 0,
-  load(sv) { const c = (sv && sv.career) || {}; this.exp = Object.assign({}, c.exp || {}); this.lic = Object.assign({}, c.lic || {}); this.duesT = c.dt != null ? +c.dt : GANG_DUES_EVERY; this.miss = +c.miss || 0; for (const k in this.exp) this.exp[k] = Math.max(0, Math.floor(+this.exp[k] || 0)); },
-  save() { return { career: { exp: this.exp, lic: this.lic, dt: Math.round(this.duesT), miss: this.miss } }; },
+  exp: {}, lic: {}, duesT: 0, miss: 0, jt: 0, fail: {},
+  load(sv) { const c = (sv && sv.career) || {}; this.jt = +c.jt || 0; this.fail = Object.assign({}, c.fail || {}); this.exp = Object.assign({}, c.exp || {}); this.lic = Object.assign({}, c.lic || {}); this.duesT = c.dt != null ? +c.dt : GANG_DUES_EVERY; this.miss = +c.miss || 0; for (const k in this.exp) this.exp[k] = Math.max(0, Math.floor(+this.exp[k] || 0)); },
+  save() { return { career: { exp: this.exp, lic: this.lic, dt: Math.round(this.duesT), miss: this.miss, jt: this.jt, fail: this.fail } }; },
   total() { let s = 0; for (const k in this.exp) s += this.exp[k]; return s; },
   of(id) { return this.exp[id] || 0; },
   // 일하고 받는 돈: 배율 × 경력 보너스, 그리고 경력 +1

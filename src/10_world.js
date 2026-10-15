@@ -1,8 +1,8 @@
-// @v 2026101418
+// @v 2026101502
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
-const HM = { x0: -1700, z0: -1300, x1: 2500, z1: 1300, res: 4 };
+const HM = { x0: -1700, z0: -3400, x1: 2500, z1: 3400, res: 5 }; // 북쪽 쿠알프스드 · 남쪽 치가커렌까지 포함한 큰 지도
 HM.W = (HM.x1 - HM.x0) / HM.res + 1; HM.H = (HM.z1 - HM.z0) / HM.res + 1;
 let hmData, roadDistF, grassMask;
 const REGIONS = {
@@ -12,6 +12,8 @@ const REGIONS = {
   kaengjibe: { name: '캥지베', desc: '갱단이 지배하는 동네 · 위험', color: '#ff5a4f', cx: -240, cz: 610 },
   disanbay: { name: '디산베이', desc: '자연친화적인 시골 마을', color: '#ffd54f', cx: -1100, cz: 0 },
   simone: { name: '시모느 아일랜드', desc: '남동쪽 휴양 섬', color: '#4fffe0', cx: 2000, cz: 560 },
+  kualp: { name: '쿠알프스드', desc: '북쪽 만년설 산악 지방 · 스키 리조트 마을 · 눈길(차량 미끄러움) · 온천 · 사냥 천국', color: '#bfe6ff', cx: -150, cz: -2150 },
+  chiga: { name: '치가커렌', desc: '남쪽 사막 무역항 도시 · 흙벽돌 시장통 · 오아시스 · 메사 협곡 · 낙타', color: '#ffb35a', cx: 50, cz: 2150 },
   sea: { name: '바다', desc: '', color: '#5aa0ff', cx: 0, cz: 0 },
 };
 // ---- 산 4개: 이름(한자) · 정상 위치. 시모느의 천해산이 가장 높다 ----
@@ -19,18 +21,33 @@ const MOUNTAINS = [
   { id: 'unryeong', n: '운령산', hj: '雲嶺山', d: '구름이 걸리는 디산베이 북쪽 큰 산 · 호수와 숲', x: -1330, z: -900, r: 330 },
   { id: 'songrim', n: '송림산', hj: '松林山', d: '소나무 숲이 덮인 디산베이 남쪽 완만한 산', x: -1350, z: 820, r: 240 },
   { id: 'mangseong', n: '망성산', hj: '望城山', d: '서불리 도심이 한눈에 내려다보이는 북쪽 산', x: 820, z: -935, r: 210 },
-  { id: 'cheonhae', n: '천해산', hj: '天海山', d: '바다에서 솟은 시모느 아일랜드의 최고봉 · 서불리에서 가장 높은 산', x: 2290, z: 1030, r: 260 },
+  { id: 'cheonhae', n: '천해산', hj: '天海山', d: '바다에서 솟은 시모느 아일랜드의 최고봉', x: 2290, z: 1030, r: 260 },
+  { id: 'baengryeong', n: '백령봉', hj: '白嶺峰', d: '쿠알프스드의 만년설 봉우리 · 서불리 세계에서 가장 높은 산', x: -250, z: -2750, r: 380 },
+  { id: 'seolhwa', n: '설화령', hj: '雪花嶺', d: '쿠알프스드 서쪽의 눈꽃 능선 · 스키 슬로프', x: -880, z: -2400, r: 300 },
 ];
 const ISLE2 = { x: 2290, z: 1030, r: 235 }; // 천해산이 있는 시모느 남동쪽 땅
+// 큰 땅 두 덩이: 북쪽(쿠알프스드)·남쪽(치가커렌)은 본토와 이어져 있고 해안선은 불규칙하다
+const KUALP = { x: -150, z: -2150, rx: 1300, rz: 1100 };
+const CHIGA = { x: 50, z: 2150, rx: 1300, rz: 1100 };
+function lobeSd(x, z, L, k) { const e = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz); return (e - 1) * Math.min(L.rx, L.rz) * 0.9 + fbm(x * 0.0042 + k, z * 0.0042 - k, 3) * 120 + fbm(x * 0.011 - k, z * 0.011 + k, 2) * 26; }
+// 바다에 떠 있는 작은 무인도들 (해변 · 야자수)
+const ISLETS = [{ x: 1750, z: -1750, r: 170 }, { x: 1900, z: 2350, r: 230 }, { x: -1550, z: 1750, r: 130 }, { x: 1550, z: -2650, r: 260 }, { x: -1600, z: -3050, r: 150 }, { x: 800, z: 3150, r: 140 }];
+const KUALP_TOWN = { x: -50, z: -1780 }, CHIGA_TOWN = { x: -100, z: 2180 };
 function mountainAt(x, z) { let best = null, bd = 1e9; for (const M of MOUNTAINS) { const d = Math.hypot(x - M.x, z - M.z) / M.r; if (d < 1 && d < bd) { bd = d; best = M; } } return best; }
+// 지역 경계는 노이즈로 휘게 만들어 자연스럽게 (사각형 격자 아님)
+function warpX(x, z) { return x + fbm(x * 0.0016 + 5, z * 0.0016 - 9, 3) * 520 + vnoise(x * 0.006, z * 0.006) * 80; }
+function warpZ(x, z) { return z + fbm(x * 0.0016 - 3, z * 0.0016 + 8, 3) * 520 + vnoise(x * 0.006 + 4, z * 0.006 - 2) * 80; }
 function regionAt(x, z) {
   if (Math.hypot(x - ISLE2.x, z - ISLE2.z) < ISLE2.r) return 'simone';
   if (((x - 2000) / 420) ** 2 + ((z - 560) / 510) ** 2 < 1) return 'simone';
-  if (x > 1420) return 'sea';
+  if (x > 1420 || z < -3300 || z > 3300) return 'sea';
+  const zz = z + fbm(x * 0.0021 - 3, z * 0.0021 + 8, 3) * 180; // 북쪽·남쪽 땅과의 경계는 완만하게
+  if (zz < -1190) return 'kualp'; if (zz > 1190) return 'chiga';
   if (Math.abs(x) < 212 && Math.abs(z) < 212) return 'plaza';
-  if (x >= 212) return 'seoburi';
-  if (x < -720) return 'disanbay';
-  return z < 0 ? 'jiolle' : 'kaengjibe';
+  const wx = warpX(x, z), wz = warpZ(x, z); // 본토 안 지역 경계는 크게 휘게
+  if (wx >= 212) return 'seoburi';
+  if (wx < -720) return 'disanbay';
+  return wz < 0 ? 'jiolle' : 'kaengjibe';
 }
 // ---- 16개 구역 (지역을 잘게 나눈 행정구역) ----
 const DISTRICTS = [
@@ -50,8 +67,14 @@ const DISTRICTS = [
   { id: 14, name: '디산베이 읍내', region: 'disanbay', cx: -1050, cz: 0 },
   { id: 15, name: '디산베이 목장', region: 'disanbay', cx: -1150, cz: 440 },
   { id: 16, name: '시모느 아일랜드', region: 'simone', cx: 2000, cz: 560 },
+  { id: 17, name: '쿠알프스드 스키 마을', region: 'kualp', cx: -50, cz: -1780 },
+  { id: 18, name: '쿠알프스드 설봉 지대', region: 'kualp', cx: -250, cz: -2650 },
+  { id: 19, name: '쿠알프스드 빙호', region: 'kualp', cx: -790, cz: -1750 },
+  { id: 20, name: '치가커렌 구시가', region: 'chiga', cx: -100, cz: 2180 },
+  { id: 21, name: '치가커렌 오아시스', region: 'chiga', cx: -800, cz: 2420 },
+  { id: 22, name: '치가커렌 메사 협곡', region: 'chiga', cx: 850, cz: 2300 },
 ];
-const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0'];
+const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0', '#bfe6ff', '#8fb8ff', '#6fd0ff', '#ffb35a', '#ff9a3a', '#e07a4a'];
 function districtAt(x, z) { // 1..16, 0 = 바다
   const r = regionAt(x, z);
   switch (r) {
@@ -61,6 +84,8 @@ function districtAt(x, z) { // 1..16, 0 = 바다
     case 'kaengjibe': return z > 540 ? (x < -280 ? 11 : 12) : 10;
     case 'disanbay': return z < -220 ? 13 : z <= 220 ? 14 : 15;
     case 'simone': return 16;
+    case 'kualp': return Math.hypot(x + 790, z + 1750) < 330 ? 19 : z < -2250 ? 18 : 17;
+    case 'chiga': return Math.hypot(x + 800, z - 2420) < 330 ? 21 : x > 480 ? 22 : 20;
   }
   return 0;
 }
@@ -79,6 +104,9 @@ const GRIDS = [
   { region: 'jiolle', xs: [-680, -520, -360, -200, 0, 200], zs: [-980, -800, -620, -440, -260], w: 12 },
   { region: 'kaengjibe', xs: [-680, -520, -360, -200, 0, 200], zs: [260, 440, 620, 800, 960], w: 12 },
   { region: 'simone', xs: [1720, 1860, 2000, 2140, 2280], zs: [200, 320, 440, 560, 680, 800, 920], w: 11, clip: (x, z) => ((x - 2000) / 370) ** 2 + ((z - 560) / 450) ** 2 <= 1 },
+  // 쿠알프스드 스키 마을 · 치가커렌 구시가: 가장자리를 노이즈로 깎아 자연스럽게
+  { region: 'kualp', xs: [-330, -190, -50, 90, 230], zs: [-2060, -1920, -1780, -1640, -1500], w: 11, clip: (x, z) => Math.hypot((x - KUALP_TOWN.x) / 340, (z - KUALP_TOWN.z) / 340) + fbm(x * 0.012, z * 0.012, 2) * 0.22 < 1.0 },
+  { region: 'chiga', xs: [-500, -340, -180, -20, 140, 300], zs: [1900, 2040, 2180, 2320, 2460], w: 12, clip: (x, z) => Math.hypot((x - CHIGA_TOWN.x) / 450, (z - CHIGA_TOWN.z) / 350) + fbm(x * 0.01, z * 0.01, 2) * 0.22 < 1.0 },
 ];
 function buildRoadGraph() {
   for (const g of GRIDS) {
@@ -98,9 +126,20 @@ function buildRoadGraph() {
   rpath([[-1400, 440], [-1050, 440], [-680, 440]], 12, { region: 'disanbay' });
   rpath([[-1400, -440], [-1400, 0], [-1400, 440]], 12, { region: 'disanbay' });
   rpath([[1240, 440], [1720, 440]], 14, { bridge: true, region: 'sea' });
+  // ---- 쿠알프스드: 본토 북쪽에서 올라오는 두 도로 + 설봉 산악도로 (굽이굽이) ----
+  rpath([[-200, -980], [-215, -1100], [-170, -1230], [-215, -1360], [-190, -1500], [-190, -1640]], 12, { region: 'kualp' });
+  rpath([[200, -980], [240, -1100], [300, -1240], [260, -1380], [230, -1500], [230, -1640]], 12, { region: 'kualp' });
+  rpath([[230, -1780], [330, -1900], [250, -2010], [420, -2120], [330, -2240], [520, -2340], [430, -2470], [600, -2560], [520, -2680]], 10, { region: 'kualp' });
+  rpath([[-330, -1780], [-470, -1830], [-640, -1760], [-790, -1900], [-900, -2050], [-820, -2220], [-880, -2400]], 9, { region: 'kualp' });
+  // ---- 치가커렌: 본토 남쪽 두 도로 + 해안 도로 + 오아시스 순환로 + 항구 부두 ----
+  rpath([[-200, 960], [-215, 1080], [-180, 1220], [-230, 1380], [-190, 1540], [-210, 1700], [-180, 1900]], 12, { region: 'chiga' });
+  rpath([[200, 960], [250, 1100], [320, 1260], [270, 1420], [330, 1580], [290, 1740], [300, 1900]], 12, { region: 'chiga' });
+  rpath([[300, 2460], [520, 2580], [780, 2560], [1020, 2420], [1160, 2230], [1060, 2060], [820, 1990], [600, 2080], [440, 2040], [300, 2040]], 11, { region: 'chiga' });
+  rpath([[-500, 2460], [-640, 2570], [-840, 2650], [-1000, 2530], [-1030, 2340], [-900, 2210], [-720, 2200], [-560, 2180], [-500, 2180]], 11, { region: 'chiga' });
+  rpath([[-20, 2460], [-20, 2620], [-20, 2800], [-20, 2960]], 12, { region: 'chiga' });
   for (const n of NODES) {
     const r = regionAt(n.x, n.z);
-    if (n.edges.length >= 3 && (r === 'seoburi' || r === 'jiolle' || r === 'kaengjibe' || r === 'plaza')) n.light = true;
+    if (n.edges.length >= 3 && (r === 'seoburi' || r === 'jiolle' || r === 'kaengjibe' || r === 'plaza' || r === 'chiga')) n.light = true;
   }
 }
 // ---- flat zones (no hills) ----
@@ -108,21 +147,28 @@ const FLAT = [
   { a: [-1380, 0], b: [-720, 0], r: 75 }, { a: [-1050, -430], b: [-1050, 430], r: 75 },
   { a: [-1230, 220], b: [-1230, 220], r: 135 }, { a: [-860, -90], b: [-860, -90], r: 100 },
   { a: [-1230, -230], b: [-1230, -230], r: 80 },
+  { a: [-50, -1780], b: [-50, -1780], r: 380 }, { a: [-100, 2180], b: [-100, 2180], r: 470 }, // 쿠알프스드 마을 · 치가커렌 구시가는 평지
 ];
 const LAKE = { x: -1230, z: -660, r: 100 };
+const LAKE_K = { x: -790, z: -1750, r: 130 }, LAKE_O = { x: -800, z: 2420, r: 85 }; // 쿠알프스드 빙호 · 치가커렌 오아시스
+const LAKES = [LAKE, LAKE_K, LAKE_O];
 function deckY(x, z) {
   if (Math.abs(z - 440) > 9.5 || x < 1240 || x > 1720) return null;
   const t = clamp((x - 1300) / 350, 0, 1); return LAND + 0.06 + 11 * Math.sin(Math.PI * t);
 }
+// 서쪽·동쪽 해안은 바깥쪽으로만 불쑥 튀어나온 만과 곶을 만든다 (도로·항구는 안 건드림)
+function coastBump(x, z) { const wf = Math.max(smooth(-1250, -1450, x), smooth(1250, 1380, x) * smooth(500, 800, Math.abs(z - 440))); return wf > 0 ? Math.max(0, fbm(x * 0.0024 - 5, z * 0.0024 + 2, 3) * 2 + 0.1) * 200 * wf : 0; }
 function landF(x, z) {
-  const n = fbm(x * 0.0032 + 11, z * 0.0032 - 7, 3) * 34;
+  const n = fbm(x * 0.0032 + 11, z * 0.0032 - 7, 3) * 34 - coastBump(x, z);
   let qx = Math.abs(x + 50) - 1450 + 220, qz = Math.abs(z) - 1100 + 220;
   let sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220 + n;
   const l1 = smooth(30, -30, sd);
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430 + fbm(x * 0.006, z * 0.006, 3) * 30;
   const l2 = smooth(25, -25, sdI);
   const l4 = smooth(25, -25, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r + fbm(x * 0.008 + 3, z * 0.008, 3) * 40);
-  return Math.max(l1, l2, l4);
+  const l5 = smooth(30, -30, lobeSd(x, z, KUALP, 3)), l6 = smooth(30, -30, lobeSd(x, z, CHIGA, 11));
+  let l7 = 0; for (const I of ISLETS) { const dx = x - I.x, dz = z - I.z; if (Math.abs(dx) < I.r * 1.6 && Math.abs(dz) < I.r * 1.6) l7 = Math.max(l7, smooth(22, -22, Math.hypot(dx, dz) - I.r + fbm(x * 0.012 + 8, z * 0.012, 3) * 60)); }
+  return Math.max(l1, l2, l4, l5, l6, l7);
 }
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
@@ -139,10 +185,29 @@ function hillsAt(x, z) {
   const band = smooth(-760, -680, x) * smooth(300, 220, x);
   h += band * smooth(-990, -1060, z) * (fbm(x * 0.006 + 2, z * 0.006, 3) * 0.5 + 0.7) * 30;
   h += band * smooth(975, 1045, z) * (fbm(x * 0.006 - 4, z * 0.006 + 1, 3) * 0.5 + 0.7) * 24;
+  if (z < -1250) { // 쿠알프스드: 만년설 산맥
+    const k = smooth(-1250, -1750, z);
+    h += k * (fbm(x * 0.0045 + 9, z * 0.0045 + 4, 5) * 0.5 + 0.55) * 60;
+    const pk = (px, pz, hh, sg) => hh * Math.exp(-((x - px) ** 2 + (z - pz) ** 2) / (2 * sg * sg));
+    h += pk(-250, -2750, 470, 250) + pk(-880, -2400, 330, 210) + pk(480, -2650, 390, 230) + pk(920, -2200, 260, 190) + pk(-700, -3000, 300, 220) + pk(200, -3050, 340, 240);
+    h += k * smooth(-2000, -2500, z) * Math.abs(fbm(x * 0.0065 - 3, z * 0.0065 + 6, 4)) * 2.2 * 120;
+  }
+  if (z > 1150) { // 치가커렌: 사구 + 메사(평탑 지형) 협곡
+    const k = smooth(1150, 1450, z);
+    h += k * Math.max(0, fbm(x * 0.0036 + 20, z * 0.0036, 4) + 0.15) * 34;
+    const mz = fbm(x * 0.0021 - 4, z * 0.0021 + 15, 3), edge = smooth(520, 820, Math.abs(x - 50));
+    h += k * edge * smooth(0.1, 0.17, mz) * 30 * smooth(1700, 1950, z) + k * edge * smooth(0.26, 0.32, mz) * 24;
+  }
   return Math.max(0, h);
 }
 // 도로까지 함께 올라가는 완만한 기복 (디산베이 외곽 언덕길). 마을·농장·호수 주변은 평지 유지
-function gradeAt(x, z) {
+function gradeK(x, z) { // 쿠알프스드는 북쪽으로 갈수록 완만히 솟아서 산악도로가 실제로 올라간다
+  if (z > -1450) return 0; let g = smooth(-1450, -2700, z) * 150 * (fbm(x * 0.0017 + 2, z * 0.0017 - 6, 3) * 0.5 + 0.62);
+  for (const f of FLAT) g *= smooth(f.r + 10, f.r + 170, distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]));
+  g *= smooth(LAKE_K.r + 25, LAKE_K.r + 170, Math.hypot(x - LAKE_K.x, z - LAKE_K.z)); return Math.max(0, g);
+}
+function gradeAt(x, z) { return gradeW(x, z) + gradeK(x, z); }
+function gradeW(x, z) {
   const wW = smooth(-760, -900, x); if (wW <= 0) return 0;
   let g = (fbm(x * 0.0019 + 5, z * 0.0019 - 3, 3) * 0.5 + 0.5) * 20;
   g += 26 * Math.exp(-((x + 1330) ** 2 + (z + 900) ** 2) / (2 * 300 * 300));
@@ -154,9 +219,10 @@ function gradeAt(x, z) {
 // 해안까지의 대략적인 거리 (육지 안쪽 +). 모래사장 색칠용
 function coastDist(x, z) {
   const qx = Math.abs(x + 50) - 1450 + 220, qz = Math.abs(z) - 1100 + 220;
-  const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220;
+  const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220 - coastBump(x, z);
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430;
-  return -Math.min(sd, sdI, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r);
+  const lk = (L) => (Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz) - 1) * Math.min(L.rx, L.rz) * 0.9;
+  return -Math.min(sd, sdI, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r, lk(KUALP), lk(CHIGA));
 }
 function hmIdx(i, j) { return j * HM.W + i; }
 function hmSample(arr, x, z) {
@@ -194,7 +260,7 @@ function buildHeightmap() {
     let mask = smooth(12, 70, roadDistF[k]);
     for (const f of FLAT) { const d = distSeg(x, z, f.a[0], f.a[1], f.b[0], f.b[1]); mask *= smooth(f.r, f.r + 45, d); }
     h += (hillsAt(x, z) + fbm(x * 0.02, z * 0.02, 2) * 0.8 * smooth(-650, -760, x)) * mask * l3;
-    const dl = Math.hypot(x - LAKE.x, z - LAKE.z); h = lerp(h, -3.5, smooth(LAKE.r + 30, LAKE.r - 15, dl));
+    for (const L of LAKES) { const dl = Math.hypot(x - L.x, z - L.z); if (dl < L.r + 30) h = lerp(h, -3.5, smooth(L.r + 30, L.r - 15, dl)); }
     hmData[k] = h;
   }
 }
@@ -470,13 +536,16 @@ const FAC = {
   zoo: { name: '동물원', icon: '🦁', col: 0x6f8c45, eng: 'ZOO' }, gun: { name: '총포사', icon: '🔫', col: 0x5a3a2a, eng: 'GUNS' },
   clothes: { name: '옷가게', icon: '👕', col: 0xf0e6f2, eng: 'FASHION' }, club: { name: '클럽 네온', icon: '🪩', col: 0x1a1030, eng: 'CLUB' },
   casino: { name: '카지노', icon: '🎰', col: 0x2a1a08, eng: 'CASINO' }, hotel: { name: '리조트 호텔', icon: '🏨', col: 0xf2efe8, eng: 'RESORT' },
+  govt: { name: '정부청사', icon: '🏛️', col: 0xcfc6b0, eng: 'GOVERNMENT' }, stats: { name: '통계청', icon: '📊', col: 0xa9c4bd, eng: 'STATISTICS' },
 };
 const REGION_FAC = {
-  seoburi: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes', 'food', 'academy'],
-  jiolle: ['police', 'hospital', 'dealer', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
+  seoburi: ['govt', 'stats', 'police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes', 'food', 'academy'],
+  jiolle: ['govt', 'police', 'hospital', 'dealer', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
   kaengjibe: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
   disanbay: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'gun', 'clothes'],
   simone: ['hotel', 'food', 'hospital', 'pool', 'clothes', 'dealer', 'police'],
+  kualp: ['police', 'hospital', 'hotel', 'food', 'dealer', 'clothes', 'pool', 'gym', 'gun', 'food'],
+  chiga: ['govt', 'police', 'hospital', 'dealer', 'food', 'school', 'academy', 'pcbang', 'gym', 'clothes', 'gun', 'hotel', 'food', 'pool', 'food'],
 };
 function makeSignTex(text, sub, bg, fg = '#fff', w = 512, h = 128) {
   return canvasTex(w, h, (x) => {
@@ -496,7 +565,7 @@ const SIDE_VEC = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
 // ---- 들어갈 수 있는 건물 목록 (모든 건물에 문 + 실내) ----
 const BLD_KIND = {
   office: '오피스 빌딩', bank: '서불리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
-  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
+  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', govt: '정부청사', stats: '통계청', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
   food: '음식점', pcbang: 'PC방', gym: '헬스장', pool: '실내 수영장', gun: '총포사', clothes: '옷가게', casino: '카지노', guard: '교도관실', home: '내 집',
 };
 const BUILDINGS = []; const BLD_GRID = new Map(); const BLD_CELL = 64;
@@ -537,6 +606,7 @@ async function buildWorld(progress) {
   await tick(); progress(0.38, '도로 포장 중…'); buildRoads();
   await tick(); progress(0.46, '이벤트광장 조성 중…'); buildPlaza(); buildBridge();
   await tick(); progress(0.52, '디산베이 마을 조성 중…'); genCountryside(); buildJobWorld();
+  await tick(); progress(0.55, '쿠알프스드 · 치가커렌 조성 중…'); genOutskirts('kualp', 50); genOutskirts('chiga', 50); genRegionLandmarks();
   await tick(); progress(0.58, '지형 메쉬 생성 중…'); buildTerrainMesh(); buildWater();
   await tick(); progress(0.68, '나무 심는 중…'); genTrees(); buildStreetProps(); buildCityDetail();
   flushMB();
@@ -570,11 +640,13 @@ function genBlocks() {
     if (g.region === 'kaengjibe') for (let k = 0; k < 2; k++) { const b = list[bi++]; if (b) b.use = k ? 'court' : 'park'; }
     if (g.region === 'jiolle') for (let k = 0; k < 3; k++) { const b = list[bi++]; if (b) b.use = k === 0 ? 'park' : 'factoryblock'; }
     if (g.region === 'simone') { const b = list[bi++]; if (b) b.use = 'park'; }
+    if (g.region === 'kualp') { const b = list[bi++]; if (b) b.use = 'park'; } // 스키 광장
+    if (g.region === 'chiga') for (let k = 0; k < 3; k++) { const b = list[bi++]; if (b) b.use = k === 0 ? 'park' : 'factoryblock'; } // 오아시스 광장 · 항구 창고
     if (g.region !== 'seoburi') { const b = list[bi++]; if (b) b.use = 'parking'; } // 모든 지역에 주차장 (차 소환)
   }
   for (const b of BLOCKS) {
     // slab + curb
-    const slabCol = b.region === 'kaengjibe' ? C(0x9a958c) : b.region === 'simone' ? C(0xe9e2d0) : C(0xc9c6c0);
+    const slabCol = b.region === 'kaengjibe' ? C(0x9a958c) : b.region === 'simone' ? C(0xe9e2d0) : b.region === 'chiga' ? C(0xd9c9a4) : b.region === 'kualp' ? C(0xe6ecf0) : C(0xc9c6c0);
     mbAt('concrete', b.x0, b.z0).box((b.x0 + b.x1) / 2, LAND - 0.5, (b.z0 + b.z1) / 2, b.x1 - b.x0, 0.66, b.z1 - b.z0, slabCol, null, { topUV: 6 });
     markGrass(b.x0 - 1, b.z0 - 1, b.x1 + 1, b.z1 + 1, 0);
     const iw = b.ix1 - b.ix0, id = b.iz1 - b.iz0;
@@ -620,6 +692,9 @@ const PALETTE = {
   apt: [0xffffff, 0xf0e8d8, 0xe8f0f4, 0xf6efe0, 0xe0e6d8],
   house: [0xfff8ec, 0xf4e4c8, 0xe8f0e0, 0xf8e0d8, 0xe0e8f0, 0xfff0c8],
   roof: [0x8a3a2a, 0x3a4a5a, 0x5a3a2a, 0x2a3a2a, 0x7a2a2a, 0x4a4a52],
+  sand: [0xe0c898, 0xd8b884, 0xe8d4aa, 0xcfae78, 0xf0e2c0, 0xc89a68],
+  wood: [0x8a5a34, 0x9a6a40, 0x7a4a2a, 0xa87a50, 0x6a4026],
+  snowRoof: [0xf2f6fa, 0xe4ecf2, 0xdde6ee],
 };
 function addBuildingBox(x, z, w, d, h, style, col, opts = {}) {
   const y0 = opts.y0 ?? LAND - 0.2; const cityShop = opts.shop;
@@ -690,6 +765,18 @@ function buildLotBuilding(lot, side, R, b) {
     if (wrng() < 0.6) addGraffiti(cx, cz, w, d, side);
     // fence + barrels
     if (wrng() < 0.5) { const bx = cx + wr(-lw / 3, lw / 3), bz = cz + (sz || 1) * (d / 2 + 2); mbAt('metalPlain', bx, bz).cyl(bx, LAND, bz, 0.4, 1.1, C(0x6a3a1a), 8); SMOKERS.push({ x: bx, y: LAND + 1.2, z: bz, fire: true, rate: 0.12 }); }
+  } else if (R === 'chiga') { // 흙벽돌 시장통 · 항구 도시
+    const k = wrng();
+    if (k < 0.1) { buildFactoryHall(cx, cz, lw - 6, ld - 6, R, true, side); return; }
+    const h = wr(7, 22); const w = lw - wr(3, 7), d = ld - wr(3, 7); const col = C(wpick(PALETTE.sand));
+    const shopF = wrng() < 0.6; const top = addBuildingBox(cx, cz, w, d, h, 'apt', col, { shop: shopF });
+    { const hk = hash2(cx * 3 | 0, cz * 5 | 0); regBuilding(hk < 0.08 ? 'church' : shopF ? (hk < 0.5 ? 'mart' : 'restaurant') : 'apartment', cx, cz, w + (shopF ? 0.4 : 0), d + (shopF ? 0.4 : 0), top, side); }
+    roofProps(cx, cz, w, d, top, 2);
+    if (wrng() < 0.3) { const tx = cx + (wrng() < 0.5 ? -1 : 1) * (w / 2 - 2.5), tz = cz + (wrng() < 0.5 ? -1 : 1) * (d / 2 - 2.5), mm = mbAt('plain', tx, tz); mm.cyl(tx, top, tz, 2.1, 9, col, 12, 1.7); mm.cyl(tx, top + 9, tz, 2.6, 0.5, C(0x6a8a8a), 12); mm.cyl(tx, top + 9.5, tz, 1.7, 1.6, C(0x5a8a8a), 12, 0.3); }
+    if (wrng() < 0.5) { const sx = (SIDE_VEC[side] || [0, 1]); const ax = cx + sx[0] * (w / 2 + 2), az = cz + sx[1] * (d / 2 + 2); mbAt('plain', ax, az).box(ax, LAND + 2.1, az, sx[0] ? 3 : 5, 0.12, sx[1] ? 3 : 5, C(wpick([0xc43a2a, 0x2a6ac4, 0xe0a82a]))); } // 시장 차양
+  } else if (R === 'kualp') { // 통나무 샬레 마을
+    if (wrng() < 0.18) { const h = wr(13, 20); const top = addBuildingBox(cx, cz, lw - 8, ld - 8, h, 'house', C(wpick(PALETTE.wood))); mbAt('roof', cx, cz).gable(cx, top, cz, lw - 6, ld - 6, 5, C(wpick(PALETTE.snowRoof)), (lw > ld ? 'x' : 'z')); roofProps(cx, cz, lw - 12, ld - 12, top, 1); regBuilding(wrng() < 0.5 ? 'hotel' : 'restaurant', cx, cz, lw - 8, ld - 8, top + 3, side); }
+    else { const n = 2; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const hx = lot.x0 + lw * (i + 0.5) / n, hz = lot.z0 + ld * (j + 0.5) / n; buildHouse(hx, hz, lw / n - 5, ld / n - 5, wrng() < 0.5 ? 2 : 3, R); } }
   } else if (R === 'simone') {
     if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); regBuilding('hotel', cx, cz, lw - 10, ld - 10, top, side); }
     else buildVilla(cx, cz, lw - 6, ld - 6, side);
@@ -706,7 +793,7 @@ function addGraffiti(cx, cz, w, d, side) {
 }
 function buildHouse(x, z, w, d, floors, R, y0 = LAND - 0.3) {
   w = Math.max(7, Math.min(w, 13)); d = Math.max(7, Math.min(d, 12)); const h = floors * 3.1 + 0.4;
-  const wall = C(wpick(PALETTE.house)), roof = C(wpick(PALETTE.roof));
+  const wall = C(wpick(R === 'kualp' ? PALETTE.wood : R === 'chiga' ? PALETTE.sand : PALETTE.house)), roof = C(wpick(R === 'kualp' ? PALETTE.snowRoof : R === 'chiga' ? PALETTE.sand : PALETTE.roof));
   mbAt('plain', x, z).box(x, y0 - 2, z, w + 0.4, 2.4, d + 0.4, C(0x8a8580));
   mbAt('house', x, z).box(x, y0 + 0.4, z, w, h, d, wall, BAY.house, { noTop: true });
   const ax = w > d ? 'x' : 'z';
@@ -787,7 +874,7 @@ function buildParking(b) {
 function buildParkBlock(b) {
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, w = b.ix1 - b.ix0, d = b.iz1 - b.iz0;
   const m = mbAt('plain', cx, cz);
-  m.box(cx, LAND - 0.2, cz, w, 0.4, d, C(0x4f8a3a));
+  m.box(cx, LAND - 0.2, cz, w, 0.4, d, b.region === 'kualp' ? C(0xe8eff4) : b.region === 'chiga' ? C(0xb8a46a) : C(0x4f8a3a));
   markGrass(b.ix0, b.iz0, b.ix1, b.iz1, 2);
   m.box(cx, LAND + 0.2, cz, w, 0.03, 4, C(0xcfc2a6)); m.box(cx, LAND + 0.2, cz, 4, 0.03, d, C(0xcfc2a6));
   if (b.use === 'court') {
@@ -798,7 +885,7 @@ function buildParkBlock(b) {
     SMOKERS.push({ x: cx, y: LAND + 1, z: cz, fountain: true, rate: 0.03 });
     addCircleCollider(cx, cz, 4, 'prop', null, LAND + 1);
   }
-  for (let i = 0; i < 18; i++) { const tx = wr(b.ix0 + 4, b.ix1 - 4), tz = wr(b.iz0 + 4, b.iz1 - 4); if (Math.abs(tx - cx) < 5 || Math.abs(tz - cz) < 5) continue; TREES.push({ type: b.region === 'simone' ? 'palm' : wpick(['oak', 'oak', 'birch']), x: tx, z: tz, s: wr(0.8, 1.2) }); }
+  for (let i = 0; i < 18; i++) { const tx = wr(b.ix0 + 4, b.ix1 - 4), tz = wr(b.iz0 + 4, b.iz1 - 4); if (Math.abs(tx - cx) < 5 || Math.abs(tz - cz) < 5) continue; TREES.push({ type: b.region === 'simone' || b.region === 'chiga' ? 'palm' : b.region === 'kualp' ? 'pine' : wpick(['oak', 'oak', 'birch']), x: tx, z: tz, s: wr(0.8, 1.2) }); }
   for (let i = 0; i < 6; i++) { const bx = cx + wr(-w / 3, w / 3), bz = cz + (i % 2 ? 3.2 : -3.2); BENCHES.push({ x: bx, z: bz, yaw: i % 2 ? Math.PI : 0 }); }
 }
 // ---- 🏊 수영장 물: 물결 · 굴절된 타일 바닥 · 레인 · 빛 무늬(코스틱) · 하늘 반사 · 깊이감 · 들어가면 수영 ----
@@ -1314,6 +1401,49 @@ function genCountryside() {
   // camp site by lake
   bm.box(LAKE.x + 80, terrainH(LAKE.x + 80, LAKE.z) - 0.2, LAKE.z + 70, 8, 0.3, 3, C(0x8a6a4a));
 }
+
+// ---- 쿠알프스드·치가커렌 외곽: 도로변 민가 + 지역 명소 (온천 · 오아시스 야영지) ----
+function genOutskirts(region, maxN) {
+  const lots = []; let n = 0; const wall = region === 'kualp';
+  const overlaps = (r) => lots.some(o => r.x0 < o.x1 + 4 && r.x1 > o.x0 - 4 && r.z0 < o.z1 + 4 && r.z1 > o.z0 - 4);
+  const okRect = (r) => {
+    for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1], [(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2]]) {
+      if (roadDistAt(x, z) < 3 || regionAt(x, z) !== region || landF(x, z) < 0.995 || insideAnyBlock(x, z)) return false;
+      for (const L of LAKES) if (Math.hypot(x - L.x, z - L.z) < L.r + 25) return false;
+    }
+    const hs = [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]].map(([x, z]) => terrainH(x, z));
+    return Math.max(...hs) - Math.min(...hs) <= 2.0 && Math.min(...hs) > LAND - 0.3;
+  };
+  const cands = [];
+  for (const e of EDGES) {
+    if (e.region !== region || e.w > 12) continue; const a = NODES[e.a], b = NODES[e.b];
+    const dx = (b.x - a.x) / e.len, dz = (b.z - a.z) / e.len;
+    for (let t = 25; t < e.len - 25; t += 38) for (const s2 of [-1, 1]) cands.push({ e, x: a.x + dx * t, z: a.z + dz * t, px: -dz * s2, pz: dx * s2, w: e.w });
+  }
+  shuffleW(cands);
+  for (const c of cands) {
+    if (n >= maxN) break;
+    const W = 17, D = 15; const off = c.w / 2 + 5 + D / 2; const cx = c.x + c.px * off, cz = c.z + c.pz * off;
+    const r = { x0: cx - W / 2, x1: cx + W / 2, z0: cz - D / 2, z1: cz + D / 2 }; if (!okRect(r) || overlaps(r)) continue;
+    lots.push(r); n++; const y0 = Math.max(terrainH(cx, cz), terrainH(r.x0, r.z0), terrainH(r.x1, r.z1)) - 0.3;
+    buildHouse(cx, cz, 11, 10, wall ? (wrng() < 0.5 ? 2 : 1) : (wrng() < 0.3 ? 2 : 1), region, y0); markGrass(r.x0, r.z0, r.x1, r.z1, 0);
+  }
+  return n;
+}
+function genRegionLandmarks() {
+  // 쿠알프스드 온천: 마을 서쪽 평지에 김이 나는 노천탕
+  const hx = KUALP_TOWN.x - 420, hz = KUALP_TOWN.z + 60; const hy = terrainH(hx, hz);
+  { const m = mbAt('plain', hx, hz); const pw = 26, pd = 16, y = Math.max(LAND, hy);
+    m.box(hx, y - 0.4, hz, pw + 8, 0.9, pd + 8, C(0x8a8e92)); const p = makePoolWater(pw, pd, false); p.position.set(hx, y + 0.5, hz); scene.add(p); addPool(hx, hz, pw, pd, y + 0.5);
+    SMOKERS.push({ x: hx - 6, y: y + 0.8, z: hz, fountain: true, rate: 0.5 }); SMOKERS.push({ x: hx + 6, y: y + 0.8, z: hz + 2, fountain: true, rate: 0.5 });
+    addSign('쿠알프스드 노천 온천', 'HOT SPRING', '#3a2a22', hx, y + 3, hz - pd / 2 - 3, 6, 1.4, 0); }
+  // 치가커렌 오아시스 야영지 + 고대 석문
+  const ox = LAKE_O.x + 110, oz = LAKE_O.z; const oy = Math.max(LAND, terrainH(ox, oz)); const m = mbAt('plain', ox, oz);
+  m.box(ox, oy - 0.2, oz, 10, 0.3, 6, C(0x8a6a4a)); for (const [dx, dz] of [[-3, -2], [3, -2], [0, 2.4]]) m.box(ox + dx, oy, oz + dz, 1.6, 0.9, 1.6, C(0x6a4a30));
+  for (const sx of [-1, 1]) m.box(ox + 40 + sx * 5, oy - 0.2, oz + 30, 2.4, 11, 2.4, C(0xc8a878)); m.box(ox + 40, oy + 10.8, oz + 30, 12.4, 2.2, 2.6, C(0xb8986a));
+  addCollider(ox + 34, oz + 29, ox + 37, oz + 32, oy + 12, 'bld'); addCollider(ox + 43, oz + 29, ox + 46, oz + 32, oy + 12, 'bld');
+  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; TREES.push({ type: 'palm', x: LAKE_O.x + Math.cos(a) * (LAKE_O.r + 18 + wr(0, 12)), z: LAKE_O.z + Math.sin(a) * (LAKE_O.r + 18 + wr(0, 12)), s: wr(1, 1.4) }); }
+}
 // ================= TERRAIN MESH =================
 let terrainMesh, waterMesh, waterNormal;
 function buildTerrainMesh() {
@@ -1326,16 +1456,20 @@ function buildTerrainMesh() {
     const hx = hmData[hmIdx(Math.min(hi + 1, HM.W - 1), hj)] - h, hz = hmData[hmIdx(hi, Math.min(hj + 1, HM.H - 1))] - h; const slope = Math.hypot(hx, hz) / HM.res;
     const R = regionAt(x, z); const n = fbm(x * 0.01, z * 0.01, 3), n2 = vnoise(x * 0.08, z * 0.08);
     let r, g, b;
-    const grass = { plaza: [0.36, 0.56, 0.24], disanbay: [0.33, 0.53, 0.2], jiolle: [0.38, 0.54, 0.26], kaengjibe: [0.5, 0.46, 0.3], seoburi: [0.38, 0.5, 0.3], simone: [0.38, 0.6, 0.26], sea: [0.4, 0.58, 0.28] }[R];
+    const grass = { plaza: [0.36, 0.56, 0.24], disanbay: [0.33, 0.53, 0.2], jiolle: [0.38, 0.54, 0.26], kaengjibe: [0.5, 0.46, 0.3], seoburi: [0.38, 0.5, 0.3], simone: [0.38, 0.6, 0.26], sea: [0.4, 0.58, 0.28], kualp: [0.2, 0.34, 0.22], chiga: [0.84, 0.7, 0.44] }[R];
     [r, g, b] = grass; r += n * 0.08 + n2 * 0.03; g += n * 0.06 + n2 * 0.04; b += n * 0.03;
     if (R === 'disanbay' && n > 0.2) { r += 0.08; g += 0.02; }
+    if (R === 'kualp') { const t = smooth(10, 50, h + n * 14); r = lerp(r, 0.92, t); g = lerp(g, 0.95, t); b = lerp(b, 0.98, t); }
+    if (R === 'chiga') { const t = smooth(0.1, 0.5, vnoise(x * 0.012, z * 0.012)); r = lerp(r, 0.78, t * 0.4); g = lerp(g, 0.58, t * 0.4); b = lerp(b, 0.36, t * 0.4); }
     const rd = roadDistF[hmIdx(hi, hj)];
     if ((R === 'disanbay' || R === 'simone') && rd < 4) { const t = smooth(4, 0, rd); r = lerp(r, 0.45, t); g = lerp(g, 0.4, t); b = lerp(b, 0.32, t); }
-    if (slope > 0.55 || h > 70) { const t = Math.max(smooth(0.55, 1.0, slope), smooth(70, 100, h)); r = lerp(r, 0.46 + n * 0.05, t); g = lerp(g, 0.44 + n * 0.05, t); b = lerp(b, 0.42, t); }
+    if (R === 'chiga' && (slope > 0.5 || h > 12 + n * 4)) { const t = Math.max(smooth(0.5, 0.9, slope), smooth(12, 30, h)); r = lerp(r, 0.64 + n * 0.05, t); g = lerp(g, 0.38 + n * 0.04, t); b = lerp(b, 0.26, t); }
+    else if (R === 'kualp') { if (slope > 0.85) { const t = smooth(0.85, 1.3, slope); r = lerp(r, 0.42, t); g = lerp(g, 0.42, t); b = lerp(b, 0.45, t); } }
+    else if (slope > 0.55 || h > 70) { const t = Math.max(smooth(0.55, 1.0, slope), smooth(70, 100, h)); r = lerp(r, 0.46 + n * 0.05, t); g = lerp(g, 0.44 + n * 0.05, t); b = lerp(b, 0.42, t); }
     if (h > 118) { const t = smooth(118, 135, h + n * 10); r = lerp(r, 0.95, t); g = lerp(g, 0.96, t); b = lerp(b, 0.98, t); }
     const land = landF(x, z);
     // 모래사장: 섬 전체 해안, 서불리 동쪽 항구 해변, 남북 해안
-    if (rd > 6 && h < LAND + 3 && !(R === 'disanbay')) { const cd = coastDist(x, z) + n * 12; const wide = R === 'simone' ? 70 : R === 'seoburi' ? 45 : 30; if (cd < wide) { const t = smooth(wide, wide * 0.5, cd) * smooth(LAND + 3, LAND + 1, h); r = lerp(r, 0.86, t); g = lerp(g, 0.79, t); b = lerp(b, 0.6, t); } }
+    if (rd > 6 && h < LAND + 3 && !(R === 'disanbay') && !(R === 'kualp')) { const cd = coastDist(x, z) + n * 12; const wide = R === 'simone' ? 70 : R === 'seoburi' ? 45 : 30; if (cd < wide) { const t = smooth(wide, wide * 0.5, cd) * smooth(LAND + 3, LAND + 1, h); r = lerp(r, 0.86, t); g = lerp(g, 0.79, t); b = lerp(b, 0.6, t); } }
     if (h < LAND - 0.15 || land < 0.985) { const t = smooth(LAND - 0.1, LAND - 0.9, h); r = lerp(r, 0.86, Math.max(t, land < 0.985 ? 0.9 : 0)); g = lerp(g, 0.78, Math.max(t, land < 0.985 ? 0.9 : 0)); b = lerp(b, 0.58, Math.max(t, land < 0.985 ? 0.9 : 0)); }
     if (h < -0.5) { const t = smooth(-0.5, -8, h); r = lerp(r, 0.45, t); g = lerp(g, 0.5, t); b = lerp(b, 0.42, t); }
     c.setRGB(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1), THREE.SRGBColorSpace);
@@ -1349,7 +1483,7 @@ function buildTerrainMesh() {
     const x = HM.x0 + i * HM.res, z = HM.z0 + j * HM.res; const h = hmData[k];
     if (roadDistF[k] < 2.5) { grassMask[k] = 0; continue; }
     const R = regionAt(x, z);
-    const ok = h > LAND - 0.1 && h < 95 && landF(x, z) > 0.99 && roadDistF[k] > 2.5 && R !== 'sea';
+    const ok = h > LAND - 0.1 && h < 95 && landF(x, z) > 0.99 && roadDistF[k] > 2.5 && R !== 'sea' && R !== 'chiga' && !(R === 'kualp' && h > 25);
     const beach = R !== 'disanbay' && h < LAND + 3 && coastDist(x, z) < (R === 'simone' ? 45 : R === 'seoburi' ? 28 : 18);
     grassMask[k] = ok && !beach && !insideAnyBlock(x, z) ? 1 : 0;
   }
@@ -1371,7 +1505,7 @@ function buildWater() {
   waterNormal = canvasTex(S, S, (x) => { const id = x.createImageData(S, S); for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const l = hgt[j * S + ((i + S - 1) % S)], r = hgt[j * S + ((i + 1) % S)], u = hgt[((j + S - 1) % S) * S + i], d = hgt[((j + 1) % S) * S + i]; const nx = (l - r) * 0.5, nz = (u - d) * 0.5, ny = 1; const L = Math.hypot(nx, ny, nz); const o = (j * S + i) * 4; id.data[o] = (nx / L * 0.5 + 0.5) * 255; id.data[o + 1] = (nz / L * 0.5 + 0.5) * 255; id.data[o + 2] = (ny / L * 0.5 + 0.5) * 255; id.data[o + 3] = 255; } x.putImageData(id, 0, 0); }, { srgb: false });
   waterNormal.repeat.set(160, 120);
   const mat = new THREE.MeshStandardMaterial({ color: 0x1a5f7a, roughness: 0.08, metalness: 0.2, normalMap: waterNormal, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.88 });
-  waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(9000, 7000), mat); waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.set(400, 0, 0); waterMesh.receiveShadow = true; scene.add(waterMesh);
+  waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(9000, 10000), mat); waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.set(400, 0, 0); waterMesh.receiveShadow = true; scene.add(waterMesh);
 }
 // ================= TREES =================
 const TREE_GEO = {}; let treeMeshes = [];
@@ -1425,6 +1559,19 @@ function genTrees() {
     if (!isGrassAt(x, z) || roadDistAt(x, z) < 6 || insideAnyBlock(x, z)) continue; if (terrainH(x, z) < LAND - 0.1) continue;
     TREES.push({ type: wpick(['oak', 'birch', 'pine', 'bush']), x, z, s: wr(0.7, 1.2) });
   }
+  // 쿠알프스드 침엽수림 · 치가커렌 바위 · 선인장 대신 마른 덤불
+  for (let i = 0; i < 3200 * q; i++) {
+    const x = wr(-1450, 1150), z = wr(-3200, -1250); if (regionAt(x, z) !== 'kualp') continue; const h = terrainH(x, z);
+    if (h < LAND + 0.2 || h > 210 || roadDistAt(x, z) < 8 || insideAnyBlock(x, z) || (Math.hypot(x - LAKE_K.x, z - LAKE_K.z) < LAKE_K.r + 10)) continue;
+    const f = fbm(x * 0.006 + 6, z * 0.006, 3); if (f < -0.05 && h > 120) continue;
+    TREES.push({ type: h > 140 && wrng() < 0.4 ? 'rock' : 'pine', x, z, s: wr(0.8, 1.7) });
+  }
+  for (let i = 0; i < 700 * q; i++) {
+    const x = wr(-1250, 1350), z = wr(1150, 3200); if (regionAt(x, z) !== 'chiga') continue; const h = terrainH(x, z);
+    if (h < LAND + 0.1 || roadDistAt(x, z) < 6 || insideAnyBlock(x, z) || Math.hypot(x - LAKE_O.x, z - LAKE_O.z) < LAKE_O.r) continue;
+    TREES.push({ type: wrng() < 0.55 ? 'rock' : 'bush', x, z, s: wr(0.6, 1.9) });
+  }
+  for (const I of ISLETS) for (let i = 0; i < 26; i++) { const a = wr(0, TAU), rr = Math.sqrt(wrng()) * I.r * 0.8; const x = I.x + Math.cos(a) * rr, z = I.z + Math.sin(a) * rr; if (terrainH(x, z) < LAND + 0.3) continue; TREES.push({ type: wrng() < 0.7 ? 'palm' : 'bush', x, z, s: wr(0.8, 1.3) }); }
   // bushes & rocks in disanbay
   for (let i = 0; i < 1600 * q; i++) {
     const x = wr(-1480, -720), z = wr(-1080, 1080); const h = terrainH(x, z); if (h < LAND || roadDistAt(x, z) < 5 || !isGrassAt(x, z)) continue;
