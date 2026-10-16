@@ -1,4 +1,4 @@
-
+// @v 2026101604
 // ================= ADMIN MODE + HELP + SETTINGS =================
 // 관리자 비밀번호는 코드/저장소 어디에도 없다.
 // 빌드할 때 ADMIN_PW(시크릿)로부터 "공개키"만 계산해서 넣는다:
@@ -39,6 +39,8 @@ const ACRYPTO = {
     try { const ed = await this.lib(); return await ed.verifyAsync(unhex(sigHex), m, unhex(pubHex)); } catch (e) { return false; }
   },
 };
+{ const st = document.createElement('style'); st.textContent = '#myName{pointer-events:auto}'; document.head.appendChild(st); } // 폰에서 이름 칸 연타가 먹히게
+document.addEventListener('click', e => { if (e.target && e.target.closest && e.target.closest('#myName')) ADMIN.secret(); });
 try { G.sens = parseFloat(localStorage.getItem('sbc3d_sens')) || 1; } catch (e) { G.sens = 1; }
 
 const ADMIN = {
@@ -64,6 +66,9 @@ const ADMIN = {
     this.lockUI();
     inp.onkeydown = e => { if (e.key === 'Enter') go(); }; const gb = $('#admGo'); if (gb) gb.onclick = () => go();
   },
+  // 인게임 진입: ? 키 (PC) 또는 내 이름 칸 (폰) 을 1.2초 안에 7번 연속으로 누르면 열린다
+  _sc: 0, _scT: 0,
+  secret() { if (!this.enabled()) return; const n = Date.now(); if (n - this._scT > 1200) this._sc = 0; this._scT = n; if (++this._sc >= 7) { this._sc = 0; this.open(); } },
   logout() { this.exit(); },
   // ----- 비번 시도 제한: 로비·F2·/admin 공용, 5회 틀리면 1시간 잠금 (localStorage + 메모리 둘 다) -----
   LK_KEY: 'sbc3d_adm_lock', LK_MAX: 5, LK_MS: 3600e3, mem: { n: 0, until: 0 },
@@ -144,7 +149,7 @@ const ADMIN = {
       { ic: '👑', t: '방장 권한 가져오기', p: G.isHost ? '방장임' : '', d: '관리자는 자동으로 방장이 된다 (안 됐을 때만)', dis: !G.online || G.isHost, disMsg: G.online ? '이미 방장이다' : '혼자 플레이 중', fn: () => { NET.send({ t: 'admClaim' }); toast('👑 방장 권한 요청 (서명 인증)'); } },
       { ic: '🔒', t: '관리자 로그아웃', p: '', fn: () => this.logout() },
     ];
-    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">F2 또는 /admin 으로 열기 · ${G.online ? (G.isHost ? '👑 내가 방장' : '⏳ 방장 권한 이전 중…') : '혼자 플레이'}</small>`, items, { refresh: R });
+    UI.openMenu('🛠️ 관리자 패널', `<small style="opacity:.7">${G.online ? (G.isHost ? '👑 내가 방장' : '⏳ 방장 권한 이전 중…') : '혼자 플레이'}</small>`, items, { refresh: R });
   },
   timeMenu() { UI.openMenu('⏰ 시간', '', [[6, '🌅 아침 06시'], [12, '☀️ 정오 12시'], [18, '🌇 저녁 18시'], [22, '🌃 밤 22시'], [0, '🌌 자정 00시'], [3, '🌠 새벽 03시']].map(([h, t]) => ({ t, p: '', fn: () => { this.remote('time', h); } }))); },
   weatherMenu() { UI.openMenu('🌦️ 날씨', '', [['clear', '☀️ 맑음'], ['cloudy', '☁️ 흐림'], ['rain', '🌧️ 비']].map(([k, t]) => ({ t, p: '', fn: () => { this.remote('weather', k); } }))); },

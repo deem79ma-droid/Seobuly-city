@@ -1,4 +1,4 @@
-// @v 2026101420
+// @v 2026101603
 
 // ================= PLAYER =================
 const ME = {
@@ -30,15 +30,50 @@ const ME = {
     if (dl) { dl.innerHTML = ''; if (lost && lost.length) { const h = document.createElement('b'); h.textContent = loot ? '떨어뜨린 것 — 죽은 자리 가방을 주우면 되찾는다 (남이 먼저 주울 수도)' : '잃어버린 것'; dl.appendChild(h); for (const s of lost) { const d = document.createElement('div'); d.textContent = s; dl.appendChild(d); } } else { const d = document.createElement('div'); d.textContent = '잃은 소지품 없음'; dl.appendChild(d); } const cd = document.createElement('div'); cd.style.color = '#9fe0ff'; cd.textContent = `💳 카드는 그대로 — 잔액 ${fmtMoney(CARD.bal)}`; dl.appendChild(cd); }
     if (lost && lost.length) { UI.chatLine('', '💀 사망 — 소지품을 떨어뜨렸다: ' + lost.join(' · ')); NET.send({ t: 'chat', m: '💀 ' + this.name + ' — 소지품 가방을 떨어뜨렸다', sys: 1 }); }
   },
+  // 사망 → 병원 회복실. 무료는 55초, 돈을 내면 22.5초(빠른 치료) 또는 즉시 치료
   respawn() {
     if (typeof INTERIOR !== 'undefined') { INTERIOR.dispose(); INTERIOR.clearRoof(); } this.fallTop = null;
-    const wasWanted = this.wanted | 0; this.dead = false; this.hp = 100; this.armor = 0; const fee = Math.min(5000, Math.floor(this.money * 0.1)); this.money -= fee; this.wanted = 0;
-    let sp = null;
-    if (this.homePlot != null && PLOTS[this.homePlot] && PLOTS[this.homePlot].state === 'done' && PLOTS[this.homePlot].owner === this.id) { const p = PLOTS[this.homePlot]; sp = { x: p.x + SIDE_VEC[p.side][0] * (p.w / 2 + 2), z: p.z + SIDE_VEC[p.side][1] * (p.d / 2 + 2) }; }
-    if (!sp) { let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } } sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 }; }
+    const wasWanted = this.wanted | 0; this.dead = false; this.hp = 20; this.armor = 0;
+    let best = null, bd = 1e9; for (const f of FACILITIES) if (f.type === 'hospital') { const d = Math.hypot(f.x - this.x, f.z - this.z); if (d < bd) { bd = d; best = f; } }
+    const sp = best ? { x: best.x, z: best.z } : { x: 30, z: 30 };
     this.x = sp.x; this.z = sp.z; this.y = groundHeight(this.x, this.z) + 0.1; this.vx = this.vz = this.vy = 0;
-    $('#death').classList.add('hidden'); CINE_EV.respawn(); toast(fee > 0 ? `🏥 병원비 ${fmtMoney(fee)} 지불` : '🏥 병원에서 깨어났다 — 빈털터리다…'); G.godT = G.t + 3;
+    $('#death').classList.add('hidden'); G.godT = G.t + 80;
+    this.recov = { t: 0, dur: 55, wasWanted }; this.recovUI(true);
+  },
+  recovUI(show) {
+    let el = $('#recov');
+    if (!show) { if (el) el.classList.add('hidden'); return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'recov'; el.style.cssText = 'position:fixed;inset:0;z-index:31;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;padding-bottom:6vh;background:linear-gradient(transparent 30%,rgba(10,30,40,.85));color:#e6f7ff;font-family:"Noto Sans KR",sans-serif;text-align:center;pointer-events:none';
+      el.innerHTML = '<div style="font:900 30px \'Black Han Sans\',sans-serif;text-shadow:0 2px 10px #000">회복실</div><div id="recovT" style="font-size:15px;margin:4px 0 8px;opacity:.9"></div><div style="width:min(420px,84vw);height:12px;background:#0a1a22;border-radius:8px;overflow:hidden;border:1px solid #6ac"><div id="recovB" style="height:100%;width:0;background:linear-gradient(90deg,#3ad,#6fe)"></div></div><div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;justify-content:center;pointer-events:auto"><button class="btn b3" id="recovQ"></button><button class="btn b3" id="recovI"></button></div>';
+      document.body.appendChild(el);
+      $('#recovQ').onclick = () => ME.recovPay('q'); $('#recovI').onclick = () => ME.recovPay('i');
+    }
+    el.classList.remove('hidden'); this.recovRender();
+  },
+  RECOV_FEE: { q: 4000, i: 12000 },
+  recovRender() {
+    const R = this.recov; if (!R) return; const left = Math.max(0, R.dur - R.t); const f = this.RECOV_FEE;
+    $('#recovT').textContent = `병원 침대에서 회복 중… 남은 시간 ${left.toFixed(1)}초 (무료)`; $('#recovB').style.width = Math.min(100, R.t / R.dur * 100) + '%';
+    const q = $('#recovQ'), i = $('#recovI'); const can = (n) => (this.money + CARD.bal) >= n;
+    q.textContent = `빠른 치료 22.5초 · ${fmtMoney(f.q)}`; q.disabled = left <= 22.5 || !can(f.q); i.textContent = `즉시 치료 · ${fmtMoney(f.i)}`; i.disabled = !can(f.i);
+  },
+  recovPay(k) {
+    const R = this.recov; if (!R) return; const fee = this.RECOV_FEE[k];
+    if (k === 'q' && R.dur - R.t <= 22.5) return; if (!CARD.pay(fee)) { toast('돈이 모자라다 (현금+카드)'); sfx('error'); return; }
+    sfx('cash'); toast(`🏥 치료비 ${fmtMoney(fee)} 지불`);
+    if (k === 'i') R.t = R.dur; else R.dur = R.t + 22.5;
+    this.recovRender();
+  },
+  recovTick(dt) {
+    const R = this.recov; if (!R) return; R.t += dt; G.godT = G.t + 5; this.hp = Math.min(100, 20 + 80 * Math.min(1, R.t / R.dur));
+    if ((this._rcT = (this._rcT || 0) - dt) <= 0) { this._rcT = 0.1; this.recovRender(); }
+    if (R.t >= R.dur) this.discharge();
+  },
+  discharge() {
+    const R = this.recov; this.recov = null; this.hp = 100; this.recovUI(false); CINE_EV.respawn(); toast('🏥 치료 끝 — 퇴원했다'); G.godT = G.t + 3; const wasWanted = R ? R.wasWanted : 0;
     // 수배 중에 죽어도 수배는 안 풀린다: 병원에서 깨어나면 기다리고 있던 경찰에게 체포된다
+    this.wanted = 0;
     if ((wasWanted > 0 || this.warrant) && !ADMIN.on) { this.wanted = Math.max(wasWanted, this.warrant ? 2 : 0); UI.updateStars(); toast('🚔 병원 앞에 경찰이 기다리고 있었다…', 3200); setTimeout(() => { if (!this.jail && !this.dead && !ADMIN.on && !COURT.pending) { announce('🚔 체포', '죽는다고 수배가 풀리지 않는다'); LAW.arrest(); } }, 3600); }
   },
 };
@@ -54,10 +89,10 @@ function initInput() {
     if (!G.started) return; const k = keyOf(e); KEYS[k] = true; KEYS[e.code] = true;
     if (PHOTO.on) { PHOTO.key(k, true); if (k === ' ' || k === 'tab' || k === 'enter') e.preventDefault(); return; } // 📸 사진 모드: 키를 가로챈다
     if (k === 'k' && !e.repeat && !UI.menuOpen && !DRIVE.on()) { PHOTO.enter(); return; }
-    if (DRIVE.on() && !UI.menuOpen) { if (!e.repeat) { if (k === 'e' || k === 'f') doInteract(); else if (k === 'h') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else if (k === 'm') UI.openMap(); else if (k === 'p' || k === 'escape' || k === 'tab') { e.preventDefault(); UI.openPhone(); } } if (k === ' ' || k.startsWith('arrow')) e.preventDefault(); return; } // 🚗 운전 중: 방향·가속·브레이크(드리프트)·내리기 + 경적(H)·지도(M)·폰(P)
+    if (DRIVE.on() && !UI.menuOpen) { if (!e.repeat) { if (k === 'e' || k === 'f') doInteract(); else if (k === 'h') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else if (k === 'm') UI.openMap(); else if (k === 'z') INP.lookBack = !INP.lookBack; else if (k === 'p' || k === 'escape' || k === 'tab') { e.preventDefault(); UI.openPhone(); } } if (k === ' ' || k.startsWith('arrow')) e.preventDefault(); return; } // 🚗 운전 중: 방향·가속·브레이크(드리프트)·내리기 + 경적(H)·지도(M)·폰(P)
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
-    if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
+    if (e.key === '?' && !e.repeat) ADMIN.secret(); // 관리자: ? 7번 연타로만 열린다 (설정 메뉴 · F2 · 명령어 진입 제거)
     if (UI.menuOpen) { if (k === 'escape' || k === 'e' || k === 'tab') UI.closeMenu(); return; }
     if (SHARE.isOpen()) { if (k === 'escape' || k === 'e' || k === 'tab' || k === 'p') { e.preventDefault(); SHARE.hide(); } return; }
     if (k === 't' || k === 'enter') { e.preventDefault(); if (k === 'enter' && performance.now() - (UI._chatSentT || 0) < 250) return; UI.openChat(); return; } // 한글 조합 중 Enter로 보낸 직후 따라오는 Enter에 채팅창이 다시 열리지 않게
@@ -66,9 +101,9 @@ function initInput() {
     if (k === 'g') UI.openDance(); if (k === 'm') UI.openMap(); if (k === 'v') CAM.fp = !CAM.fp; if (k === 'p' || k === 'escape' || k === 'tab') UI.openPhone();
     if (k === 'h' && ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); }
     if (k === 'l' && ME.vehicle && ME.vehicle.M.police) ME.vehicle.siren = !ME.vehicle.siren;
-    if (k === 'u') COMFORT.unstick(true);
+    if (k === 'u') COMFORT.unstick(true); if (k === 'z' && ME.vehicle) INP.lookBack = !INP.lookBack;
     if (k === 'j') POLICE.open();
-    if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1; if (k === 'b') GRENADE.throw();
+    if (k === 'q') cycleWeapon(-1); if (k === 'x') ME.dance = -1; if (k === 'b') GRENADE.throw('g'); if (k === 'n') GRENADE.throw('tb'); if (k === 'o') GRENADE.plant();
     const dm = /^Digit([1-8])$/.exec(e.code); if (dm) selectWeapon(WEAPON_ORDER[+dm[1] - 1]);
     if (k === ' ') e.preventDefault();
   });
@@ -182,6 +217,7 @@ function tryAttack() {
   if (ME.dead || ME.fireT > 0 || ME.swim || UI.menuOpen) return;
   const W = WEAPONS[ME.weapon]; ME.dance = -1; ME.sitBench = null; ME.combatT = G.t + 5;
   if (ME.vehicle && (W.melee || ME.seat === 'd' && !INP.aim)) return;
+  if (ME.vehicle && W.scope && Math.abs(ME.vehicle.speed) > 6) { if (G.t > (ME._scT || 0)) { ME._scT = G.t + 3; toast('달리는 차에서는 저격총을 쏠 수 없다'); } return; }
   if (W.melee) {
     ME.fireT = W.rate;
     if (ME.weapon === 'fist') { // 콤보: 0.9초 안에 이어 치면 잽 → 크로스 → 훅 → 어퍼컷
@@ -200,11 +236,15 @@ function tryAttack() {
   const w = ME.weapon; if ((ME.mag[w] || 0) <= 0) { if ((ME.ammo[w] || 0) > 0) startReload(); else { toast('탄약이 없다 — 총포사에서 구매'); sfx('error'); ME.fireT = 0.4; } return; }
   ME.mag[w]--; ME.fireT = W.rate; ME.action = 'shoot'; ME.actionT = 0;
   camera.getWorldDirection(_d); _o.copy(camera.position); if (G.opt.assist && !ME.vehicle) COMFORT.assist(_d, _o);
+  if (ME.vehicle && ME.seat !== 'd') { // 동승자: 옆 차량 쪽으로 조준 보정 (달리는 차 위에서도 맞출 수 있게)
+    let bv = null, bs = 0.9; for (const o of vehicles.values()) { if (o === ME.vehicle || o.dead) continue; const dx = o.x - _o.x, dy = o.y + 1 - _o.y, dz = o.z - _o.z, dl = Math.hypot(dx, dy, dz); if (dl > 70 || dl < 2) continue; const dt2 = (dx * _d.x + dy * _d.y + dz * _d.z) / dl; if (dt2 > bs) { bs = dt2; bv = [dx / dl, dy / dl, dz / dl]; } }
+    if (bv) { _d.x += (bv[0] - _d.x) * 0.7; _d.y += (bv[1] - _d.y) * 0.7; _d.z += (bv[2] - _d.z) * 0.7; _d.normalize(); }
+  }
   const tgt = ME.vehicle || ME; const along = (tgt.x - _o.x) * _d.x + (tgt.y + 1.4 - _o.y) * _d.y + (tgt.z - _o.z) * _d.z; _o.addScaledVector(_d, Math.max(0, along - 0.2));
   ME.char.muzzleWorld(_m);
   const pel = W.pellets || 1; const skill = 1 - ME.skills.shoot * 0.08; let anyHit = false;
   for (let i = 0; i < pel; i++) {
-    const sp = (W.spread * (INP.aim ? 0.6 : 1.4) * skill) + (ME.spd > 3 ? 0.02 : 0);
+    const sp = (W.spread * (INP.aim ? 0.6 : 1.4) * skill) + (ME.spd > 3 ? 0.02 : 0) + (ME.vehicle ? Math.min(0.05, Math.abs(ME.vehicle.speed) * 0.0018) : 0); // 달리는 차 위에서는 흔들린다
     const dd = _d.clone(); dd.x += rnd(-sp, sp); dd.y += rnd(-sp, sp); dd.z += rnd(-sp, sp); dd.normalize();
     const h = raycastWorld(_o, dd, W.range, { ignoreVeh: ME.vehicle });
     let imp = h.kind === 'water' ? 'water' : h.kind === 'tree' ? 'wood' : h.kind === 'veh' ? 'spark' : h.kind === 'world' ? 'spark' : 'dust';
@@ -216,7 +256,7 @@ function tryAttack() {
     FX.tracer(_m, h.p); FX.impact(h.p, imp);
     if (i === 0) NET.send({ t: 'shot', a: [_m.x, _m.y, _m.z], b: [h.p.x, h.p.y, h.p.z], w: W.sfx, i: imp });
   }
-  if (anyHit) UI.hitMarker();
+  if (anyHit) UI.hitMarker(); RULES.onShot();
   FX.muzzle(_m, _d); sfx(W.sfx, ME.x, ME.z, 0.9);
   CAM.pitch -= (W.scope ? 0.03 : w === 'shotgun' ? 0.05 : 0.012) * (INP.aim ? 0.6 : 1); CAM.shake = Math.min(0.4, CAM.shake + (w === 'shotgun' || w === 'sniper' ? 0.25 : 0.06));
   // public gunfire -> police
@@ -287,7 +327,7 @@ function enterVehicle(v) {
   if (v.taxiCab) { if (v.taxiOwner === ME.id) TAXI.board(); else toast('🚕 다른 손님이 부른 택시다'); return; }
   if (v.locked) { toast('🚗 판매용 전시 차량 — 판매점에서 구매하세요'); return; }
   if (v.driver && v.driver !== ME.id) {
-    if (G.players.has(v.driver)) { const st = freeSeat(v); if (!st) { toast(`빈 자리가 없다 (${seatCount(v)}인승)`); return; } seatSet(v, st, ME.id); ME.vehicle = v; ME.seat = st; NET.send({ t: 'seat', v: v.id, s: st }); toast(`${st === 'p' ? '조수석' : '뒷좌석'}에 탔다 (${seatCount(v)}인승 · F 하차 · 우클릭 조준 사격)`); return; }
+    if (G.players.has(v.driver)) { const st = freeSeat(v); if (!st) { toast(`빈 자리가 없다 (${seatCount(v)}인승)`); return; } seatSet(v, st, ME.id); ME.vehicle = v; ME.seat = st; NET.send({ t: 'seat', v: v.id, s: st }); toast(`${st === 'p' ? '조수석' : '뒷좌석'}에 탔다 (${seatCount(v)}인승 · F 하차 · 클릭 사격 · B 수류탄 · N 시한폭탄 — 옆 차는 자동 조준)`); return; }
   }
   if (v.ai) {
     const cop = v.model === 'police'; if (G.isHost) ejectNpcDriver(v); else NET.send({ t: 'jack', v: v.id });
@@ -296,7 +336,7 @@ function enterVehicle(v) {
     toast(cop ? '🚓 경찰차 탈취!' : '🔑 차량 탈취!'); JOBS.crime('car');
   } else if (v.owner && v.owner !== ME.id && !v.driver) { toast('🔑 남의 차를 훔쳤다!'); JOBS.crime('car'); } // 다른 사람 소유 차
   v.driver = ME.id; v.ctrl = 'local'; ME.vehicle = v; ME.seat = 'd'; ME.dance = -1; ME.sitBench = null; NET.send({ t: 'seat', v: v.id, s: 'd' }); sfx('door');
-  if (!ME._drvTip || G.t - ME._drvTip > 300) { ME._drvTip = G.t; toast(v.kind === 'heli' ? '헬기: W/S 앞뒤 · A/D 회전 · Space 상승 · Shift 하강 · F 내리기 (공중에서 내리면 떨어진다)' : v.kind === 'horse' ? '말: W 달리기 · Shift 전력질주 · Space 점프' : 'W 가속 · S 브레이크/후진 · Space 브레이크 · Shift 드리프트 · H 경적 · F 하차', 5000); }
+  if (!ME._drvTip || G.t - ME._drvTip > 300) { ME._drvTip = G.t; toast(v.M.jet ? '전투기: W 가속 · S 감속 · A/D 선회 · 속도 55↑에서 Space로 이륙 · 공중 Space 상승 · Shift 하강 · 좌클릭 미사일 · 너무 빠르게 착륙하면 추락' : v.kind === 'heli' ? '헬기: W/S 앞뒤 · A/D 회전 · Space(R) 상승 · Shift(X) 하강 · 오래 누를수록 빠름, 떼면 호버링 · F 내리기 (공중에서 내리면 떨어진다)' : v.kind === 'horse' ? '말: W 달리기 · Shift 전력질주 · Space 점프' : 'W 가속 · S 브레이크/후진 · Space 브레이크 · Shift 드리프트 · H 경적 · F 하차', 5000); }
   if (v.kind === 'horse') sfx('neigh', v.x, v.z);
 }
 function ejectNpcDriver(v) {
@@ -317,7 +357,7 @@ function exitVehicle(force) {
   if (air) { ME.grounded = false; ME.fallTop = ME.y; }
   const r = resolveCircle(ME.x, ME.z, 0.35, ME.y, 1.8); ME.x = r.x; ME.z = r.z;
   if (ME.seat === 'd') { v.driver = null; v.brake = true; } else seatClear(v, ME.id);
-  NET.send({ t: 'seat', v: v.id, s: null }); ME.vehicle = null; ME.seat = null; ENG.set(false, 0); sfx('door');
+  NET.send({ t: 'seat', v: v.id, s: null }); INP.lookBack = false; ME.vehicle = null; ME.seat = null; ENG.set(false, 0); sfx('door');
   // 빠르게 달리다 내리면 다친다
   if (!force && !air && exitSpd > 7 && v.kind !== 'horse') { const dmg = Math.round((exitSpd - 5) * 3.6); ME.takeDamage(dmg, 'crash', 'fall'); ME.knock(Math.sin(v.yaw) * exitSpd * 0.45, Math.cos(v.yaw) * exitSpd * 0.45); CAM.shake = Math.min(0.7, CAM.shake + 0.4); sfx('hit'); toast(`달리는 차에서 뛰어내렸다! -${dmg} (${Math.round(exitSpd * 3.6)}km/h)`, 3000); }
   if (v.siren && !v.ai) v.siren = false;
@@ -374,10 +414,11 @@ function updatePlayer(dt) {
   if (ME.meleeAt && G.t >= ME.meleeAt) { ME.meleeAt = 0; meleeResolve(); }
   ME.drunk = Math.max(0, ME.drunk - dt * 0.01);
   if (ME.dead) { ME.deadT += dt; if (ME.deadT > 6) ME.respawn(); c.update(dt, { state: 'dead' }); placeChar(); return; }
+  if (ME.recov) { ME.recovTick(dt); c.update(dt, { state: 'dead' }); placeChar(); return; }
   // wanted decay
   if (ME.wanted > 0) {
     const copNear = PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - ME.x, v.z - ME.z) < 90);
-    ME.wantedCool += copNear ? -dt * 0.5 : INTERIOR.cur ? 0 : dt; ME.wantedCool = Math.max(0, ME.wantedCool); // 건물에 숨어 있어도 수배는 그대로
+    ME.wantedCool += copNear ? -dt * 0.25 : INTERIOR.cur ? dt * 0.4 : dt * 1.4; // 숨으면(건물 안 포함) 수배가 더 빨리 식는다 ME.wantedCool = Math.max(0, ME.wantedCool); // 건물에 숨어 있어도 수배는 그대로
     if (ME.wantedCool > 25 + ME.wanted * 10) { ME.wanted--; ME.wantedCool = 0; UI.updateStars(); if (!ME.wanted) toast('✅ 경찰을 따돌렸다 — 수배 해제' + (JOBS.criminal() ? ' (범죄 기록은 남아 있다)' : '')); }
   }
   if (INP.fire) { const W = WEAPONS[ME.weapon]; if (W.auto || !INP._fired) { tryAttack(); INP._fired = true; } } else INP._fired = false;
@@ -455,7 +496,11 @@ function updateDriving(dt) {
   const mi = readMoveInput();
   const shift = !!(KEYS['shift'] || KEYS['ShiftLeft'] || KEYS['ShiftRight']);
   const inp = DRIVE.on() ? DRIVE.input(v) : { throttle: mi.z, steer: -mi.x, brake: !!(KEYS[' '] || INP.brake) && v.kind !== 'horse', hand: (shift || INP.drift) && v.kind === 'car' && Math.abs(v.speed) > 6, up: !!(KEYS[' '] || INP.jump || INP.brake), down: shift || !!INP.touchRun };
-  if (v.kind === 'heli') { inp.brake = false; }
+  if (v.kind === 'heli') { // 헬기: 상승(Space/▲) · 하강(Shift/▼)은 누르고 있는 동안만. 점프 입력이 남아 계속 떠오르던 버그 수정
+    inp.brake = false; inp.down = !!(shift || INP.heliDown || KEYS['x'] || KEYS['pagedown'] || KEYS['PageDown']); inp.up = !inp.down && !!(KEYS[' '] || INP.brake || INP.heliUp || KEYS['r'] || KEYS['pageup'] || KEYS['PageUp']); INP.jump = false;
+    // 누르고 있는 시간이 길수록 빨리 오르내린다 (살짝 누르면 천천히) · 떼면 그 높이에서 멈춘다
+    v._vh = (inp.up || inp.down) ? Math.min(1, (v._vh || 0.25) + dt * 0.9) : 0.25; inp.vk = v._vh;
+  }
   if (v.kind === 'horse' && (KEYS[' '] || INP.jump) && v.y <= v.groundY + 0.05) { v.vy = 6.5; v.y += 0.1; INP.jump = false; }
   if (v.kind === 'horse' && (KEYS['shift'] || INP.touchRun)) inp.throttle *= 1; else if (v.kind === 'horse') inp.throttle *= 0.55;
   if (IS_TOUCH && INP.joyMag > 0.05 && !DRIVE.on()) { inp.throttle = clamp(mi.z * 1.4, -1, 1); inp.steer = clamp(-mi.x * 1.2, -1, 1); }
@@ -467,15 +512,18 @@ function updateDriving(dt) {
   if (v.dead && v.burnT === 0) { exitVehicle(true); }
 }
 // bike crash ejection
-function onVehicleCrash(v, imp) { if (v === ME.vehicle && v.kind === 'bike' && imp > 11) { exitVehicle(true); ME.takeDamage(imp * 2.2, 'crash'); ME.knock(Math.sin(v.yaw) * imp * 0.5, Math.cos(v.yaw) * imp * 0.5); toast('💥 오토바이에서 튕겨나갔다!'); } }
+function onVehicleCrash(v, imp) { if (v === ME.vehicle && v.kind === 'car' && imp > 9 && !ME.dead && G.t > (ME._crT || 0)) { ME._crT = G.t + 1.5; ME.takeDamage((imp - 7) * 2.4, 'crash'); CAM.shake = Math.min(0.8, CAM.shake + 0.4); toast('충돌 충격 — 안전하게 운전하자', 1800); } if (v === ME.vehicle && v.kind === 'bike' && imp > 11) { exitVehicle(true); ME.takeDamage(imp * 2.2, 'crash'); ME.knock(Math.sin(v.yaw) * imp * 0.5, Math.cos(v.yaw) * imp * 0.5); toast('💥 오토바이에서 튕겨나갔다!'); } }
 // ----- camera -----
 const _camT = new THREE.Vector3(), _camP = new THREE.Vector3(), _camF = new THREE.Vector3();
 function updateCamera(dt) {
   const v = ME.vehicle; const scope = ME.aiming && WEAPONS[ME.weapon].scope;
   let tx, ty, tz, dist, sh = 0;
   if (v) {
-    tx = v.x; ty = v.y + (v.kind === 'heli' ? 3 : v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'heli' ? 15 : v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * (v.kind === 'heli' ? 0.08 : 0.03);
+    tx = v.x; ty = v.y + (v.kind === 'heli' ? 3 : v.kind === 'car' ? 1.6 : 1.9); tz = v.z; dist = (v.kind === 'heli' ? (v.M.jet ? 26 : 15) : v.kind === 'car' ? 7.2 + v.M.L * 0.25 : 5.2) + Math.abs(v.speed) * (v.kind === 'heli' ? 0.08 : 0.03);
     if (G.t - CAM.lookT > 1.3 && Math.abs(v.speed) > 2 && (ME.seat === 'd' || v.taxiCab)) { CAM.yaw = dampAng(CAM.yaw, v.yaw + (v.speed < -1 ? Math.PI : 0), 2.5, dt); CAM.pitch = damp(CAM.pitch, 0.16, 2, dt); }
+    if (INP.lookBack && !ME.aiming) { // 👀 뒤보기: 3인칭 카메라를 차 앞쪽으로 돌려 뒷좌석·뒤따라오는 차를 본다
+      CAM.yaw = dampAng(CAM.yaw, v.yaw + Math.PI, 7, dt); CAM.pitch = damp(CAM.pitch, 0.2, 5, dt); CAM.lookT = G.t; dist += 1.5;
+    }
     if (ME.aiming) { dist = 3.2; sh = 0.6; }
   } else {
     tx = ME.x; ty = ME.y + (ME.swim ? 0.9 : ME.sitBench ? 1.2 : 1.6); tz = ME.z; dist = ME.aiming ? 2.0 : 4.3; sh = ME.aiming ? 0.62 : 0.38;

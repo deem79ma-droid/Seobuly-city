@@ -1,4 +1,4 @@
-// @v 2026101503
+// @v 2026101603
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -51,13 +51,12 @@ const UI = {
   },
   command(m) {
     const [c, a] = m.slice(1).split(/\s+/);
-    if (c === 'admin' || c === '관리자') { ADMIN.open(); return; }
     if (!ADMIN.hostPower()) { toast(G.adminId ? '👑 관리자가 방장 권한을 가지고 있다' : '명령어는 방장만 사용 가능'); return; }
     if (G.adminId && G.adminId !== ME.id) return;
     if (c === '시간' || c === 'time') { G.time = clamp(parseFloat(a) || 12, 0, 23.99); toast('⏰ 시간 변경'); }
     else if (c === '날씨' || c === 'weather') { G.weather = { 비: 'rain', 맑음: 'clear', 흐림: 'cloudy' }[a] || a || 'clear'; G.weatherT = 600; toast('🌦️ 날씨 변경'); }
     else if (c === '습격' || c === 'raid') { G.raidT = 0; }
-    else toast('명령어: /시간 20, /날씨 비|맑음|흐림, /습격, /admin');
+    else toast('명령어: /시간 20, /날씨 비|맑음|흐림, /습격');
   },
   chatLine(name, msg) { const d = document.createElement('div'); if (!name) { d.className = 'sys'; d.textContent = msg; } else { d.innerHTML = `<b></b> `; d.querySelector('b').textContent = name; if (String(name).startsWith('[관리자]')) d.querySelector('b').style.color = '#ff3b3b'; d.appendChild(document.createTextNode(msg)); } $('#chatLog').appendChild(d); while ($('#chatLog').children.length > (IS_TOUCH ? 4 : 7)) $('#chatLog').firstChild.remove(); setTimeout(() => { d.style.transition = 'opacity 1s'; d.style.opacity = 0; setTimeout(() => d.remove(), 1000); }, 15000); },
   // ---------- menu ----------
@@ -126,7 +125,7 @@ const UI = {
         { ic: '🥤', t: '해장 음료', p: 500, d: '취기 해소', fn: () => { ME.drunk = 0; } },
         { ic: '💃', t: '춤추기', p: 0, fn: () => { setTimeout(() => this.openDance(), 50); } },
         { ic: '🎧', t: 'DJ 신청곡 (BPM 변경)', p: 500, fn: () => { MUSIC.bpm = pick([110, 124, 128, 140, 96]); toast(`🎧 BPM ${MUSIC.bpm}`); } }]); break;
-      case 'casino': this.openCasino(); break;
+      case 'casino': CSN.hub(); break;
       case 'court': courtFacilityMenu(); break;
       case 'hotel': this.openMenu('🏨 시모느 리조트 호텔', '', [{ ic: '🛏️', t: '숙박 (체력 회복 + 스폰 설정)', p: 5000, fn: () => { ME.hp = 100; ME.homePlot = null; ME.spawnHotel = true; toast('🛏️ 푹 쉬었다'); } }, { ic: '🍹', t: '루프탑 바', p: 1500, fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.4); } }]); break;
     }
@@ -282,7 +281,6 @@ const UI = {
       { ic: '🎯', t: '쉬운 조작 · 끼임 탈출', p: 0, d: '사격 보정 · 자동 달리기 · 끼임 탈출', fn: () => setTimeout(() => this.openEasy(), 30) },
       { ic: '🖱️', t: '마우스 감도', p: 0, d: 'x' + (G.sens || 1), dis: IS_TOUCH, disMsg: '터치에선 필요 없어요', fn: () => setTimeout(() => this.openSens(), 30) },
       { ic: '❓', t: '조작법 (F1)', p: 0, fn: () => setTimeout(() => this.openHelp(), 30) },
-      { ic: '🛠️', t: '관리자', p: 0, d: ADMIN.enabled() ? (ADMIN.on ? '로그인됨' : '비밀번호 필요') : '이 빌드에선 비활성', fn: () => setTimeout(() => ADMIN.open(), 30) },
       ...QUEST.phoneItems(),
       SMS.phoneItem(),
       CAREER.phoneItem(),
@@ -413,6 +411,9 @@ const UI = {
     const hold = (el, on, off) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); AU.init(); on(); el.classList.add('on'); }, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off && off(); el.classList.remove('on'); }, { passive: false }); el.addEventListener('touchcancel', e => { off && off(); el.classList.remove('on'); }); };
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
     hold(B.jump, () => { INP.jump = true; INP.brake = true; }, () => { INP.brake = false; });
+    // 헬기 전용 고도 버튼: 누르는 동안만 오르거나 내린다 (떼면 그 높이에서 호버링)
+    B.hUp = mk('tHUp', '▲', 'right:18px;bottom:268px;display:none', '', '상승'); B.hDn = mk('tHDn', '▼', 'right:18px;bottom:340px;display:none', '', '하강');
+    hold(B.hUp, () => { INP.heliUp = true; }, () => { INP.heliUp = false; }); hold(B.hDn, () => { INP.heliDown = true; INP.heliUp = false; }, () => { INP.heliDown = false; });
     hold(B.aim, () => { INP.aim = !INP.aim; B.aim.dataset.on = INP.aim ? 1 : 0; }, () => { if (INP.aim) B.aim.classList.add('on'); });
     hold(B.use, () => { if (ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else doInteract(); });
     hold(B.car, () => toggleVehicle());
@@ -455,6 +456,7 @@ const UI = {
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
     const heli = inV && ME.vehicle.kind === 'heli'; B.jump.innerHTML = heli ? '▲<small>상승</small>' : inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.run.innerHTML = heli ? '▼<small>하강</small>' : inV && ME.vehicle.kind === 'car' ? 'DRIFT<small>드리프트</small>' : 'RUN<small>달리기</small>'; const pass = inV && ME.seat !== 'd'; /* 동승자는 차 안에서도 던질 수 있다 */ const canT = !inV || pass; if (B.nade) B.nade.style.display = (ME.inv.grenade | 0) > 0 && canT ? '' : 'none'; if (B.tbomb) B.tbomb.style.display = (ME.inv.tbomb | 0) > 0 && canT ? '' : 'none'; if (B.mine) B.mine.style.display = (ME.inv.mine | 0) > 0 && !inV ? '' : 'none'; if (B.back) { B.back.style.display = inV && !DRIVE.on() ? '' : 'none'; B.back.classList.toggle('on', !!INP.lookBack); } B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
+    if (B.hUp) { B.hUp.style.display = heli && !(ME.vehicle.M && ME.vehicle.M.jet) ? '' : 'none'; B.hDn.style.display = B.hUp.style.display; }
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun || !!INP.heliDown);
   },
 };
