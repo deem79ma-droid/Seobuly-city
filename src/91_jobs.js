@@ -1,4 +1,4 @@
-// @v 2026101503
+// @v 2026101703
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -281,7 +281,7 @@ const JOBS = {
   roadPoint(x, z) { const n = ROUTE.nearestOnRoad(x, z); const E = EDGES[n.e]; return { x: n.x + (E.axis === 'x' ? 0 : E.w / 2 + 2), z: n.z + (E.axis === 'x' ? E.w / 2 + 2 : 0) }; },
   newTask() {
     const id = this.id; this.task = null; const a = anchorOf(ME);
-    if (id === 'police') { for (let k = 0; k < 30; k++) { const d = pick(DISTRICTS.filter(q => q.id !== 16)); const p = this.roadPoint(d.cx + rnd(-150, 150), d.cz + rnd(-150, 150)); const dd = Math.hypot(p.x - a.x, p.z - a.z); if (dd > 120 && dd < 700) { this.task = { kind: 'patrol', x: p.x, z: p.z, label: `🚓 순찰: ${d.name}`, r: 7 }; break; } } }
+    if (id === 'police') { for (let k = 0; k < 30; k++) { const d = pick(DISTRICTS.filter(q => q.id !== 16 && q.id !== 23)); const p = this.roadPoint(d.cx + rnd(-150, 150), d.cz + rnd(-150, 150)); const dd = Math.hypot(p.x - a.x, p.z - a.z); if (dd > 120 && dd < 700) { this.task = { kind: 'patrol', x: p.x, z: p.z, label: `🚓 순찰: ${d.name}`, r: 7 }; break; } } }
     else if (id === 'soldier') { const p = pick(ARMY.posts); this.task = { kind: 'post', x: p.x, z: p.z, label: '🪖 경계 근무 지점', r: 4 }; }
     else if (id === 'civil' || id === 'minister' || id === 'statoff') {
       const ty = id === 'statoff' ? 'stats' : 'govt'; const c = FACILITIES.filter(f => f.type === ty).map(f => [f, Math.hypot(f.x - a.x, f.z - a.z)]).sort((x, y) => x[1] - y[1])[0];
@@ -362,7 +362,7 @@ const JOBS = {
   },
   // ---- 매 프레임 ----
   tick(dt) {
-    if (!this.hud) return; GOV.tick(dt); RULES.tick(dt);
+    if (!this.hud) return; GOV.tick(dt); RULES.tick(dt); GHOST.tick(dt);
     // 범죄자 신분: 형량은 감옥에서만 1초/초 줄어든다 (밖에서는 안 줄어든다)
     if (this.record > 0 && ME.jail) { const was = this.record; this.record = Math.max(0, this.record - dt); if (was > 0 && this.record === 0) { toast('✅ 형량이 끝나 범죄자 신분에서 벗어났다', 4000); sfx('levelup'); saveGame(); } }
     // 경찰 NPC가 범죄자를 알아본다

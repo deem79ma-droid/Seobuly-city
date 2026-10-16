@@ -87,8 +87,9 @@ const TAXI = {
   removeOwnedBy(id) { for (const v of [...vehicles.values()]) if (v.taxiCab && v.taxiOwner === id) this.removeCab(v); },
   // ---- 목적지 목록: 16개 구역 + 웨이포인트 + 집 ----
   destinations() {
-    const L = DISTRICTS.map(d => ({ ic: d.id + '', name: `${d.id}구역 ${d.name}`, short: d.name, x: d.cx, z: d.cz, district: d.id }));
-    if (UI.waypoint) L.unshift({ ic: '📍', name: '지도에 찍은 목적지', short: '웨이포인트', x: UI.waypoint.x, z: UI.waypoint.z });
+    let L = DISTRICTS.map(d => ({ ic: d.id + '', name: `${d.id}구역 ${d.name}`, short: d.name, x: d.cx, z: d.cz, district: d.id }));
+    { const here = regionAt(anchorOf(ME).x, anchorOf(ME).z) === 'agaton'; L = L.filter(d => (regionAt(d.x, d.z) === 'agaton') === here); /* 아가톤섬은 도로로 안 이어져 택시가 못 간다 */ }
+    if (UI.waypoint && (regionAt(UI.waypoint.x, UI.waypoint.z) === 'agaton') === (regionAt(anchorOf(ME).x, anchorOf(ME).z) === 'agaton')) L.unshift({ ic: '📍', name: '지도에 찍은 목적지', short: '웨이포인트', x: UI.waypoint.x, z: UI.waypoint.z });
     const hp = ME.homePlot != null && PLOTS[ME.homePlot]; if (hp && hp.state === 'done' && hp.owner === ME.id) L.unshift({ ic: '🏠', name: '우리 집', short: '집', x: hp.x, z: hp.z });
     return L;
   },

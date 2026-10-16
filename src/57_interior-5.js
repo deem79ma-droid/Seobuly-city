@@ -1,4 +1,4 @@
-// @v 2026101418
+// @v 2026101702
 
 // ================= 건물 실내 (모든 건물 입장 가능) =================
 // 실내는 맵 밖 먼 곳(건물 id마다 고정 좌표)에 들어갈 때만 만들고, 나오면 바로 정리(dispose)한다.
@@ -108,7 +108,7 @@ const INTERIOR = {
   // 계단·엘리베이터로 층이 바뀌면 그 층 ±1층으로 다시 만든다 (엘리베이터 상태는 유지)
   setFloor(f) { const I = this.cur; if (!I) return; const b = I.b; this.dispose(true); const N = this.build(b, f); this.cur = N; if (this.el) { this.el.I = N; N.plats.push(this.el.plat); this.elevSync(); } this.placeLight(N); },
   dispose(keepEl) {
-    const I = this.cur; if (!I) return; this.cur = null;
+    const I = this.cur; if (!I) return; this.cur = null; STAFF.clear(I);
     for (const k in I.dyn.doors) { const d = I.dyn.doors[k]; if (d.col) removeCollider(d.col); d.col = null; }
     if (!keepEl) this.elevDispose();
     scene.remove(I.group);
@@ -123,6 +123,7 @@ const INTERIOR = {
     const I = this.cur;
     if (I) {
       if (ME.dead || ME.jail || ME.vehicle || Math.abs(ME.x - I.O.x) > 120 || Math.abs(ME.z - I.O.z) > 120) { this.dispose(); return; }
+      STAFF.update(I, dt);
       // 출구 쪽으로 걸어가면 자동으로 나간다
       if (G.t > this.cool && Math.abs(ME.x - I.exit.x) < 1.1 && ME.z > I.exit.z && ME.vz > 0.8 && Math.abs(ME.y - I.O.y) < 0.5) { this.exit(); return; }
       if (I.tall) { this.elevUpdate(dt); const C2 = this.cur; if (C2 && !this.inCar()) { const cf = this.floorOfY(C2, ME.y); if (cf !== C2.center) this.setFloor(cf); } }
@@ -215,7 +216,11 @@ const INTERIOR = {
     const tenOf = (k) => (k > 0 && tall && !['hotel', 'apartment', 'hospital', 'police', 'guard', 'school'].includes(kind)) ? floorTenant(b, k) : null; // 위층 가게·상점·센터
     for (let k = lo; k <= hi; k++) { const tn = tenOf(k); const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(8, W * 0.4), 1.4), new THREE.MeshBasicMaterial({ map: makeSignTex(k ? (tn ? `${k + 1}층 · ${tn.n}` : `${k + 1}층`) : title, k ? title : T.sub, T.sign) })); sg.position.set(X(tall ? 1 : 0), O.y + LV(k) + H - 1.1, Z(-D / 2 + 0.2)); group.add(sg); }
     // 종류별 가구
-    const facItem = (lx, lz, label) => { if (fac) item(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, () => UI.openFacility(fac), 2.4); };
+    const staffSpecs = [];
+    const staffAt = (lx, lz, role, sz, ly = 0) => { staffSpecs.push({ x: X(lx), y: O.y + ly, z: Z(sz != null ? sz : lz - 2.0), yaw: 0, role }); };
+    // 직원이 서 있는 상호작용 자리: 직원에게 말을 걸어야 메뉴가 열린다 (결제도 직원과)
+    const staffItem = (lx, lz, label, role, fn, r = 2.4, sz, ly = 0) => { staffAt(lx, lz, role, sz, ly); item(lx, lz, `💬 ${role} · ${label}`, () => STAFF.talk(role, fn), r, ly); };
+    const facItem = (lx, lz, label, sz) => { if (fac) staffItem(lx, lz, label || `${fac.icon} ${fac.name} 이용하기`, STAFF_ROLE[fac.type] || '직원', () => UI.openFacility(fac), 2.4, sz); };
     const desk = (lx, lz, col = 0x8a6a4a, mon = true) => { box(lx, 0, lz, 1.6, 0.76, 0.8, col, true); if (mon) { box(lx, 0.76, lz - 0.2, 0.6, 0.42, 0.06, 0x111418); box(lx, 0.8, lz - 0.18, 0.54, 0.34, 0.02, 0x3a7ad8); } box(lx, 0, lz + 0.75, 0.5, 0.45, 0.5, 0x2a2a30); box(lx, 0.45, lz + 0.98, 0.5, 0.55, 0.06, 0x2a2a30); };
     const chair = (lx, lz, col = 0x6a4a2a, face = 1) => { box(lx, 0, lz, 0.45, 0.45, 0.45, col); box(lx, 0.45, lz + face * 0.2, 0.45, 0.5, 0.06, col); };
     const table4 = (lx, lz, col = 0xa07850, round = false) => { if (round) { cyl(lx, 0, lz, 0.08, 0.72, 0x444444, 6); cyl(lx, 0.72, lz, 0.55, 0.05, col, 14); cols.push(addCollider(X(lx) - 0.5, Z(lz) - 0.5, X(lx) + 0.5, Z(lz) + 0.5, O.y + 0.77, 'int', null, O.y - 0.3)); } else box(lx, 0, lz, 1.2, 0.75, 1.2, col, true); chair(lx - 0.95, lz, 0x5a3a22, 0); chair(lx + 0.95, lz, 0x5a3a22, 0); chair(lx, lz - 0.95, 0x5a3a22, -1); chair(lx, lz + 0.95, 0x5a3a22, 1); };
@@ -289,7 +294,7 @@ const INTERIOR = {
       case 'dealer': {
         box(0, 0, 0, W - 2, 0.02, D - 2, 0xf4f4f4);
         for (const [lx, col] of [[-hw / 2, 0xd02a2a], [hw / 2, 0x2a5ad0]]) { cyl(lx, 0, -1, 3, 0.25, 0x333333, 24); box(lx, 0.6, -1, 1.9, 0.7, 4.2, col, true); box(lx, 1.3, -1.3, 1.7, 0.6, 2.2, 0x223344); for (const [wx, wz] of [[-0.95, 0.5], [0.95, 0.5], [-0.95, -2.5], [0.95, -2.5]]) cyl(lx + wx, 0.25, -1 + wz + 1, 0.36, 0.3, 0x111111, 10); }
-        desk(0, hd - 5, 0xeeeeee); facItem(0, hd - 3.6, '🚗 차량 구매 상담'); part(-2.2, hd - 6.4, title + ' 판매', 750);
+        desk(0, hd - 5, 0xeeeeee); facItem(0, hd - 3.6, '🚗 차량 구매 상담', hd - 5.9); part(-2.2, hd - 6.4, title + ' 판매', 750);
         break;
       }
       case 'factory': {
@@ -315,7 +320,7 @@ const INTERIOR = {
         for (let r = 0; r < Math.floor((D - 6) / 3); r++) for (let c = 0; c < Math.floor((W - 3) / 3.4); c++) table4(-hw + 2.4 + c * 3.4, -hd + 6 + r * 3, cafe ? 0xe8e0d0 : 0xa07850, cafe);
         if (cafe) { sofa(-hw + 1.6, hd - 2, 0x8a5a3a); plant(hw - 1, hd - 1.2); plant(-hw + 1, -hd + 4); }
         if (fac) facItem(0, -hd + 3.4);
-        else item(0, -hd + 3.4, cafe ? '☕ 카페 메뉴 보기' : `${FOOD.shop(b).ic} ${FOOD.shop(b).name} 메뉴 보기`, () => FOOD.open(b, cafe), 2.4);
+        else staffItem(0, -hd + 3.4, cafe ? '☕ 카페 메뉴 보기' : `${FOOD.shop(b).ic} ${FOOD.shop(b).name} 메뉴 보기`, cafe ? '바리스타' : '점원', () => FOOD.open(b, cafe), 2.4);
         part(Math.min(9, W - 4) / 2 + 1.0, -hd + 2.4, title, cafe ? 600 : 650);
         break;
       }
@@ -323,7 +328,7 @@ const INTERIOR = {
         counter(-hw + 3, hd - 4, 3.2, 0xe8e8e8); box(-hw + 3, 1.1, hd - 4, 0.5, 0.35, 0.4, 0x222222);
         for (let i = 0; i < Math.floor((W - 6) / 2.6); i++) shelf(-hw + 6 + i * 2.6, -1, D - 9, 'z');
         box(0, 0, -hd + 0.5, W - 2, 2.1, 0.8, 0xdde8f0, true); for (let i = -hw + 1.5; i < hw - 1; i += 1.2) box(i, 0.2, -hd + 0.92, 1.0, 1.7, 0.02, 0x9fd8ff);
-        item(-hw + 3, hd - 2.8, '🛒 계산대 (음료 ₩2,000 · 구급상자 ₩8,000)', () => this.martMenu(), 2.2);
+        staffItem(-hw + 3, hd - 2.8, '🛒 계산대 (음료 ₩2,000 · 구급상자 ₩8,000)', '계산원', () => this.martMenu(), 2.2, hd - 4.9);
         part(-hw + 3, hd - 5.1, title, 550); atm(hw - 0.8, hd - 2.6, 0, 1);
         if (b.genre === 'electro' || b.genre === 'dept') { box(-hw + 2.6, 0, -hd + 2.6, 2.2, 0.85, 0.9, 0xf4f4f4, true); for (let i = 0; i < 3; i++) box(-hw + 1.9 + i * 0.7, 0.86, -hd + 2.6, 0.16, 0.02, 0.3, 0x111111); item(-hw + 2.6, -hd + 3.8, '📱 스테이온 휴대폰 코너', () => PHONE.shop('store'), 1.4); }
         break;
@@ -365,8 +370,10 @@ const INTERIOR = {
       case 'casino': {
         box(0, 0.003, 0, W - 1, 0.01, D - 1, 0x8a1a2a);
         for (let i = 0; i < Math.floor((W - 4) / 1.3); i++) for (const z of [-hd + 1.2, -hd + 4.5]) { const x = -hw + 2 + i * 1.3; box(x, 0, z, 1.0, 1.6, 0.8, 0x2a1a08, true); box(x, 1.0, z + 0.41, 0.8, 0.5, 0.02, RP([0xffd34a, 0xff4a8a, 0x4affd3])); }
-        for (let i = 0; i < 3; i++) { const x = -hw + 4 + i * (W - 8) / 2; cyl(x, 0, 2.5, 1.6, 0.85, 0x1a5a2a, 20); cyl(x, 0.85, 2.5, 0.5, 0.05, 0x8a5a2a, 16); cols.push(addCollider(X(x) - 1.5, Z(2.5) - 1.5, X(x) + 1.5, Z(2.5) + 1.5, O.y + 0.9, 'int', null, O.y - 0.3)); }
-        facItem(0, hd - 3, fac ? '🎰 카지노 칩 교환소 (게임하기)' : undefined); part(-hw + 4, 4.6, '카지노 딜러', 800);
+        for (let i = 0; i < 3; i++) { const x = -hw + 4 + i * (W - 8) / 2; cyl(x, 0, 2.5, 1.6, 0.85, i === 1 ? 0x1a3a7a : 0x1a5a2a, 20); cyl(x, 0.85, 2.5, 0.5, 0.05, 0x8a5a2a, 16); item(x, 4.6, i === 1 ? '포커 테이블 (E)' : '룰렛 테이블 (E)', () => (i === 1 ? CSN.poker() : CSN.roulette()), 2.2); cols.push(addCollider(X(x) - 1.5, Z(2.5) - 1.5, X(x) + 1.5, Z(2.5) + 1.5, O.y + 0.9, 'int', null, O.y - 0.3)); }
+        for (let i = 0; i < 4; i++) item(-hw + 3.5 + i * ((W - 7) / 3), -hd + 2.8, '777 슬롯머신 (E)', () => CSN.slots(), 1.8);
+        box(hw - 1.5, 0, 3, 0.8, 1.7, 0.7, 0x2a4a2a, true); box(hw - 1.92, 1.0, 3, 0.02, 0.4, 0.5, 0xffd34a); item(hw - 2.6, 3, '토큰 교환기 (E)', () => CSN.exchange(() => UI.closeMenu()), 1.9);
+        facItem(0, hd - 3, fac ? '카지노 안내 (토큰 · 게임)' : undefined); part(-hw + 4, 4.6, '카지노 딜러', 800);
         break;
       }
       case 'bank': {
@@ -375,8 +382,8 @@ const INTERIOR = {
         { const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.4, 28), new THREE.MeshBasicMaterial({ color: 0x8a8e94 })); vd.rotation.x = Math.PI / 2; vd.position.set(X(0), O.y + 1.7, Z(-hd + 0.3)); group.add(vd); box(0, 1.6, -hd + 0.55, 1.6, 0.2, 0.2, 0xd8c070); }
         for (let i = 0; i < 2; i++) { box(hw - 1, 0, hd - 4 - i * 1.6, 0.8, 1.7, 1.0, 0x2a4a6a, true); box(hw - 1.42, 1.0, hd - 4 - i * 1.6, 0.02, 0.4, 0.5, 0x6ad8ff); }
         for (let i = 0; i < 6; i++) chair(-hw + 2 + i * 0.8, hd - 3, 0x2a3a5a, 1);
-        item(-hw / 3, -hd + 5.2, '🏦 은행 창구 (대출·빚 상환)', () => CREDIT.bankMenu(), 2.0);
-        item(hw / 3, -hd + 5.2, '💳 카드 창구 (카드 입출금 · 잔액)', () => CARD.menu('은행 창구'), 2.0);
+        staffItem(-hw / 3, -hd + 5.2, '🏦 은행 창구 (대출·빚 상환)', '은행원', () => CREDIT.bankMenu(), 2.0);
+        staffItem(hw / 3, -hd + 5.2, '💳 카드 창구 (카드 입출금 · 잔액)', '은행원', () => CARD.menu('은행 창구'), 2.0);
         item(hw - 1.8, hd - 4.8, '🏧 ATM (카드 입출금)', () => CARD.menu('ATM'), 1.6);
         part(-hw / 2, -hd + 2.8, title + ' 창구 보조', 700);
         break;
@@ -491,6 +498,7 @@ const INTERIOR = {
     const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true })); group.add(mesh);
     scene.add(group);
     const I = { b, O, W, D, H, FH, NF, center, lo, hi, tall, ST, SH, dyn, group, cols, plats, items: items.filter(Boolean), title, spawn: { x: X(0), z: Z(hd - 1.6) }, exit: { x: X(0), z: Z(hd - 0.7) }, elev: tall ? { x: X(SH.dx), z: Z(SH.z1 + 1.0) } : { x: X(0), z: Z(hd - 1.6) } };
+    I.staff = STAFF.make(I, staffSpecs, b.id);
     return I;
   },
   theme(kind) {

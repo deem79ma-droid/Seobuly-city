@@ -1,4 +1,4 @@
-// @v 2026101503
+// @v 2026101703
 
 // ================= 지역 규정 (체계적인 지역별 법규) =================
 // 모든 지역 규정은 이 표(REGION_RULES) 한 곳에서만 정한다. 게임 코드는 표를 읽기만 한다.
@@ -10,6 +10,7 @@ const REGION_RULES = {
   kaengjibe: { speed: 70, fine: 0.6, crime: 0.8, gun: 'free', tip: '갱단 구역 — 단속이 느슨하다 · 대신 위험' },
   disanbay: { speed: 80, fine: 0.8, crime: 0.9, gun: 'hunt', tip: '시골 — 사냥용 총기 허용 (읍내 제외)' },
   simone: { speed: 50, fine: 1.3, crime: 1.2, gun: 'ban', tip: '휴양섬 — 관광객 보호 · 벌금 30% 가중' },
+  agaton: { speed: 80, fine: 0, crime: 1.0, gun: 'free', tip: '고립된 섬 — 경찰이 없다(수배·단속 없음) · 도로가 안 이어진다 · 밤에 가끔 귀신이 나온다' },
   kualp: { speed: 50, fine: 1.0, crime: 1.0, gun: 'hunt', tip: '만년설 눈길 — 차가 미끄러진다 · 사냥 허용 (스키 마을 제외)' },
   chiga: { speed: 70, fine: 0.9, crime: 1.4, gun: 'permit', tip: '무역항 — 구시가 총기 금지 · 밀수/강도 형량 가중' },
   sea: { speed: 90, fine: 1.0, crime: 1.0, gun: 'free', tip: '' },
@@ -54,7 +55,7 @@ const RULES = {
   },
   card() {
     const cur = regionAt(anchorOf(ME).x, anchorOf(ME).z); const rows = [];
-    for (const id of ['plaza', 'seoburi', 'jiolle', 'kaengjibe', 'disanbay', 'simone', 'kualp', 'chiga']) { const q = REGION_RULES[id]; rows.push(`<div class="vr"><span>${id === cur ? '▶ ' : ''}${REGIONS[id].name}</span><b${id === cur ? ' style="color:#ffd34a"' : ''}>${this.line(id)}</b></div>`); }
+    for (const id of ['plaza', 'seoburi', 'jiolle', 'kaengjibe', 'disanbay', 'simone', 'agaton', 'kualp', 'chiga']) { const q = REGION_RULES[id]; rows.push(`<div class="vr"><span>${id === cur ? '▶ ' : ''}${REGIONS[id].name}</span><b${id === cur ? ' style="color:#ffd34a"' : ''}>${this.line(id)}</b></div>`); }
     const q = REGION_RULES[cur];
     for (const id of [17, 18, 19, 20, 21, 22]) { const D = DISTRICTS.find(q => q.id === id); rows.push(`<div class="vr"><span>${D.name}</span><b>${ZONE_FX[id].tip}</b></div>`); }
     POLICE.showCard('지역 규정집', q && q.tip ? REGIONS[cur].name : '', q && q.tip ? q.tip : '지역마다 법규가 다르다', rows.join(''));

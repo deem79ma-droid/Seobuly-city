@@ -20,14 +20,14 @@
 <meta property="og:title" content="서불리 시티 3D - 무료 브라우저 오픈월드 멀티플레이 게임">
 <meta property="og:description" content="설치 없이 브라우저에서 바로 즐기는 무료 3D 오픈월드 게임. 친구들과 최대 20명 멀티플레이로 도시를 누비며 차량 운전, 택시, 건축, 땅 구매, 카지노, 경찰·교도소까지 — 서불리 시티에서 나만의 이야기를 만들어 보세요.">
 <meta property="og:url" content="https://deem79ma-droid.github.io/Seobuly-city/">
-<meta property="og:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png">
+<meta property="og:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png?v=3">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="서불리 시티 3D 게임 화면">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="서불리 시티 3D - 무료 브라우저 오픈월드 멀티플레이 게임">
 <meta name="twitter:description" content="설치 없이 브라우저에서 바로 즐기는 무료 3D 오픈월드 게임. 친구들과 최대 20명 멀티플레이로 도시를 누비며 차량 운전, 택시, 건축, 땅 구매, 카지노, 경찰·교도소까지 — 서불리 시티에서 나만의 이야기를 만들어 보세요.">
-<meta name="twitter:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png">
+<meta name="twitter:image" content="https://deem79ma-droid.github.io/Seobuly-city/og.png?v=3">
 <meta name="twitter:image:alt" content="서불리 시티 3D 게임 화면">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
@@ -77,7 +77,7 @@ body.driving #touch>:not(#look){display:none!important}
 #driveUI .da .pv{position:absolute;left:0;right:0;bottom:0;height:calc(var(--p) * 100%);background:linear-gradient(0deg,rgba(255,211,74,.55),rgba(255,120,40,.25));pointer-events:none;z-index:-1}
 #driveUI .da.on{background:linear-gradient(180deg,#4a4f58,#2a2d33);border-color:#ffd34a}#driveUI .db{right:120px;bottom:26px;width:92px;height:84px;font-size:15px}
 #driveUI .dout{right:18px;top:96px;width:78px;height:44px;font-size:14px;border-radius:12px}
-#driveUI .dhorn,#driveUI .dph,#driveUI .dmap{right:18px;width:78px;height:40px;font-size:14px;border-radius:12px}#driveUI .dhorn{top:148px}#driveUI .dph{top:196px}#driveUI .dmap{top:244px}
+#driveUI .dhorn,#driveUI .dph,#driveUI .dmap{right:18px;width:78px;height:40px;font-size:14px;border-radius:12px}#driveUI .dhorn{top:148px}#driveUI .dph{top:196px}#driveUI .dmap{top:244px}#driveUI .dbk{right:104px;top:96px;width:78px;height:44px;font-size:14px;border-radius:12px}
 #breath{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:30;pointer-events:none;text-align:center;color:#fff;font:700 13px/1 inherit;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 #breath .bt{margin-bottom:5px;letter-spacing:1px}#breath .bb{width:180px;height:12px;border-radius:7px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.7);overflow:hidden}
 #breath .bf{height:100%;width:0;background:linear-gradient(90deg,#7fd6ff,#ffd34a 60%,#ff4a3a);transition:width .15s linear}#breath.low{animation:brl .4s infinite alternate}#breath.low .bt{color:#ff6a5a}@keyframes brl{from{opacity:1}to{opacity:.35}}
@@ -270,7 +270,7 @@ body.touch #prompt{bottom:auto;top:58%}
  <div class="card">
   <div>
    <div class="logo">서불리 시티<small>SEOBULY CITY 3D · ONLINE</small></div><button id="secretHelp" style="position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#9aa3b8;font-size:16px;font-weight:700;cursor:pointer;z-index:10">?</button>
-   <div class="sub">서불리 · 지올르 · 이벤트광장 · 디산베이 · 캥지베, 그리고 시모느 아일랜드.<br>총, 도끼, 차, 오토바이, 말, 춤, 건축 의뢰까지 — 하고 싶은 거 다 해.</div>
+   <div class="sub">서불리 · 지올르 · 이벤트광장 · 디산베이 · 캥지베, 시모느 아일랜드, 그리고 고립된 아가톤섬.<br>총, 도끼, 차, 오토바이, 말, 춤, 건축 의뢰까지 — 하고 싶은 거 다 해.</div>
    <div id="inviteBox" class="hidden"><div class="t">친구의 방 <b id="invCode"></b> 에 초대받았어요!</div><button class="btn big" id="invJoin">바로 참가하기</button><div id="invCount"></div></div>
    <div class="field" id="admField" style="display:none"><label>관리자</label><div class="row" style="gap:8px"><input id="admIn" class="inp" type="password" autocomplete="off" placeholder="비밀번호 (관리자만) · Enter"><button class="btn b3" id="admBtn" type="button" style="flex:0 0 auto;min-width:72px">확인</button></div><div id="admMsg"></div></div>
    <div class="field"><label>닉네임</label><input id="nameIn" class="inp" maxlength="12" placeholder="이름"></div>

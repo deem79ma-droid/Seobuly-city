@@ -1,4 +1,4 @@
-// @v 2026101410
+// @v 2026101703
 
 
 // ================= 경찰 신고 · 수사 · 판결 =================
@@ -147,6 +147,7 @@ const POLICE = {
   },
   // ---------- 경찰 출동 (방장 NPC) ----------
   freeCop(x, z, near = 70, dmin = 28, dmax = 45) {
+    if (regionAt(x, z) === 'agaton') return null; // 아가톤섬엔 경찰이 없다
     let best = null, bd = near;
     for (const p of PEDS) if (p.kind === 'police' && (p.state === 'walk' || p.state === 'idle' || p.state === 'talk') && !p.raidCop) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
     if (best) return best;
@@ -164,8 +165,8 @@ const POLICE = {
     for (const pl of playersList()) {
       const w = pl.wanted | 0, pw = lw[pl.id] | 0; lw[pl.id] = w; if (!w || pl.inside) continue; if (pl.me ? ADMIN.on : G.adminId === pl.id) continue;
       if (w > pw || PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - pl.x, q.z - pl.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - pl.x, v.z - pl.z) < 90)) seen[pl.id] = G.t;
-      if (G.t - (seen[pl.id] ?? -99) > 15) continue; // 경찰이 놓쳤다
-      const want = [0, 1, 2, 3, 4, 6][Math.min(5, w)]; let have = 0;
+      if (G.t - (seen[pl.id] ?? -99) > 10) continue; // 경찰이 놓쳤다 (10초)
+      const want = [0, 1, 1, 2, 3, 4][Math.min(5, w)]; let have = 0; // 출동 인원 너프: ★1 1명 · ★2 1명 · ★3 2명 · ★4 3명 · ★5 4명
       for (const p of PEDS) if (p.kind === 'police' && p.state === 'fight' && p.target && p.target.id === pl.id) { have++; if (p.dispT < G.t + 20) p.dispT = G.t + 30; }
       for (let i = have; i < want; i++) {
         const c = this.freeCop(pl.x, pl.z, 130, 80, 115); if (!c) break; // 새 경찰은 80~115m 밖에서 달려온다

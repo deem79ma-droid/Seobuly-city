@@ -1,11 +1,11 @@
-// @v 2026101501
+// @v 2026101703
 
 // ================= 정부 · 공무원 · 장관 · 통계청 · 군 계급 · NPC 주민 명부 =================
 //  - NPC는 100명. 이름은 "NPC<번호>" (NPC1 ~ NPC100) 이고 서로 번호로 부른다.
 //  - 주민 명부: 번호마다 거주 도시와 직업이 정해져 있다. 통계청 직원(과 장관)만 열람할 수 있다.
 //  - 군인은 경력(근무 횟수)에 따라 계급이 오른다. 사단 본부에서 훈련 · 보급 · 경계태세.
 const NPC_TOTAL = 100;
-const NPC_HOME_COUNT = { plaza: 14, seoburi: 26, jiolle: 16, kaengjibe: 12, disanbay: 12, simone: 6, kualp: 6, chiga: 8 };
+const NPC_HOME_COUNT = { plaza: 14, seoburi: 26, jiolle: 16, kaengjibe: 12, disanbay: 12, simone: 4, agaton: 2, kualp: 6, chiga: 8 };
 const NPC_JOB_COUNT = [['장관', 3], ['공무원', 12], ['통계청 직원', 4], ['군인', 10], ['경찰', 10], ['의사', 5], ['농부', 4], ['택배기사', 4], ['자영업자', 8], ['무직·학생', 40]];
 const ARMY_RANKS = [[0, '이병'], [10, '일병'], [25, '상병'], [45, '병장'], [70, '하사'], [100, '중사'], [140, '상사'], [190, '소위'], [250, '중위'], [320, '대위'], [400, '소령'], [520, '대령'], [700, '장군']];
 const DUTY_PAY = { police: 900, soldier: 1000, doctor: 900, civil: 600, statoff: 650, minister: 2200 };

@@ -1,4 +1,4 @@
-// @v 2026101603
+// @v 2026101703
 
 // ================= PLAYER =================
 const ME = {
@@ -208,6 +208,7 @@ function damageArea(x, y, z, r, dmg, by) {
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
 function addWanted(n) {
+  if (!ADMIN.on && typeof regionAt === 'function' && regionAt(anchorOf(ME).x, anchorOf(ME).z) === 'agaton') { if (n > 0 && G.t > (ME._noCopT || 0)) { ME._noCopT = G.t + 20; toast('🏝️ 아가톤섬엔 경찰이 없다 — 수배는 되지 않는다', 3000); } return; }
   const before = ME.wanted; ME.wanted = clamp(ME.wanted + n, 0, 5); ME.wantedCool = 0; if (ME.wanted > before) { UI.updateStars(true); if (ME.wanted >= 5 && before < 5) CINE_EV.wanted5(); if (ME.wanted >= 3 && before < 3) toast('🚨 경찰이 발포를 허가했다!'); }
 }
 // ----- combat -----

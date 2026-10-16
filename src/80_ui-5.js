@@ -1,4 +1,4 @@
-// @v 2026101603
+// @v 2026101703
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -25,7 +25,8 @@ const UI = {
     const regionChanged = R !== this.lastRegion;
     if (regionChanged) { this.lastRegion = R; $('#regionName').textContent = RG.name; $('#regionName').style.color = RG.color; $('#regionSub').textContent = RG.desc; if (G.t > 3 && R !== 'sea') { announce(RG.name, RG.desc); const rl = REGION_RULES[R]; if (rl) setTimeout(() => toast('규정: ' + RULES.line(R) + (rl.tip ? ' · ' + rl.tip : ''), 5000), 1800); } }
     const px = AP.x, pz = AP.z; const dId = districtAt(px, pz);
-    if (dId !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dId; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${D.id}구역 · ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${D.id}구역 · ${D.name}`, 2200); }
+    const dg = dongAt(px, pz), dKey = dId + '|' + (dg ? dg.name : '');
+    if (dKey !== this.lastDistrict) { const D = DISTRICTS[dId - 1]; this.lastDistrict = dKey; const zn = $('#zoneName'); zn.textContent = D ? `📍 ${dg ? dg.name + ' · ' : ''}${D.id}구역 ${D.name}` : '🌊 바다 (구역 밖)'; zn.style.color = D ? DISTRICT_COLORS[dId - 1] : '#9ab'; if (D && G.t > 3 && !regionChanged) toast(`📍 ${dg ? dg.name + ' · ' : ''}${D.name}`, 2200); }
     const h = Math.floor(G.time), mi = Math.floor((G.time - h) * 60); const wt = { clear: '☀️ 맑음', cloudy: '☁️ 흐림', rain: '🌧️ 비' }[G.weather];
     $('#clock').textContent = `${G.day}일차 ${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')} · ${ENV.night > 0.5 && G.weather === 'clear' ? '🌙 밤' : wt}`;
     this.updateStars(); this.updateInv();
@@ -65,19 +66,23 @@ const UI = {
     this.menuOpen = true; if (document.pointerLockElement) document.exitPointerLock();
     if (!opts.phone) this._phTok = null; // 다른 창이 열리면 폰 로딩은 취소
     const box = $('#menuBox'); box.dataset.phone = opts.phone || ''; box.innerHTML = `<h2></h2><div class="desc"></div><div class="items"></div>${opts.extra || ''}<button class="btn b3 close">닫기</button>`;
-    box.querySelector('h2').textContent = title; box.querySelector('.desc').innerHTML = desc || '';
+    box.querySelector('h2').textContent = title; { const sf = this._staff; box.querySelector('.desc').innerHTML = (sf && sf.line && !opts.phone ? `🗣️ <b>${escHtml(sf.role)} NPC${sf.num}</b>: “${escHtml(sf.line)}”<br>` : '') + (desc || ''); }
     const wrap = box.querySelector('.items');
     for (const it of items) {
       const b = document.createElement('button'); b.className = 'item' + (it.dis ? ' dis' : '');
       b.innerHTML = `${it.ic ? `<span class="ic">${it.ic}</span>` : ''}<span class="t"></span>${it.p !== undefined && (typeof it.p === 'number' ? it.p > 0 : it.p !== '') ? `<span class="p">${typeof it.p === 'number' ? fmtMoney(it.p) : it.p}</span>` : ''}${it.d ? `<span class="d"></span>` : ''}`;
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
-      b.onclick = () => { AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; } if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전엔 살 수 없다'); sfx('error'); return; } if (!CARD.pay(it.p)) { toast('💸 돈이 부족하다 (현금 + 카드)'); sfx('error'); return; } } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+      b.onclick = () => {
+        AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; }
+        const go = () => { if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전엔 살 수 없다'); sfx('error'); return; } if (!CARD.pay(it.p)) { toast('💸 돈이 부족하다 (현금 + 카드)'); sfx('error'); return; } } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+        if (this._staff && typeof it.p === 'number' && it.p > 0 && !it.free) STAFF.checkout(this._staff, it, go); else go(); // 직원이 있는 가게: 직원에게 계산
+      };
       wrap.appendChild(b);
     }
     box.querySelector('.close').onclick = () => this.closeMenu();
     $('#menu').classList.remove('hidden'); if (opts.after) opts.after(box);
   },
-  closeMenu() { this.menuOpen = false; $('#menu').classList.add('hidden'); clearInterval(this._mg); const f = this._onClose; this._onClose = null; if (f) f(); },
+  closeMenu() { this._staff = null; if (typeof STAFF !== 'undefined') STAFF.closeDlg(); this.menuOpen = false; $('#menu').classList.add('hidden'); clearInterval(this._mg); const f = this._onClose; this._onClose = null; if (f) f(); },
   // ---------- facility ----------
   openFacility(f) {
     if (ME.wanted > 0 && !ADMIN.on && (f.type === 'gun' || f.type === 'dealer')) { toast('🚨 수배자는 받지 않는다 — 가게 문이 잠겼다', 3000); sfx('error'); return; }
@@ -130,12 +135,7 @@ const UI = {
       case 'hotel': this.openMenu('🏨 시모느 리조트 호텔', '', [{ ic: '🛏️', t: '숙박 (체력 회복 + 스폰 설정)', p: 5000, fn: () => { ME.hp = 100; ME.homePlot = null; ME.spawnHotel = true; toast('🛏️ 푹 쉬었다'); } }, { ic: '🍹', t: '루프탑 바', p: 1500, fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.4); } }]); break;
     }
   },
-  openDealer(f) {
-    const list = ['bicycle', 'hatch', 'sedan', 'suv', 'pickup', 'van', 'sports', 'supercar', 'scooter', 'bike', 'superbike', 'heli', 'jet'];
-    this.openMenu('🚗 자동차 판매점', `구매한 차는 차고에 저장되고 휴대폰으로 언제든 부를 수 있다 · 보유 ${ME.garage.length}대`, list.map(k => {
-      const M = VMODELS[k]; return { ic: M.bicycle ? '🚲' : M.kind === 'bike' ? '🏍️' : k === 'supercar' || k === 'sports' ? '🏎️' : k === 'suv' || k === 'pickup' ? '🚙' : '🚗', t: M.name, p: M.price, d: `최고 ${Math.round(M.max * 3.6)}km/h · ${M.seats || 4}인승${M.jet ? ' · 미사일 6발 · 1인승' : M.kind === 'heli' ? ' · 하늘을 난다' : ''}`, fn: () => { const col = M.kind === 'bike' ? pick(['#c41818', '#1a1a1a', '#f2f2f2', '#1a4ad0']) : pick(CAR_COLORS); const g = { model: k, color: col, id: ME.id + '_' + Date.now().toString(36) }; ME.garage.push(g); spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', M.name); setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150); saveGame(); } };
-    }));
-  },
+  openDealer(f) { STAFF.dealerMenu(f); },
   openGarage(x, z) {
     if (!ME.garage.length) { toast('보유 차량이 없다 — 자동차 판매점에서 구매'); return; }
     this.openMenu('🔑 내 차고', '차를 선택하면 근처로 배달된다', ME.garage.map(g => ({ ic: VMODELS[g.model].kind === 'bike' ? '🏍️' : '🚗', t: VMODELS[g.model].name, d: g.color, fn: () => { spawnOwned(g, x ?? ME.x, z ?? ME.z); toast('🚗 차량 도착!'); } })));
@@ -256,7 +256,7 @@ const UI = {
     tab = tab || this.phoneTab || 'main'; this.phoneTab = tab; const PH = PHONE.cur();
     const regions = ['seoburi', 'plaza', 'jiolle', 'kaengjibe', 'disanbay', 'simone', 'kualp', 'chiga'];
     const dz = DISTRICTS[districtAt(anchorOf(ME).x, anchorOf(ME).z) - 1];
-    const desc = `<small style="opacity:.75">${PH.n} · ${PH.g} · 💳 ${fmtMoney(CARD.bal)}</small><br>${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? dz.id + '구역 ' + dz.name : '바다'} · 킬 ${ME.kills}`;
+    const desc = `<small style="opacity:.75">${PH.n} · ${PH.g} · 💳 ${fmtMoney(CARD.bal)}</small><br>${G.online ? `방 코드 <b style="color:#ffd34a">${G.room}</b> · ${G.players.size + 1}명 접속${G.isHost ? ' · 👑 방장' : ''}` : '혼자 플레이 중'} · ${dz ? placeName(anchorOf(ME).x, anchorOf(ME).z) + ' · ' + dz.name : '바다'} · 킬 ${ME.kills}`;
     const ALL = [
       { ic: '🏛️', t: '정치 · 경제', p: 0, d: `${ECON.presName()} · 세금 ${Math.round(ECON.taxRate() * 100)}% · 집값 ×${ECON.houseMul().toFixed(2)}${ECON.E.elec ? ' · 🗳️ 선거 중!' : ''}`, fn: () => setTimeout(() => ECON.open(), 30) },
       { ic: '📰', t: '서불리 일보', p: 0, d: ECON.E.news[0] ? ECON.E.news[0].s.slice(0, 40) : '뉴스 없음', fn: () => setTimeout(() => ECON.openNews(), 30) },
@@ -300,7 +300,7 @@ const UI = {
   // ---------- maps ----------
   buildWorldImage() {
     const W = Math.floor(HM.W / 1), H = Math.floor(HM.H / 1); const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); const id = x.createImageData(W, H);
-    const RC = { plaza: [70, 110, 60], seoburi: [92, 102, 110], jiolle: [80, 112, 70], kaengjibe: [110, 96, 70], disanbay: [74, 112, 54], simone: [90, 130, 80], kualp: [200, 220, 235], chiga: [190, 160, 100], sea: [50, 90, 120] };
+    const RC = { plaza: [70, 110, 60], seoburi: [92, 102, 110], jiolle: [80, 112, 70], kaengjibe: [110, 96, 70], disanbay: [74, 112, 54], simone: [90, 130, 80], agaton: [100, 96, 130], kualp: [200, 220, 235], chiga: [190, 160, 100], sea: [50, 90, 120] };
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const k = hmIdx(i, j); const h = hmData[k]; const o = (j * W + i) * 4; const wx = HM.x0 + i * HM.res, wz = HM.z0 + j * HM.res;
       let c3; if (h < -0.2) c3 = [28, 62, 96]; else if (h < LAND - 0.3) c3 = [196, 180, 130]; else { c3 = RC[regionAt(wx, wz)].slice(); if (h > 60) { const t = clamp((h - 60) / 60, 0, 1); c3 = c3.map((v, ii) => lerp(v, [140, 140, 140][ii], t)); } if (h > 115) c3 = [235, 238, 242]; const sh = clamp((h - LAND) * 0.6, -10, 40); c3 = c3.map(v => v + sh); }
@@ -388,6 +388,7 @@ const UI = {
     for (const M of MOUNTAINS) { const p = P(M.px ?? M.x, M.pz ?? M.z); x.beginPath(); x.moveTo(p[0], p[1] - 9); x.lineTo(p[0] - 9, p[1] + 6); x.lineTo(p[0] + 9, p[1] + 6); x.closePath(); x.fillStyle = '#8a7a5a'; x.fill(); x.lineWidth = 1.5; x.strokeStyle = '#fff'; x.stroke(); x.font = 'bold 13px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.75)'; const t = `${M.n} ${M.hj}${M.top ? ' ' + M.top + 'm' : ''}`; x.strokeText(t, p[0], p[1] + 18); x.fillStyle = '#f2ead0'; x.fillText(t, p[0], p[1] + 18); }
     const myD = districtAt(anchorOf(ME).x, anchorOf(ME).z);
     for (const D of DISTRICTS) { const p = P(D.cx, D.cz); const col = DISTRICT_COLORS[D.id - 1]; x.beginPath(); x.arc(p[0], p[1], 11, 0, TAU); x.fillStyle = D.id === myD ? '#fff' : 'rgba(0,0,0,.72)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = col; x.stroke(); x.fillStyle = D.id === myD ? '#000' : '#fff'; x.font = 'bold 12px sans-serif'; x.fillText(D.id, p[0], p[1] + 0.5); x.font = 'bold 12.5px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(D.name, p[0], p[1] + 21); x.fillStyle = col; x.fillText(D.name, p[0], p[1] + 21); }
+    { const myG = dongAt(anchorOf(ME).x, anchorOf(ME).z); for (const r in DONG_SEEDS) DONG_SEEDS[r].forEach((q, i) => { const p = P(q[0], q[1] - 70); const here = myG && myG.region === r && myG.i === i; x.font = 'bold 14px "Noto Sans KR",sans-serif'; x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.85)'; const t = `${CITY_NAME[r]} ${String.fromCharCode(65 + i)}동`; x.strokeText(t, p[0], p[1]); x.fillStyle = here ? '#ffe27a' : 'rgba(255,255,255,.85)'; x.fillText(t, p[0], p[1]); }); }
     for (const f of FACILITIES) { const p = P(f.x, f.z); mapBadge(x, f.type, p[0], p[1], 17); }
     for (const p of PLOTS) { const s = P(p.x, p.z); mapBadge(x, p.state === 'empty' ? 'plotEmpty' : p.state === 'building' ? 'plotBuild' : p.owner === ME.id ? 'plotMine' : 'plotOther', s[0], s[1], 14); }
     for (const v of vehicles.values()) if (v.owner === ME.id) { const s = P(v.x, v.z); mapBadge(x, 'car', s[0], s[1], 16); }
@@ -412,7 +413,7 @@ const UI = {
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
     hold(B.jump, () => { INP.jump = true; INP.brake = true; }, () => { INP.brake = false; });
     // 헬기 전용 고도 버튼: 누르는 동안만 오르거나 내린다 (떼면 그 높이에서 호버링)
-    B.hUp = mk('tHUp', '▲', 'right:18px;bottom:268px;display:none', '', '상승'); B.hDn = mk('tHDn', '▼', 'right:18px;bottom:340px;display:none', '', '하강');
+    B.hUp = mk('tHUp', '▲', 'right:24px;bottom:196px;display:none;width:62px;height:62px', '', '상승'); B.hDn = mk('tHDn', '▼', 'right:96px;bottom:196px;display:none;width:62px;height:62px', '', '하강');
     hold(B.hUp, () => { INP.heliUp = true; }, () => { INP.heliUp = false; }); hold(B.hDn, () => { INP.heliDown = true; INP.heliUp = false; }, () => { INP.heliDown = false; });
     hold(B.aim, () => { INP.aim = !INP.aim; B.aim.dataset.on = INP.aim ? 1 : 0; }, () => { if (INP.aim) B.aim.classList.add('on'); });
     hold(B.use, () => { if (ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else doInteract(); });
@@ -456,7 +457,8 @@ const UI = {
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
     const heli = inV && ME.vehicle.kind === 'heli'; B.jump.innerHTML = heli ? '▲<small>상승</small>' : inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.run.innerHTML = heli ? '▼<small>하강</small>' : inV && ME.vehicle.kind === 'car' ? 'DRIFT<small>드리프트</small>' : 'RUN<small>달리기</small>'; const pass = inV && ME.seat !== 'd'; /* 동승자는 차 안에서도 던질 수 있다 */ const canT = !inV || pass; if (B.nade) B.nade.style.display = (ME.inv.grenade | 0) > 0 && canT ? '' : 'none'; if (B.tbomb) B.tbomb.style.display = (ME.inv.tbomb | 0) > 0 && canT ? '' : 'none'; if (B.mine) B.mine.style.display = (ME.inv.mine | 0) > 0 && !inV ? '' : 'none'; if (B.back) { B.back.style.display = inV && !DRIVE.on() ? '' : 'none'; B.back.classList.toggle('on', !!INP.lookBack); } B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
-    if (B.hUp) { B.hUp.style.display = heli && !(ME.vehicle.M && ME.vehicle.M.jet) ? '' : 'none'; B.hDn.style.display = B.hUp.style.display; }
+    { const pilotH = heli && ME.seat === 'd' && !(ME.vehicle.M && ME.vehicle.M.jet); if (B.wpn) B.wpn.style.display = pilotH ? 'none' : ''; if (B.rel) B.rel.style.display = pilotH ? 'none' : ''; }
+    if (B.hUp) { B.hUp.style.display = heli && ME.seat === 'd' && !(ME.vehicle.M && ME.vehicle.M.jet) ? '' : 'none'; B.hDn.style.display = B.hUp.style.display; }
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun || !!INP.heliDown);
   },
 };
