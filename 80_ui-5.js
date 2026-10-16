@@ -1,4 +1,4 @@
-// @v 2026101502
+// @v 2026101601
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -8,7 +8,8 @@ const UI = {
   menuOpen: false, mapOpen: false, waypoint: null, lastRegion: '',
   init() {
     $('#mapClose').onclick = () => this.closeMap();
-    $('#bigmapC').addEventListener('click', e => { const r = e.target.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 1400, y = (e.clientY - r.top) / r.height * 900; const w = this.mapToWorld(x, y); this.waypoint = w; toast('📍 목적지 설정'); this.drawBigMap(); });
+    this.initMapZoom();
+    $('#bigmapC').addEventListener('click', e => { if (this._mdrag) { this._mdrag = false; return; } const r = e.target.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 1400, y = (e.clientY - r.top) / r.height * 900; const w = this.mapToWorld(x, y); this.waypoint = w; toast('📍 목적지 설정'); this.drawBigMap(); });
     $('#menu').addEventListener('click', e => { if (e.target.id === 'menu') this.closeMenu(); });
     { const mb = $('#menuBox'); let busy = false; const addX = () => { if (busy || mb.querySelector(':scope > .xbtn')) return; busy = true; const x = document.createElement('button'); x.className = 'xbtn'; x.type = 'button'; x.setAttribute('aria-label', '닫기'); x.textContent = '✕'; x.onclick = e => { e.stopPropagation(); sfx('ui'); this.closeMenu(); }; mb.insertBefore(x, mb.firstChild); busy = false; }; new MutationObserver(addX).observe(mb, { childList: true }); }
     this.buildHotbar();
@@ -125,7 +126,7 @@ const UI = {
         { ic: '🥤', t: '해장 음료', p: 500, d: '취기 해소', fn: () => { ME.drunk = 0; } },
         { ic: '💃', t: '춤추기', p: 0, fn: () => { setTimeout(() => this.openDance(), 50); } },
         { ic: '🎧', t: 'DJ 신청곡 (BPM 변경)', p: 500, fn: () => { MUSIC.bpm = pick([110, 124, 128, 140, 96]); toast(`🎧 BPM ${MUSIC.bpm}`); } }]); break;
-      case 'casino': this.openCasino(); break;
+      case 'casino': CSN.hub(); break;
       case 'court': courtFacilityMenu(); break;
       case 'hotel': this.openMenu('🏨 시모느 리조트 호텔', '', [{ ic: '🛏️', t: '숙박 (체력 회복 + 스폰 설정)', p: 5000, fn: () => { ME.hp = 100; ME.homePlot = null; ME.spawnHotel = true; toast('🛏️ 푹 쉬었다'); } }, { ic: '🍹', t: '루프탑 바', p: 1500, fn: () => { ME.drunk = Math.min(1.2, ME.drunk + 0.4); } }]); break;
     }
@@ -354,12 +355,33 @@ const UI = {
     const n = clampS(toS(px, pz - 5000)); x.fillStyle = '#fff'; x.font = `bold ${Math.round(S / 16)}px sans-serif`; x.fillText('북', n[0], n[1]); x.fillStyle = '#cfd6e6'; x.font = `bold ${Math.round(S / 20)}px sans-serif`; for (const [dx, dz, t] of [[5000, 0, '동'], [0, 5000, '남'], [-5000, 0, '서']]) { const q = clampS(toS(px + dx, pz + dz)); x.fillText(t, q[0], q[1]); }
     x.restore();
   },
-  openMap() { this.mapOpen = true; $('#bigmap').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); this.drawBigMap(); },
+  mapZ: { z: 1, cx: 0, cz: 0 },
+  // 지도 확대/축소: 휠 · 핀치(두 손가락) · 한 손가락 드래그 이동 · +/- 버튼
+  setMapZoom(z, cx, cz) { const M = this.mapZ; M.z = clamp(z, 1, 12); const ww = HM.W * HM.res, wh = HM.H * HM.res; M.cx = clamp(cx ?? M.cx, HM.x0, HM.x0 + ww); M.cz = clamp(cz ?? M.cz, HM.z0, HM.z0 + wh); if (M.z <= 1.001) { M.cx = HM.x0 + ww / 2; M.cz = HM.z0 + wh / 2; } this.drawBigMap(); },
+  initMapZoom() {
+    const cv = $('#bigmapC'), box = $('#bigmap'); cv.style.touchAction = 'none'; const M = this.mapZ; const pts = new Map(); let pd = 0, mv = 0;
+    const toC = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 1400, (e.clientY - r.top) / r.height * 900]; };
+    const zoomAt = (f, px, py) => { const w = this.mapToWorld(px, py); const z2 = clamp(M.z * f, 1, 12); const k2 = this._ms.k / M.z * z2; this.setMapZoom(z2, w.x - (px - 700) / k2, w.z - (py - 450) / k2); };
+    cv.addEventListener('wheel', e => { e.preventDefault(); const [px, py] = toC(e); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, px, py); }, { passive: false });
+    cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, toC(e)); mv = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pd = Math.hypot(a[0] - b[0], a[1] - b[1]); } try { cv.setPointerCapture(e.pointerId); } catch (_) { } });
+    cv.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return; const old = pts.get(e.pointerId), cur = toC(e); pts.set(e.pointerId, cur);
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pd > 0 && d > 0) zoomAt(d / pd, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pd = d; this._mdrag = true; return; }
+      const dx = cur[0] - old[0], dy = cur[1] - old[1]; mv += Math.abs(dx) + Math.abs(dy);
+      if (mv > 8 && M.z > 1.001) { this._mdrag = true; const k = this._ms.k; this.setMapZoom(M.z, M.cx - dx / k, M.cz - dy / k); }
+    });
+    const up = e => { pts.delete(e.pointerId); pd = 0; if (!pts.size) setTimeout(() => { this._mdrag = false; }, 60); };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    const bar = document.createElement('div'); bar.style.cssText = 'position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:2';
+    for (const [t, fn] of [['+', () => zoomAt(1.5, 700, 450)], ['-', () => zoomAt(1 / 1.5, 700, 450)], ['내 위치', () => { const a = anchorOf(ME); this.setMapZoom(Math.max(M.z, 4), a.x, a.z); }], ['전체', () => this.setMapZoom(1)]]) { const b = document.createElement('button'); b.className = 'btn b3'; b.textContent = t; b.style.cssText = 'min-width:56px;font-size:20px;padding:10px 12px'; b.onclick = e => { e.stopPropagation(); sfx('ui'); fn(); }; bar.appendChild(b); }
+    box.appendChild(bar);
+  },
+  openMap() { this.mapZ.z = 1; this.mapOpen = true; $('#bigmap').classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); this.drawBigMap(); },
   closeMap() { this.mapOpen = false; $('#bigmap').classList.add('hidden'); },
   mapToWorld(px, py) { const s = this._ms; return { x: (px - s.ox) / s.k, z: (py - s.oy) / s.k }; },
   drawBigMap() {
     const cv = $('#bigmapC'); const x = cv.getContext('2d'); const W = cv.width, H = cv.height;
-    const ww = HM.W * HM.res, wh = HM.H * HM.res; const k = Math.min(W / ww, H / wh); const ox = (W - ww * k) / 2 - HM.x0 * k, oy = (H - wh * k) / 2 - HM.z0 * k; this._ms = { k, ox, oy };
+    const ww = HM.W * HM.res, wh = HM.H * HM.res; const k0 = Math.min(W / ww, H / wh); const MZ = this.mapZ; const k = k0 * MZ.z; const ox = MZ.z > 1.001 ? W / 2 - MZ.cx * k : (W - ww * k) / 2 - HM.x0 * k, oy = MZ.z > 1.001 ? H / 2 - MZ.cz * k : (H - wh * k) / 2 - HM.z0 * k; this._ms = { k, ox, oy };
     x.fillStyle = '#16324a'; x.fillRect(0, 0, W, H); x.drawImage(this.worldImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
     const P = (wx, wz) => [ox + wx * k, oy + wz * k];
     if (this.zoneImg) x.drawImage(this.zoneImg, ox + HM.x0 * k, oy + HM.z0 * k, ww * k, wh * k);
@@ -391,6 +413,9 @@ const UI = {
     const hold = (el, on, off) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); AU.init(); on(); el.classList.add('on'); }, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off && off(); el.classList.remove('on'); }, { passive: false }); el.addEventListener('touchcancel', e => { off && off(); el.classList.remove('on'); }); };
     hold(B.fire, () => { INP.fire = true; }, () => { INP.fire = false; });
     hold(B.jump, () => { INP.jump = true; INP.brake = true; }, () => { INP.brake = false; });
+    // 헬기 전용 고도 버튼: 누르는 동안만 오르거나 내린다 (떼면 그 높이에서 호버링)
+    B.hUp = mk('tHUp', '▲', 'right:18px;bottom:268px;display:none', '', '상승'); B.hDn = mk('tHDn', '▼', 'right:18px;bottom:340px;display:none', '', '하강');
+    hold(B.hUp, () => { INP.heliUp = true; }, () => { INP.heliUp = false; }); hold(B.hDn, () => { INP.heliDown = true; INP.heliUp = false; }, () => { INP.heliDown = false; });
     hold(B.aim, () => { INP.aim = !INP.aim; B.aim.dataset.on = INP.aim ? 1 : 0; }, () => { if (INP.aim) B.aim.classList.add('on'); });
     hold(B.use, () => { if (ME.vehicle) { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else doInteract(); });
     hold(B.car, () => toggleVehicle());
@@ -433,6 +458,7 @@ const UI = {
   updateTouch() {
     if (!this.touchBtns) return; const B = this.touchBtns; const inV = !!ME.vehicle;
     const heli = inV && ME.vehicle.kind === 'heli'; B.jump.innerHTML = heli ? '▲<small>상승</small>' : inV ? '■<small>브레이크</small>' : '↑<small>점프</small>'; B.run.innerHTML = heli ? '▼<small>하강</small>' : inV && ME.vehicle.kind === 'car' ? 'DRIFT<small>드리프트</small>' : 'RUN<small>달리기</small>'; const pass = inV && ME.seat !== 'd'; /* 동승자는 차 안에서도 던질 수 있다 */ const canT = !inV || pass; if (B.nade) B.nade.style.display = (ME.inv.grenade | 0) > 0 && canT ? '' : 'none'; if (B.tbomb) B.tbomb.style.display = (ME.inv.tbomb | 0) > 0 && canT ? '' : 'none'; if (B.mine) B.mine.style.display = (ME.inv.mine | 0) > 0 && !inV ? '' : 'none'; if (B.back) { B.back.style.display = inV && !DRIVE.on() ? '' : 'none'; B.back.classList.toggle('on', !!INP.lookBack); } B.use.innerHTML = inV ? 'H<small>경적</small>' : 'E<small>상호작용</small>'; B.car.innerHTML = inV ? (ME.vehicle.taxiCab ? 'OUT<small>세워주세요</small>' : 'OUT<small>하차</small>') : 'IN<small>탑승</small>';
+    if (B.hUp) { B.hUp.style.display = heli && !(ME.vehicle.M && ME.vehicle.M.jet) ? '' : 'none'; B.hDn.style.display = B.hUp.style.display; }
     B.aim.classList.toggle('on', INP.aim); B.run.classList.toggle('on', INP.touchRun || !!INP.heliDown);
   },
 };
