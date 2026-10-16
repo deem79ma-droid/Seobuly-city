@@ -1,4 +1,4 @@
-// @v 2026101502
+// @v 2026101703
 
 // ================= NPC: PEDESTRIANS, POLICE, GANGS =================
 const PEDS = []; const N_PED = 100; const PICKUPS = new Map(); let pickupSeq = 1;

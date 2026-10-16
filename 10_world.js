@@ -1,4 +1,4 @@
-// @v 2026101431
+// @v 2026101703
 
 // ================= WORLD: LAYOUT =================
 const LAND = 2;
@@ -14,6 +14,7 @@ const REGIONS = {
   simone: { name: '시모느 아일랜드', desc: '남동쪽 휴양 섬', color: '#4fffe0', cx: 2000, cz: 560 },
   kualp: { name: '쿠알프스드', desc: '북쪽 만년설 산악 지방 · 스키 리조트 마을 · 눈길(차량 미끄러움) · 온천 · 사냥 천국', color: '#bfe6ff', cx: -150, cz: -2150 },
   chiga: { name: '치가커렌', desc: '남쪽 사막 무역항 도시 · 흙벽돌 시장통 · 오아시스 · 메사 협곡 · 낙타', color: '#ffb35a', cx: 50, cz: 2150 },
+  agaton: { name: '아가톤섬', desc: '도로가 이어지지 않은 고립된 섬 · 경찰이 없다 · 가끔 귀신이 나온다', color: '#b48aff', cx: 2130, cz: -1000 },
   sea: { name: '바다', desc: '', color: '#5aa0ff', cx: 0, cz: 0 },
 };
 // ---- 산 4개: 이름(한자) · 정상 위치. 시모느의 천해산이 가장 높다 ----
@@ -25,6 +26,7 @@ const MOUNTAINS = [
   { id: 'baengryeong', n: '백령봉', hj: '白嶺峰', d: '쿠알프스드의 만년설 봉우리 · 서불리 세계에서 가장 높은 산', x: -250, z: -2750, r: 380 },
   { id: 'seolhwa', n: '설화령', hj: '雪花嶺', d: '쿠알프스드 서쪽의 눈꽃 능선 · 스키 슬로프', x: -880, z: -2400, r: 300 },
 ];
+const ISLE3 = { x: 2130, z: -1000, r: 290 }; // 아가톤섬 (북동쪽 바다 · 도로 없음)
 const ISLE2 = { x: 2290, z: 1030, r: 235 }; // 천해산이 있는 시모느 남동쪽 땅
 // 큰 땅 두 덩이: 북쪽(쿠알프스드)·남쪽(치가커렌)은 본토와 이어져 있고 해안선은 불규칙하다
 const KUALP = { x: -150, z: -2150, rx: 1300, rz: 1100 };
@@ -38,6 +40,7 @@ function mountainAt(x, z) { let best = null, bd = 1e9; for (const M of MOUNTAINS
 function warpX(x, z) { return x + fbm(x * 0.0016 + 5, z * 0.0016 - 9, 3) * 520 + vnoise(x * 0.006, z * 0.006) * 80; }
 function warpZ(x, z) { return z + fbm(x * 0.0016 - 3, z * 0.0016 + 8, 3) * 520 + vnoise(x * 0.006 + 4, z * 0.006 - 2) * 80; }
 function regionAt(x, z) {
+  if (Math.hypot(x - ISLE3.x, z - ISLE3.z) < ISLE3.r) return 'agaton';
   if (Math.hypot(x - ISLE2.x, z - ISLE2.z) < ISLE2.r) return 'simone';
   if (((x - 2000) / 420) ** 2 + ((z - 560) / 510) ** 2 < 1) return 'simone';
   if (x > 1420 || z < -3300 || z > 3300) return 'sea';
@@ -73,8 +76,9 @@ const DISTRICTS = [
   { id: 20, name: '치가커렌 구시가', region: 'chiga', cx: -100, cz: 2180 },
   { id: 21, name: '치가커렌 오아시스', region: 'chiga', cx: -800, cz: 2420 },
   { id: 22, name: '치가커렌 메사 협곡', region: 'chiga', cx: 850, cz: 2300 },
+  { id: 23, name: '아가톤섬', region: 'agaton', cx: 2130, cz: -1000 },
 ];
-const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0', '#bfe6ff', '#8fb8ff', '#6fd0ff', '#ffb35a', '#ff9a3a', '#e07a4a'];
+const DISTRICT_COLORS = ['#ff5fd8', '#4fc3ff', '#3fa8ff', '#7fd6ff', '#5fb0e8', '#2f8fdf', '#7dff8a', '#5fe070', '#a8ff9a', '#ff8a5a', '#ff4f4f', '#4f7bff', '#ffe27a', '#ffd54f', '#ffb84f', '#4fffe0', '#bfe6ff', '#8fb8ff', '#6fd0ff', '#ffb35a', '#ff9a3a', '#e07a4a', '#b48aff'];
 function districtAt(x, z) { // 1..16, 0 = 바다
   const r = regionAt(x, z);
   switch (r) {
@@ -84,11 +88,28 @@ function districtAt(x, z) { // 1..16, 0 = 바다
     case 'kaengjibe': return z > 540 ? (x < -280 ? 11 : 12) : 10;
     case 'disanbay': return z < -220 ? 13 : z <= 220 ? 14 : 15;
     case 'simone': return 16;
+    case 'agaton': return 23;
     case 'kualp': return Math.hypot(x + 790, z + 1750) < 330 ? 19 : z < -2250 ? 18 : 17;
     case 'chiga': return Math.hypot(x + 800, z - 2420) < 330 ? 21 : x > 480 ? 22 : 20;
   }
   return 0;
 }
+// ---- 도시 안의 동(洞): 서불리시 A동 · 캥지베시 D동 … (가장 가까운 동 중심으로 나눈다) ----
+const CITY_NAME = { seoburi: '서불리시', jiolle: '지올르시', kaengjibe: '캥지베시', disanbay: '디산베이시', kualp: '쿠알프스드시', chiga: '치가커렌시' };
+const DONG_SEEDS = {
+  seoburi: [[450, -400], [800, -400], [1150, -400], [450, 400], [800, 400], [1150, 400]],
+  jiolle: [[-520, -800], [-40, -800], [-480, -360], [-100, -360]],
+  kaengjibe: [[-480, 330], [-100, 330], [-520, 830], [-40, 830]],
+  disanbay: [[-1050, -560], [-1050, 0], [-1150, 440]],
+  kualp: [[-50, -1780], [-250, -2650], [-790, -1750]],
+  chiga: [[-100, 2180], [-800, 2420], [850, 2300]],
+};
+function dongAt(x, z) {
+  const r = regionAt(x, z), S = DONG_SEEDS[r]; if (!S) return null;
+  let bi = 0, bd = 1e18; for (let i = 0; i < S.length; i++) { const d = (x - S[i][0]) ** 2 + (z - S[i][1]) ** 2; if (d < bd) { bd = d; bi = i; } }
+  const letter = String.fromCharCode(65 + bi); return { region: r, city: CITY_NAME[r], i: bi, letter, name: `${CITY_NAME[r]} ${letter}동` };
+}
+function placeName(x, z) { const d = dongAt(x, z); return d ? d.name : (REGIONS[regionAt(x, z)] || REGIONS.sea).name; }
 // ---- road graph ----
 const NODES = [], EDGES = []; const nodeIdx = new Map();
 function rnode(x, z) { const k = Math.round(x) + ',' + Math.round(z); if (nodeIdx.has(k)) return nodeIdx.get(k); const n = { id: NODES.length, x, z, edges: [], light: false }; NODES.push(n); nodeIdx.set(k, n); return n; }
@@ -105,6 +126,7 @@ const GRIDS = [
   { region: 'kaengjibe', xs: [-680, -520, -360, -200, 0, 200], zs: [260, 440, 620, 800, 960], w: 12 },
   { region: 'simone', xs: [1720, 1860, 2000, 2140, 2280], zs: [200, 320, 440, 560, 680, 800, 920], w: 11, clip: (x, z) => ((x - 2000) / 370) ** 2 + ((z - 560) / 450) ** 2 <= 1 },
   // 쿠알프스드 스키 마을 · 치가커렌 구시가: 가장자리를 노이즈로 깎아 자연스럽게
+  { region: 'agaton', xs: [1860, 1950, 2040, 2130, 2220, 2310, 2400], zs: [-1270, -1180, -1090, -1000, -910, -820, -730], w: 10, clip: (x, z) => Math.hypot(x - ISLE3.x, z - ISLE3.z) <= 215 },
   { region: 'kualp', xs: [-330, -190, -50, 90, 230], zs: [-2060, -1920, -1780, -1640, -1500], w: 11, clip: (x, z) => Math.hypot((x - KUALP_TOWN.x) / 340, (z - KUALP_TOWN.z) / 340) + fbm(x * 0.012, z * 0.012, 2) * 0.22 < 1.0 },
   { region: 'chiga', xs: [-500, -340, -180, -20, 140, 300], zs: [1900, 2040, 2180, 2320, 2460], w: 12, clip: (x, z) => Math.hypot((x - CHIGA_TOWN.x) / 450, (z - CHIGA_TOWN.z) / 350) + fbm(x * 0.01, z * 0.01, 2) * 0.22 < 1.0 },
 ];
@@ -166,9 +188,10 @@ function landF(x, z) {
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430 + fbm(x * 0.006, z * 0.006, 3) * 30;
   const l2 = smooth(25, -25, sdI);
   const l4 = smooth(25, -25, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r + fbm(x * 0.008 + 3, z * 0.008, 3) * 40);
+  const l8 = smooth(25, -25, Math.hypot(x - ISLE3.x, z - ISLE3.z) - ISLE3.r + fbm(x * 0.008 + 9, z * 0.008 - 4, 3) * 40);
   const l5 = smooth(30, -30, lobeSd(x, z, KUALP, 3)), l6 = smooth(30, -30, lobeSd(x, z, CHIGA, 11));
   let l7 = 0; for (const I of ISLETS) { const dx = x - I.x, dz = z - I.z; if (Math.abs(dx) < I.r * 1.6 && Math.abs(dz) < I.r * 1.6) l7 = Math.max(l7, smooth(22, -22, Math.hypot(dx, dz) - I.r + fbm(x * 0.012 + 8, z * 0.012, 3) * 60)); }
-  return Math.max(l1, l2, l4, l5, l6, l7);
+  return Math.max(l1, l2, l4, l5, l6, l7, l8);
 }
 function hillsAt(x, z) {
   const wW = smooth(-650, -820, x);
@@ -178,6 +201,8 @@ function hillsAt(x, z) {
   // 시모느 아일랜드: 동쪽 언덕 + 북쪽 작은 봉우리
   h += 46 * Math.exp(-((x - 2140) ** 2 + (z - 850) ** 2) / (2 * 110 * 110));
   h += 24 * Math.exp(-((x - 1830) ** 2 + (z - 230) ** 2) / (2 * 80 * 80));
+  // 아가톤섬: 서쪽 숲 언덕 + 동쪽 낮은 언덕
+  h += 34 * Math.exp(-((x - 2030) ** 2 + (z + 1110) ** 2) / (2 * 90 * 90)) + 22 * Math.exp(-((x - 2260) ** 2 + (z + 920) ** 2) / (2 * 80 * 80));
   // 천해산 (시모느 · 최고봉) · 망성산 (서불리 북쪽)
   { const d2 = (x - 2290) ** 2 + (z - 1030) ** 2; h += 330 * Math.exp(-d2 / (2 * 120 * 120)) + 40 * Math.exp(-d2 / (2 * 40 * 40)); h += (fbm(x * 0.012, z * 0.012, 3) * 0.5) * 30 * Math.exp(-d2 / (2 * 160 * 160)); }
   { const d2 = (x - 820) ** 2 + (z + 935) ** 2; h += 135 * Math.exp(-d2 / (2 * 115 * 115)) + (fbm(x * 0.01 + 7, z * 0.01, 3) * 0.5 + 0.3) * 25 * Math.exp(-d2 / (2 * 150 * 150)); }
@@ -222,7 +247,7 @@ function coastDist(x, z) {
   const sd = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - 220 - coastBump(x, z);
   const e = Math.hypot((x - 2000) / 400, (z - 560) / 490); const sdI = (e - 1) * 430;
   const lk = (L) => (Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz) - 1) * Math.min(L.rx, L.rz) * 0.9;
-  return -Math.min(sd, sdI, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r, lk(KUALP), lk(CHIGA));
+  return -Math.min(sd, sdI, Math.hypot(x - ISLE2.x, z - ISLE2.z) - ISLE2.r, Math.hypot(x - ISLE3.x, z - ISLE3.z) - ISLE3.r, lk(KUALP), lk(CHIGA));
 }
 function hmIdx(i, j) { return j * HM.W + i; }
 function hmSample(arr, x, z) {
@@ -536,15 +561,17 @@ const FAC = {
   zoo: { name: '동물원', icon: '🦁', col: 0x6f8c45, eng: 'ZOO' }, gun: { name: '총포사', icon: '🔫', col: 0x5a3a2a, eng: 'GUNS' },
   clothes: { name: '옷가게', icon: '👕', col: 0xf0e6f2, eng: 'FASHION' }, club: { name: '클럽 네온', icon: '🪩', col: 0x1a1030, eng: 'CLUB' },
   casino: { name: '카지노', icon: '🎰', col: 0x2a1a08, eng: 'CASINO' }, hotel: { name: '리조트 호텔', icon: '🏨', col: 0xf2efe8, eng: 'RESORT' },
+  govt: { name: '정부청사', icon: '🏛️', col: 0xcfc6b0, eng: 'GOVERNMENT' }, stats: { name: '통계청', icon: '📊', col: 0xa9c4bd, eng: 'STATISTICS' },
 };
 const REGION_FAC = {
-  seoburi: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes', 'food', 'academy'],
-  jiolle: ['police', 'hospital', 'dealer', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
+  seoburi: ['govt', 'stats', 'police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes', 'food', 'academy'],
+  jiolle: ['govt', 'police', 'hospital', 'dealer', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
   kaengjibe: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'zoo', 'gun', 'clothes'],
   disanbay: ['police', 'hospital', 'dealer', 'factory', 'school', 'academy', 'food', 'pcbang', 'gym', 'pool', 'gun', 'clothes'],
   simone: ['hotel', 'food', 'hospital', 'pool', 'clothes', 'dealer', 'police'],
   kualp: ['police', 'hospital', 'hotel', 'food', 'dealer', 'clothes', 'pool', 'gym', 'gun', 'food'],
-  chiga: ['police', 'hospital', 'dealer', 'food', 'school', 'academy', 'pcbang', 'gym', 'clothes', 'gun', 'hotel', 'food', 'pool', 'food'],
+  chiga: ['govt', 'police', 'hospital', 'dealer', 'food', 'school', 'academy', 'pcbang', 'gym', 'clothes', 'gun', 'hotel', 'food', 'pool', 'food'],
+  agaton: ['hospital', 'food', 'hotel', 'clothes', 'dealer'], // 경찰서 없음
 };
 function makeSignTex(text, sub, bg, fg = '#fff', w = 512, h = 128) {
   return canvasTex(w, h, (x) => {
@@ -564,7 +591,7 @@ const SIDE_VEC = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
 // ---- 들어갈 수 있는 건물 목록 (모든 건물에 문 + 실내) ----
 const BLD_KIND = {
   office: '오피스 빌딩', bank: '서불리 은행', cafe: '카페', restaurant: '식당', mart: '편의점', apartment: '아파트', house: '주택', villa: '빌라',
-  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
+  factory: '공장', church: '교회', barn: '헛간', hotel: '호텔', police: '경찰서', govt: '정부청사', stats: '통계청', hospital: '병원', dealer: '자동차 판매점', school: '학교', academy: '학원',
   food: '음식점', pcbang: 'PC방', gym: '헬스장', pool: '실내 수영장', gun: '총포사', clothes: '옷가게', casino: '카지노', guard: '교도관실', home: '내 집',
 };
 const BUILDINGS = []; const BLD_GRID = new Map(); const BLD_CELL = 64;
@@ -633,19 +660,19 @@ function genBlocks() {
     const facs = REGION_FAC[g.region].slice(); let bi = 0;
     // whole-block uses
     for (const f of facs) { const b = list[bi++]; if (!b) break; b.use = 'fac'; b.fac = f; }
-    const nPlots = g.region === 'simone' ? 3 : 4;
+    const nPlots = g.region === 'simone' ? 3 : g.region === 'agaton' ? 2 : 4;
     for (let k = 0; k < nPlots; k++) { const b = list[bi++]; if (b) b.use = 'plotblock'; }
     if (g.region === 'seoburi') for (let k = 0; k < 4; k++) { const b = list[bi++]; if (b) b.use = k < 2 ? 'park' : 'parking'; }
     if (g.region === 'kaengjibe') for (let k = 0; k < 2; k++) { const b = list[bi++]; if (b) b.use = k ? 'court' : 'park'; }
     if (g.region === 'jiolle') for (let k = 0; k < 3; k++) { const b = list[bi++]; if (b) b.use = k === 0 ? 'park' : 'factoryblock'; }
-    if (g.region === 'simone') { const b = list[bi++]; if (b) b.use = 'park'; }
+    if (g.region === 'simone' || g.region === 'agaton') { const b = list[bi++]; if (b) b.use = 'park'; }
     if (g.region === 'kualp') { const b = list[bi++]; if (b) b.use = 'park'; } // 스키 광장
     if (g.region === 'chiga') for (let k = 0; k < 3; k++) { const b = list[bi++]; if (b) b.use = k === 0 ? 'park' : 'factoryblock'; } // 오아시스 광장 · 항구 창고
     if (g.region !== 'seoburi') { const b = list[bi++]; if (b) b.use = 'parking'; } // 모든 지역에 주차장 (차 소환)
   }
   for (const b of BLOCKS) {
     // slab + curb
-    const slabCol = b.region === 'kaengjibe' ? C(0x9a958c) : b.region === 'simone' ? C(0xe9e2d0) : b.region === 'chiga' ? C(0xd9c9a4) : b.region === 'kualp' ? C(0xe6ecf0) : C(0xc9c6c0);
+    const slabCol = b.region === 'kaengjibe' ? C(0x9a958c) : b.region === 'simone' ? C(0xe9e2d0) : b.region === 'agaton' ? C(0xb4b0a6) : b.region === 'chiga' ? C(0xd9c9a4) : b.region === 'kualp' ? C(0xe6ecf0) : C(0xc9c6c0);
     mbAt('concrete', b.x0, b.z0).box((b.x0 + b.x1) / 2, LAND - 0.5, (b.z0 + b.z1) / 2, b.x1 - b.x0, 0.66, b.z1 - b.z0, slabCol, null, { topUV: 6 });
     markGrass(b.x0 - 1, b.z0 - 1, b.x1 + 1, b.z1 + 1, 0);
     const iw = b.ix1 - b.ix0, id = b.iz1 - b.iz0;
@@ -776,6 +803,9 @@ function buildLotBuilding(lot, side, R, b) {
   } else if (R === 'kualp') { // 통나무 샬레 마을
     if (wrng() < 0.18) { const h = wr(13, 20); const top = addBuildingBox(cx, cz, lw - 8, ld - 8, h, 'house', C(wpick(PALETTE.wood))); mbAt('roof', cx, cz).gable(cx, top, cz, lw - 6, ld - 6, 5, C(wpick(PALETTE.snowRoof)), (lw > ld ? 'x' : 'z')); roofProps(cx, cz, lw - 12, ld - 12, top, 1); regBuilding(wrng() < 0.5 ? 'hotel' : 'restaurant', cx, cz, lw - 8, ld - 8, top + 3, side); }
     else { const n = 2; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const hx = lot.x0 + lw * (i + 0.5) / n, hz = lot.z0 + ld * (j + 0.5) / n; buildHouse(hx, hz, lw / n - 5, ld / n - 5, wrng() < 0.5 ? 2 : 3, R); } }
+  } else if (R === 'agaton') { // 낡은 외딴 마을: 오래된 단독주택 + 낮은 벽돌 아파트
+    if (wrng() < 0.3) { const h = wr(9, 15); const w = lw - wr(3, 7), d = ld - wr(3, 7); const top = addBuildingBox(cx, cz, w, d, h, 'brick', C(wpick(PALETTE.brick))); regBuilding('apartment', cx, cz, w, d, top, side); roofProps(cx, cz, w, d, top, 1); }
+    else buildHouse(cx, cz, lw - 6, ld - 6, wrng() < 0.5 ? 2 : 3, R);
   } else if (R === 'simone') {
     if (wrng() < 0.25 && Math.hypot(cx - 2000, cz - 560) < 220) { const h = wr(30, 60); const top = addBuildingBox(cx, cz, lw - 10, ld - 10, h, 'apt', C(0xffffff)); roofProps(cx, cz, lw - 10, ld - 10, top, 2); regBuilding('hotel', cx, cz, lw - 10, ld - 10, top, side); }
     else buildVilla(cx, cz, lw - 6, ld - 6, side);
@@ -931,7 +961,7 @@ function buildOutdoorPool(lot) {
 }
 function makePlot(lot, side, R) {
   const cx = (lot.x0 + lot.x1) / 2, cz = (lot.z0 + lot.z1) / 2; const w = Math.min(lot.x1 - lot.x0 - 4, 40), d = Math.min(lot.z1 - lot.z0 - 4, 40);
-  const id = PLOTS.length; const price = { seoburi: 60000, jiolle: 30000, kaengjibe: 18000, disanbay: 22000, simone: 90000 }[R] || 30000;
+  const id = PLOTS.length; const price = { seoburi: 60000, jiolle: 30000, kaengjibe: 18000, disanbay: 22000, simone: 90000, agaton: 15000 }[R] || 30000;
   const p = { id, x: cx, z: cz, w, d, side, region: R, price, owner: null, ownerName: '', design: null, progress: 0, state: 'empty', y: groundHeight(cx, cz) };
   const dirt = new THREE.Mesh(new THREE.PlaneGeometry(w, d), MAT.dirt); dirt.rotation.x = -Math.PI / 2; dirt.position.set(cx, p.y + 0.25, cz); dirt.receiveShadow = true; scene.add(dirt);
   const [sx, sz] = SIDE_VEC[side];
@@ -1455,11 +1485,18 @@ function buildTerrainMesh() {
     const hx = hmData[hmIdx(Math.min(hi + 1, HM.W - 1), hj)] - h, hz = hmData[hmIdx(hi, Math.min(hj + 1, HM.H - 1))] - h; const slope = Math.hypot(hx, hz) / HM.res;
     const R = regionAt(x, z); const n = fbm(x * 0.01, z * 0.01, 3), n2 = vnoise(x * 0.08, z * 0.08);
     let r, g, b;
-    const grass = { plaza: [0.36, 0.56, 0.24], disanbay: [0.33, 0.53, 0.2], jiolle: [0.38, 0.54, 0.26], kaengjibe: [0.5, 0.46, 0.3], seoburi: [0.38, 0.5, 0.3], simone: [0.38, 0.6, 0.26], sea: [0.4, 0.58, 0.28], kualp: [0.2, 0.34, 0.22], chiga: [0.84, 0.7, 0.44] }[R];
+    const grass = { plaza: [0.36, 0.56, 0.24], disanbay: [0.33, 0.53, 0.2], jiolle: [0.38, 0.54, 0.26], kaengjibe: [0.5, 0.46, 0.3], seoburi: [0.38, 0.5, 0.3], simone: [0.38, 0.6, 0.26], agaton: [0.3, 0.45, 0.27], sea: [0.4, 0.58, 0.28], kualp: [0.2, 0.34, 0.22], chiga: [0.84, 0.7, 0.44] }[R];
     [r, g, b] = grass; r += n * 0.08 + n2 * 0.03; g += n * 0.06 + n2 * 0.04; b += n * 0.03;
     if (R === 'disanbay' && n > 0.2) { r += 0.08; g += 0.02; }
     if (R === 'kualp') { const t = smooth(10, 50, h + n * 14); r = lerp(r, 0.92, t); g = lerp(g, 0.95, t); b = lerp(b, 0.98, t); }
     if (R === 'chiga') { const t = smooth(0.1, 0.5, vnoise(x * 0.012, z * 0.012)); r = lerp(r, 0.78, t * 0.4); g = lerp(g, 0.58, t * 0.4); b = lerp(b, 0.36, t * 0.4); }
+    if (R === 'kualp' || R === 'chiga') { // 소구역별 지표 색: 빙호(얼음) · 설봉(암반) · 오아시스(초록) · 메사(붉은 사암)
+      const dz = districtAt(x, z);
+      if (dz === 19) { const t = 0.6 + n * 0.2; r = lerp(r, 0.7, t); g = lerp(g, 0.87, t); b = lerp(b, 0.97, t); }
+      else if (dz === 18) { const t = 0.3 + n * 0.25; r = lerp(r, 0.6, t); g = lerp(g, 0.64, t); b = lerp(b, 0.7, t); }
+      else if (dz === 21) { const t = Math.max(0, 0.75 - Math.hypot(x + 800, z - 2420) / 440); r = lerp(r, 0.38, t); g = lerp(g, 0.56, t); b = lerp(b, 0.24, t); }
+      else if (dz === 22) { const t = 0.55 + n * 0.25; r = lerp(r, 0.76, t); g = lerp(g, 0.34, t); b = lerp(b, 0.18, t); }
+    }
     const rd = roadDistF[hmIdx(hi, hj)];
     if ((R === 'disanbay' || R === 'simone') && rd < 4) { const t = smooth(4, 0, rd); r = lerp(r, 0.45, t); g = lerp(g, 0.4, t); b = lerp(b, 0.32, t); }
     if (R === 'chiga' && (slope > 0.5 || h > 12 + n * 4)) { const t = Math.max(smooth(0.5, 0.9, slope), smooth(12, 30, h)); r = lerp(r, 0.64 + n * 0.05, t); g = lerp(g, 0.38 + n * 0.04, t); b = lerp(b, 0.26, t); }
@@ -1617,7 +1654,7 @@ function buildStreetProps() {
   for (const e of EDGES) {
     const a = NODES[e.a], b = NODES[e.b]; const R = e.region || regionAt((a.x + b.x) / 2, (a.z + b.z) / 2);
     const dx = (b.x - a.x) / e.len, dz = (b.z - a.z) / e.len; const px = -dz, pz = dx;
-    const city = R === 'seoburi' || R === 'jiolle' || R === 'kaengjibe' || R === 'simone' || R === 'plaza';
+    const city = R === 'seoburi' || R === 'jiolle' || R === 'kaengjibe' || R === 'simone' || R === 'agaton' || R === 'plaza';
     const spacing = e.bridge ? 30 : city ? 32 : 60;
     for (let t = e.w + 6; t < e.len - e.w - 2; t += spacing) for (const s of [-1, 1]) {
       if (!city && !e.bridge && s > 0) continue;

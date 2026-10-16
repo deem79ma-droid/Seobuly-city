@@ -1,4 +1,4 @@
-// @v 2026101601
+// @v 2026101703
 // ================= 운전 · 헬기 · 수류탄 · 교통법규 =================
 
 // ---------- 좌석: 운전석 d · 조수석 p · 뒷좌석 b1(왼쪽) b2(오른쪽) ----------
@@ -40,7 +40,7 @@ function buildHeliMesh(Mo, color, v) {
   return root;
 }
 const HELI = {
-  pads: [{ x: 60, z: 150 }, { x: -900, z: -150 }, { x: 2030, z: 700 }, { x: 760, z: 180 }],
+  pads: [{ x: 60, z: 150 }, { x: -900, z: -150 }, { x: 2030, z: 700 }, { x: 760, z: 180 }, { x: 2130, z: -1000 }],
   // 헬기장 자리: 도로·건물·나무에서 떨어진 평평한 땅을 근처에서 찾는다
   spot(p) { for (let r = 0; r <= 160; r += 6) for (let a = 0; a < (r ? 16 : 1); a++) { const x = p.x + Math.cos(a / 16 * TAU) * r, z = p.z + Math.sin(a / 16 * TAU) * r; if (roadDistAt(x, z) < 8 || terrainH(x, z) < LAND - 0.5) continue; const h = terrainH(x, z); if (Math.abs(terrainH(x + 6, z) - h) > 1 || Math.abs(terrainH(x, z + 6) - h) > 1 || Math.abs(terrainH(x - 6, z) - h) > 1 || Math.abs(terrainH(x, z - 6) - h) > 1) continue; if (collidersNear(x, z, 9).some(c => c.circle ? Math.hypot(c.x - x, c.z - z) < 9 + (c.r || 0) : x > c.x0 - 9 && x < c.x1 + 9 && z > c.z0 - 9 && z < c.z1 + 9)) continue; if (BUILDINGS.some(b => Math.abs(b.x - x) < b.w / 2 + 9 && Math.abs(b.z - z) < b.d / 2 + 9)) continue; return { x, z }; } return p; },
   // 헬기장: 바닥 표시 + 공용 헬기 (누구나 탈 수 있다)

@@ -1,4 +1,4 @@
-// @v 2026101601
+// @v 2026101703
 
 // ================= PLAYER =================
 const ME = {
@@ -92,7 +92,7 @@ function initInput() {
     if (DRIVE.on() && !UI.menuOpen) { if (!e.repeat) { if (k === 'e' || k === 'f') doInteract(); else if (k === 'h') { sfx('horn', ME.x, ME.z); NET.send({ t: 'horn' }); } else if (k === 'm') UI.openMap(); else if (k === 'z') INP.lookBack = !INP.lookBack; else if (k === 'p' || k === 'escape' || k === 'tab') { e.preventDefault(); UI.openPhone(); } } if (k === ' ' || k.startsWith('arrow')) e.preventDefault(); return; } // 🚗 운전 중: 방향·가속·브레이크(드리프트)·내리기 + 경적(H)·지도(M)·폰(P)
     if (k === 'tab' || k === 'f1' || k === 'f2') e.preventDefault();
     if (k === 'f1') { if (UI.menuOpen) UI.closeMenu(); else UI.openHelp(); return; }
-    if (k === 'f2' || k === '`') { if (UI.menuOpen) UI.closeMenu(); else ADMIN.open(); return; }
+    if (e.key === '?' && !e.repeat) ADMIN.secret(); // 관리자: ? 7번 연타로만 열린다 (설정 메뉴 · F2 · 명령어 진입 제거)
     if (UI.menuOpen) { if (k === 'escape' || k === 'e' || k === 'tab') UI.closeMenu(); return; }
     if (SHARE.isOpen()) { if (k === 'escape' || k === 'e' || k === 'tab' || k === 'p') { e.preventDefault(); SHARE.hide(); } return; }
     if (k === 't' || k === 'enter') { e.preventDefault(); if (k === 'enter' && performance.now() - (UI._chatSentT || 0) < 250) return; UI.openChat(); return; } // 한글 조합 중 Enter로 보낸 직후 따라오는 Enter에 채팅창이 다시 열리지 않게
@@ -208,6 +208,7 @@ function damageArea(x, y, z, r, dmg, by) {
   for (const v of vehicles.values()) { const d = Math.hypot(v.x - x, v.z - z); if (d < r && d > 0.5 && v.ctrl === 'local') v.damage(dmg * 6 * (1 - d / r), by); }
 }
 function addWanted(n) {
+  if (!ADMIN.on && typeof regionAt === 'function' && regionAt(anchorOf(ME).x, anchorOf(ME).z) === 'agaton') { if (n > 0 && G.t > (ME._noCopT || 0)) { ME._noCopT = G.t + 20; toast('🏝️ 아가톤섬엔 경찰이 없다 — 수배는 되지 않는다', 3000); } return; }
   const before = ME.wanted; ME.wanted = clamp(ME.wanted + n, 0, 5); ME.wantedCool = 0; if (ME.wanted > before) { UI.updateStars(true); if (ME.wanted >= 5 && before < 5) CINE_EV.wanted5(); if (ME.wanted >= 3 && before < 3) toast('🚨 경찰이 발포를 허가했다!'); }
 }
 // ----- combat -----
