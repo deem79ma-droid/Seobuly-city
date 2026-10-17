@@ -16,6 +16,41 @@ _dups = [f for f in glob.glob(src + '/[0-9]*.js') if f not in _pick.values()]
 if _dups: print('중복 파일 무시:', ', '.join(os.path.basename(f) for f in sorted(_dups)))
 js = '\n'.join(open(_pick[b], encoding='utf-8').read() for b in sorted(_pick))
 
+# ================= 빌드 검사: 주석에 먹힌 코드 찾기 =================
+# "코드; // 설명 const x = 1; foo();" 처럼 한 줄 뒤쪽 주석 안에 코드가 들어가면 그 코드는 조용히 죽는다
+# (에러도 안 난다). 파일을 합치거나 줄바꿈이 사라질 때 생기는 실수라서, 배포 전에 걸러낸다.
+#   끄기: SKIPCHECK=1
+def _line_comment_at(line):
+    """한 줄에서 문자열 밖의 '//' 위치를 찾는다 (없으면 -1). 정규식 리터럴까지는 보지 않는다."""
+    q = None; i = 0; n = len(line)
+    while i < n:
+        c = line[i]
+        if q:
+            if c == '\\': i += 2; continue
+            if c == q: q = None
+        elif c in '\'"`': q = c
+        elif c == '/' and line[i:i + 2] == '//': return i
+        i += 1
+    return -1
+_CODEISH = re.compile(r'(\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()]*\)\s*;|\b[A-Za-z_$][\w$.]*\s*=[^=][^;]*;)')
+def _swallowed(files):
+    bad = []
+    for f in files:
+        for no, line in enumerate(open(f, encoding='utf-8').read().split('\n'), 1):
+            k = _line_comment_at(line)
+            if k <= 0 or not line[:k].strip(): continue  # 줄 맨 앞 주석은 설명글
+            cm = line[k + 2:].strip()
+            if _CODEISH.search(cm) and re.search(r'[가-힣]', cm) and (cm.endswith((';', '}')) or re.search(r';\s*//', cm)):
+                bad.append((os.path.basename(f), no, cm[:90]))
+    return bad
+if os.environ.get('SKIPCHECK') != '1':
+    _bad = _swallowed(sorted(_pick.values()))
+    if _bad:
+        print('\n❌ 주석 안에 코드가 먹혔을 가능성이 있는 줄 (줄바꿈이 빠진 것 같음):')
+        for fn, no, cm in _bad: print(f'   {fn}:{no}  // {cm}')
+        print('   → 해당 줄에서 코드 앞에 줄바꿈을 넣거나, 일부러 쓴 거라면 SKIPCHECK=1 로 빌드하세요.')
+        raise SystemExit(1)
+
 # ---- 관리자 공개키 ----
 # 관리자 비밀번호는 코드/저장소에 넣지 않는다. ADMIN_PW(평문)는 환경변수/GitHub 시크릿으로만 전달되고,
 # 빌드 결과물에는 Ed25519 "공개키"만 들어간다 (서명 검증용, 공개돼도 안전).
@@ -163,4 +198,8 @@ for _dn, _ext in (('models', '.glb'), ('music', '.mp3')):  # 3D 모델 · 배경
         for _r, _ds, _fs in os.walk(_md):  # 하위 폴더에 들어가 있어도 찾아서 music/ 바로 아래로 모은다
             for f in _fs:
                 if f.endswith(_ext): shutil.copyfile(os.path.join(_r, f), os.path.join(out_dir, _dn, f))
+import shutil as _sh, subprocess as _sp
+if os.environ.get('SKIPCHECK') != '1' and _sh.which('node'):  # 문법 검사 (배포 전에 깨진 파일 차단)
+    _r = _sp.run(['node', '--check', os.path.join(out_dir, 'game.mjs')], capture_output=True, text=True)
+    if _r.returncode: print('❌ 문법 오류:\n' + _r.stderr[:1500]); raise SystemExit(1)
 print(len(out) // 1024, 'KB', len(js.splitlines()), 'lines', '| admin:', 'ON' if pub else 'OFF', '| server:', srv or 'P2P')
