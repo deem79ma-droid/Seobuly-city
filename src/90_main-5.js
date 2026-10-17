@@ -1,4 +1,4 @@
-// @v 2026101601
+// @v 2026101802
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -31,7 +31,7 @@ function leaveServer() {
 }
 function saveGame() {
   if (!G.started) return;
-  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), law: LAW.save(), card: CARD.bal, phone: PHONE.id, ...CAREER.save(), ...CSN.save(), keys: HOUSE.keys(), ...QUEST.save() }; } catch (e) { return; }
+  let o; try { o = { name: ME.name, outfit: WARDROBE.base || (ADMIN.on && ADMIN.prev ? ADMIN.prev.outfit : ME.outfit), ...WARDROBE.save(), money: Math.floor(ADMIN.on && ADMIN.prev ? ADMIN.prev.money : ME.money), debt: Math.max(0, Math.floor(ME.debt || 0)), weapons: ME.weapons, ammo: ME.ammo, mag: ME.mag, inv: ME.inv, skills: ME.skills, garage: ME.garage, homePlot: ME.homePlot, kills: ME.kills, job: JOBS.id, rec: Math.ceil(JOBS.record), law: LAW.save(), card: CARD.bal, phone: PHONE.id, ...CAREER.save(), ...CSN.save(), ...REP.save(), ...SYS.save(), keys: HOUSE.keys(), ...QUEST.save() }; } catch (e) { return; }
   if (ACCT.on) { ACCT.data = o; ACCT.push(o); return; } // 로그인: 서버에 저장
   try { localStorage.setItem('sbc3d_save', JSON.stringify(o)); } catch (e) { }
 }
@@ -176,7 +176,7 @@ async function loadWorld() {
   // player
   const sv = loadSave(); if (sv) { Object.assign(ME, { money: sv.money ?? 3000, debt: Math.max(0, Number(sv.debt) || 0), weapons: sv.weapons || { fist: 1 }, ammo: sv.ammo || {}, mag: sv.mag || {}, inv: Object.assign(ME.inv, sv.inv || {}), skills: Object.assign(ME.skills, sv.skills || {}), garage: sv.garage || [], homePlot: sv.homePlot ?? null, kills: sv.kills || 0, keys: Array.isArray(sv.keys) ? sv.keys.map(Number) : [] }); } // 집 열쇠는 죽어도 남는다
   if (!sv && !ME.weapons.axe) { ME.weapons.axe = 1; } // 처음 시작할 때만 도끼 지급 (사망으로 잃은 건 돌려주지 않는다)
-  JOBS.load(sv); QUEST.load(sv); CARD.load(sv); PHONE.load(sv); CAREER.load(sv); CSN.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
+  JOBS.load(sv); QUEST.load(sv); CARD.load(sv); PHONE.load(sv); CAREER.load(sv); CSN.load(sv); REP.load(sv); SYS.load(sv); WARDROBE.base = Object.assign({}, ME.outfit); WARDROBE.load(sv); ME.outfit = WARDROBE.outfit(); // 로비 외형 = 기본 옷, 그 위에 산 옷
   ME.char = new Character(ME.outfit); scene.add(ME.char.root); ME.char.setName(null);
   const sx = G.isHost ? 10 : -10; ME.x = sx; ME.z = 52; ME.y = groundHeight(ME.x, ME.z); ME.yaw = Math.PI; CAM.yaw = Math.PI;
   setLoad(1, '완료!'); await tick();

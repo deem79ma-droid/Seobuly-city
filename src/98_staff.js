@@ -1,6 +1,6 @@
-// @v 2026101703
+// @v 2026101802
 
-// ================= 🧑‍💼 가게 직원 NPC + 아가톤섬 귀신 =================
+// ================= 🧑‍💼 가게 직원 NPC =================
 // 가게 안에는 직원이 서 있다. 직원에게 말을 걸고 → 메뉴를 고르면 → 직원이 금액을 말하고 → 결제하면 건네준다.
 // (예전엔 상호작용 키 한 번에 메뉴가 열려 딸깍 사는 식이었다)
 const STAFF_ROLE = {
@@ -58,7 +58,8 @@ const STAFF = {
   talk(role, fn) {
     const st = this.near(role); if (!st) { UI._staff = null; fn(); return; }
     const key = Object.keys(STAFF_ROLE).find(k => STAFF_ROLE[k] === role) || 'food';
-    const line = pick(STAFF_HI[key] || ['어서 오세요.']); st.line = line; st.ch.say(line, 4); sfx('ui');
+    if (REP.refuse(role)) { st.ch.say('죄송하지만… 소문 들었어요. 손님께는 못 팝니다.', 4); toast(`🚫 ${role} NPC${st.num}: 소문이 다 났어요. 평판(${REP.name()})이 너무 나빠서 팔지 않는다`, 4000); sfx('error'); UI._staff = null; return; }
+    const line = REP.greet(role) || pick(STAFF_HI[key] || ['어서 오세요.']); st.line = line; st.ch.say(line, 4); sfx('ui');
     UI._staff = st; fn();
   },
   // 계산: 직원이 금액을 말하고, 손님이 결제해야 물건이 넘어온다
@@ -71,7 +72,7 @@ const STAFF = {
   },
   closeDlg() { const el = document.getElementById('stfDlg'); if (el) el.style.display = 'none'; this._busy = false; },
   checkout(st, it, run) {
-    if (this._busy) return; const price = it.p; const el = this._dlg(); this._busy = true;
+    if (this._busy) return; const price = it._adj ?? it.p; const el = this._dlg(); this._busy = true;
     el.innerHTML = '<div class="bx"><div class="who"></div><div class="say"></div><div class="row"></div><div class="bal"></div></div>';
     el.querySelector('.who').textContent = `🧑‍💼 ${st.role} NPC${st.num}`;
     const say = (t) => { el.querySelector('.say').textContent = t; st.ch.say(t.length > 30 ? t.slice(0, 30) : t, 3); };
@@ -79,7 +80,7 @@ const STAFF = {
     el.querySelector('.bal').textContent = `현금 ${fmtMoney(ME.money)} · 카드 ${fmtMoney(CARD.bal)}`;
     el.style.display = 'flex';
     if (CREDIT.blocked()) { say('죄송합니다. 신용불량이시라 결제가 안 됩니다. 빚부터 갚으세요.'); sfx('error'); mk('no', '알겠어요', () => this.closeDlg()); return; }
-    say(`「${it.t}」 ${fmtMoney(price)}입니다. 결제하시겠어요?`);
+    say(`「${it.t}」 ${fmtMoney(price)}입니다.${price > it.p ? ' (소문 때문에 값이 좀 올랐어요…)' : price < it.p ? ' (단골이시라 깎아드렸어요!)' : ''} 결제하시겠어요?`);
     mk('ok', `💳 ${fmtMoney(price)} 결제`, () => {
       if (ME.money + CARD.bal < price) { say('어… 결제가 안 되네요. 잔액이 부족해요.'); sfx('error'); row.innerHTML = ''; mk('no', '다음에 올게요', () => this.closeDlg()); return; }
       row.innerHTML = ''; say('결제 중입니다…'); sfx('ui');
@@ -111,56 +112,5 @@ const STAFF = {
     spawnOwned(g, f.x, f.z); announce('🚗 구매 완료!', `${M.name} · 건물 앞에 출고됨 (지도에 📍 표시)`); sfx('cash');
     if (!INTERIOR.cur) setTimeout(() => CINE_EV.car(vehicles.get(g.id)), 150);
     saveGame();
-  },
-};
-
-// ================= 👻 아가톤섬 귀신 =================
-// 경찰도 없고 도로도 안 이어진 외딴 섬. 가끔(특히 밤) 하얀 귀신이 나타나 다가온다. 닿으면 소스라치게 놀라 스태미나가 빠진다.
-const GHOST = {
-  g: null, mode: 'none', t: 0, next: 50, fade: 1, spk: 0,
-  build() {
-    const pts = [[0.02, 0], [0.42, 0.06], [0.5, 0.3], [0.47, 0.75], [0.4, 1.15], [0.28, 1.55], [0.12, 1.82], [0.0, 1.9]].map(p => new THREE.Vector2(p[0], p[1]));
-    const mat = new THREE.MeshBasicMaterial({ color: 0xe8f2ff, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
-    const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 14), mat); g.add(body);
-    for (const s of [-1, 1]) { const arm = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.8, 7), mat); arm.position.set(0.5 * s, 1.1, 0.15); arm.rotation.z = s * 2.1; arm.rotation.x = -0.5; g.add(arm); }
-    const dark = new THREE.MeshBasicMaterial({ color: 0x05060a, transparent: true, opacity: 0.9 });
-    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), dark); e.scale.set(1, 1.6, 0.5); e.position.set(0.17 * s, 1.5, 0.37); g.add(e); }
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), dark); m.scale.set(1.1, 1.8, 0.5); m.position.set(0, 1.15, 0.4); g.add(m);
-    g.userData.mat = mat; return g;
-  },
-  wail(vol = 1) { const c = AU.ctx; if (!c) return; const t = c.currentTime; AU.tone(t, 1.3, 420, 170, 0.22 * vol, 0, 'sine'); AU.tone(t + 0.1, 1.1, 430, 150, 0.16 * vol, 0, 'triangle'); },
-  scare() { const c = AU.ctx; if (c) { const t = c.currentTime; AU.tone(t, 0.45, 900, 200, 0.5, 0, 'sawtooth'); AU.noiseHit && AU.noiseHit(t, 0.4, 1800, 0.6, 0.6, 0); } },
-  spawn(a) {
-    const ang = Math.random() * TAU, dist = rnd(26, 36); let x = a.x + Math.sin(ang) * dist, z = a.z + Math.cos(ang) * dist;
-    if (regionAt(x, z) !== 'agaton') { x = a.x - Math.sin(ang) * dist; z = a.z - Math.cos(ang) * dist; if (regionAt(x, z) !== 'agaton') return false; }
-    if (!this.g) { this.g = this.build(); } scene.add(this.g); this.x = x; this.z = z; this.mode = 'haunt'; this.t = 0; this.fade = 0; this.life = rnd(35, 55);
-    this.wail(0.7); toast('👻 …어딘가에서 소름 끼치는 소리가 들린다', 3500); return true;
-  },
-  kill(quick) { if (this.g) scene.remove(this.g); this.mode = 'none'; this.next = quick ? 40 : rnd(70, 170); },
-  tick(dt) {
-    if (!G.started) return;
-    const a = anchorOf(ME); const on = regionAt(a.x, a.z) === 'agaton' && !INTERIOR.cur && !ME.dead && !ME.jail && !ADMIN.on;
-    if (!on) { if (this.mode !== 'none') this.kill(true); return; }
-    if (this.mode === 'none') {
-      const nightK = ENV.night > 0.5 ? 2.2 : 0.7; this.next -= dt * nightK;
-      if (this.next <= 0 && !UI.menuOpen && !(CINE.locked && CINE.locked())) { if (!this.spawn(a)) this.next = 15; }
-      return;
-    }
-    const g = this.g; this.t += dt; if (this.t > this.life) { this.mode = 'gone'; }
-    if (this.mode === 'gone') { this.fade = Math.max(0, this.fade - dt * 1.5); if (this.fade <= 0) { this.kill(); return; } }
-    else if (this.mode === 'haunt') this.fade = Math.min(1, this.fade + dt * 0.5);
-    const dx = a.x - this.x, dz = a.z - this.z, d = Math.hypot(dx, dz);
-    const spdMe = ME.vehicle ? Math.abs(ME.vehicle.speed) : (ME.spd || 0);
-    if (this.mode === 'haunt') {
-      const sp = d > 9 ? 3.4 : 2.2; this.x += dx / (d || 1) * sp * dt; this.z += dz / (d || 1) * sp * dt;
-      if (d > 85) { this.kill(true); return; }
-      this.spk -= dt; if (d < 16 && this.spk <= 0) { this.spk = rnd(6, 10); this.wail(Math.min(1, 12 / Math.max(4, d))); toast(pick(['…나가…', '…같이 있자…', '…돌아가…', '…보인다…']), 1800); }
-      if (d < 2.2 && spdMe < 14) { // 닿았다!
-        this.mode = 'gone'; this.t = this.life; this.scare(); CAM.shake = Math.min(1, CAM.shake + 0.9); ME.stamina = Math.max(0, ME.stamina - 30);
-        try { CINE.init(); CINE.flash(0.85, 700); } catch (e) { } toast('😱 귀신이다!! — 온몸이 얼어붙는다 (스태미나 -30)', 3500);
-      }
-    }
-    g.position.set(this.x, groundHeight(this.x, this.z) + 0.5 + Math.sin(G.t * 1.7) * 0.18, this.z); g.rotation.y = Math.atan2(dx, dz);
-    const flick = 0.5 + 0.5 * Math.sin(G.t * 9 + Math.sin(G.t * 2.3) * 3); g.userData.mat.opacity = (0.22 + 0.4 * flick) * this.fade * (Math.sin(G.t * 31) > 0.93 ? 0.2 : 1);
   },
 };

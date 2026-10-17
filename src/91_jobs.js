@@ -1,4 +1,4 @@
-// @v 2026101703
+// @v 2026101802
 
 // ================= 직업 · 범죄자 신분 · 군부대 =================
 // 직업: 휴대폰(P) ▶ 💼 직업 에서 고른다. 경찰·군인·의사·부동산중개인은 범죄 기록이 없어야 한다.
@@ -192,7 +192,7 @@ const JOBS = {
     else if (!hunter && pay && !this._hTip) { this._hTip = 1; toast('사냥꾼 직업이면 포상금을 받는다 (디산베이 사냥꾼 오두막)', 4000); }
     UI.updateInv && UI.updateInv();
   },
-  pay(n, why, key) { if (key !== 'raw') n = CAREER.adjust(key || this.id, n); const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); GOV.promoCheck(); },
+  pay(n, why, key) { if (key !== 'raw') n = CAREER.adjust(key || this.id, n) * SYS.wageMul(); const r = ECON.net(n, this.id); const v = Math.round(r.net / 10) * 10; ME.money += v; sfx('cash'); if (this.cur && this.cur.clean) REP.add(0.25, '성실한 근무'); toast(`💰 ${why} +${fmtMoney(v)}${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); GOV.promoCheck(); },
   // 일하는 시간: 가만히 sec초 있어야 돈이 들어온다 (딸깍 방지)
   channel(sec, label, fn) { if (this.chan) return; this.chan = { end: G.t + sec, dur: sec, x: ME.x, z: ME.z, label, fn }; sfx('ui'); this.updateHud(); },
   chanTick() { const c = this.chan; if (!c) return; if (ME.dead || ME.vehicle || ME.jail || Math.hypot(ME.x - c.x, ME.z - c.z) > 1.5) { this.chan = null; toast('❌ 중단됐다 — 끝날 때까지 가만히 있어야 해'); this.updateHud(); return; } if ((this._cT = (this._cT || 0) - G.dt) <= 0) { this._cT = 0.25; this.updateHud(); } if (G.t >= c.end) { this.chan = null; ME.stamina = Math.max(0, ME.stamina - 12); c.fn(); this.updateHud(); } },
@@ -203,6 +203,7 @@ const JOBS = {
     if (ADMIN.on) return; const c = CRIMES[kind]; if (!c) return;
     if (quiet) { if (G.t < (this._qc || 0)) return; this._qc = G.t + 15; } // 폭행처럼 자주 생기는 건 15초에 한 번만
     const was = this.criminal(); this.cnt = this.cnt || {}; const n = this.cnt[kind] = (this.cnt[kind] || 0) + 1; this.priorsN = (this.priorsN | 0) + 1;
+    REP.add(-clamp(c.s / 6, 2, 25) * (quiet ? 0.4 : 1), c.name);
     const rm = (typeof RULES !== 'undefined' ? RULES.crimeAt(ME.x, ME.z) : 1) || 1; const mul = 1 + Math.min(1, (n - 1) * 0.25); const add = Math.round(c.s * mul * rm / 5) * 5; this.record += add; /* 지역 규정 배율 적용 */
     if (n >= 2 && !quiet) toast(`상습 ${c.name} ${n}회째 — 형량 가중 x${mul.toFixed(2)}`, 3000); this.witness(kind === 'army' ? 6 : kind === 'murder' ? 8 : 3);
     if (quiet) toast(`🦹 ${c.name} — [${CRIME_CLASS[c.c]}] 형량 +${add}초 (총 ${Math.ceil(this.record)}초)`, 3000);
@@ -267,7 +268,7 @@ const JOBS = {
     const P = this.pend; this.pend = null; if (!P) return; const j = JOB_BY[P.id], t = JOB_TIER[P.id] ?? 1;
     if (ME.jail || ME.dead && false) { this.updateHud(); return; }
     if (CAREER.why(P.id) || (j.clean && this.criminal())) { toast(`📭 ${j.name} 지원 취소 — 조건이 달라졌다`, 4000); this.updateHud(); return; }
-    if (Math.random() < TIER_PASS[t]) { toast(`📬 ${j.name} 합격!`, 3000); this.set(P.id); }
+    if (Math.random() < Math.min(1, TIER_PASS[t] * REP.passMul())) { toast(`📬 ${j.name} 합격!`, 3000); this.set(P.id); }
     else { CAREER.fail[P.id] = Date.now() / 1000; announce('📭 불합격', `${j.name} 지원 — ${REAPPLY_LOCK / 60}분 뒤에 다시 지원할 수 있다`); sfx('error'); saveGame(); this.updateHud(); }
   },
   openMenu() {
@@ -318,7 +319,7 @@ const JOBS = {
         if (t.kind === 'pickup') cand(d - 0.4, { label: '📦 택배 상차', key: 'E', fn: () => this.channel(3, '📦 상차 중', () => this.loadParcel()) });
         if (t.kind === 'drop') cand(d - 0.4, { label: `📦 ${t.name} 배달 완료`, key: 'E', fn: () => this.channel(3, '📦 하차 중', () => { this.pay(600 + t.dist * 1.1, '배달 완료'); this.later(); }) });
         if (t.kind === 'collect') cand(d - 0.4, { label: '💰 자릿세 걷기', key: 'E', fn: () => this.channel(4, '💰 수금 중', () => { this.pay(rnd(700, 1500) * ECON.crimeMul(), '자릿세 수금'); if (Math.random() < 0.35) { addWanted(1); JOBS.witness(2); } this.later(); }) });
-        if (t.kind === 'patient') { const p = PEDS[t.ped]; cand(d - 0.4, { label: '🩺 환자 치료하기', key: 'E', fn: () => this.channel(4, '🩺 치료 중', () => { if (p && p.char) p.char.say(pick(['감사합니다 선생님!', '훨씬 나아졌어요', '살았다…']), 3); FX.emoji('💖', t.x, (p ? p.y : ME.y) + 2, t.z, 0.4); if (G.isHost) NPCMEM.help(ME.id, p); else NET.send({ t: 'pedHelp', id: t.ped }); this.pay(1300, '환자 치료'); this.later(); }) }); }
+        if (t.kind === 'patient') { const p = PEDS[t.ped]; cand(d - 0.4, { label: '🩺 환자 치료하기', key: 'E', fn: () => this.channel(4, '🩺 치료 중', () => { REP.add(2, '환자 치료'); if (p && p.char) p.char.say(pick(['감사합니다 선생님!', '훨씬 나아졌어요', '살았다…']), 3); FX.emoji('💖', t.x, (p ? p.y : ME.y) + 2, t.z, 0.4); if (G.isHost) NPCMEM.help(ME.id, p); else NET.send({ t: 'pedHelp', id: t.ped }); this.pay(1300, '환자 치료'); this.later(); }) }); }
       }
     }
     if (this.id === 'soldier' && !INTERIOR.cur) { const hq = GOV.armyHQ(); const d = Math.hypot(ME.x - hq.x, ME.z - hq.z); if (d < 16) cand(d - 4, { label: '🪖 사단 본부 (계급 · 훈련 · 보급)', key: 'E', fn: () => GOV.armyMenu() }); }
@@ -362,7 +363,7 @@ const JOBS = {
   },
   // ---- 매 프레임 ----
   tick(dt) {
-    if (!this.hud) return; GOV.tick(dt); RULES.tick(dt); GHOST.tick(dt);
+    if (!this.hud) return; GOV.tick(dt); RULES.tick(dt); REP.tick(dt); SYS.tick(dt);
     // 범죄자 신분: 형량은 감옥에서만 1초/초 줄어든다 (밖에서는 안 줄어든다)
     if (this.record > 0 && ME.jail) { const was = this.record; this.record = Math.max(0, this.record - dt); if (was > 0 && this.record === 0) { toast('✅ 형량이 끝나 범죄자 신분에서 벗어났다', 4000); sfx('levelup'); saveGame(); } }
     // 경찰 NPC가 범죄자를 알아본다

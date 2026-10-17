@@ -1,4 +1,4 @@
-// @v 2026101703
+// @v 2026101802
 
 // ================= UI =================
 function toast(msg, dur = 2600) { const t = document.createElement('div'); t.className = 'toast panel'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, dur); while ($('#toasts').children.length > 5) $('#toasts').firstChild.remove(); }
@@ -74,8 +74,8 @@ const UI = {
       b.querySelector('.t').textContent = it.t; if (it.d) b.querySelector('.d').textContent = it.d;
       b.onclick = () => {
         AU.init(); sfx('ui'); if (it.dis) { toast(it.disMsg || '사용할 수 없다'); return; }
-        const go = () => { if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전엔 살 수 없다'); sfx('error'); return; } if (!CARD.pay(it.p)) { toast('💸 돈이 부족하다 (현금 + 카드)'); sfx('error'); return; } } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
-        if (this._staff && typeof it.p === 'number' && it.p > 0 && !it.free) STAFF.checkout(this._staff, it, go); else go(); // 직원이 있는 가게: 직원에게 계산
+        const go = () => { if (typeof it.p === 'number' && it.p > 0 && !it.free) { if (CREDIT.blocked()) { toast('⛔ 신용불량자 — 빚을 갚기 전엔 살 수 없다'); sfx('error'); return; } if (!CARD.pay(it._adj ?? it.p)) { toast('💸 돈이 부족하다 (현금 + 카드)'); sfx('error'); return; } } const keep = it.fn && it.fn(b); if (!keep && !it.stay) this.closeMenu(); else if (opts.refresh) opts.refresh(); };
+        if (this._staff && typeof it.p === 'number' && it.p > 0 && !it.free) { it._adj = Math.max(10, Math.round(it.p * REP.priceMul() / 10) * 10); if (REP.priceMul() === 1) it._adj = it.p; STAFF.checkout(this._staff, it, go); } else { delete it._adj; go(); } // 직원이 있는 가게: 직원에게 계산
       };
       wrap.appendChild(b);
     }
@@ -102,7 +102,9 @@ const UI = {
       case 'hospital': this.openMenu('🏥 병원', '치료와 의약품', [
         { ic: '💉', t: '치료받기', p: 300, d: '체력 100으로 회복', fn: () => { ME.hp = 100; sfx('levelup'); toast('❤️ 완치!'); } },
         { ic: '🩹', t: '구급상자 구매', p: 800, d: '인벤토리 +1 (사용: 휴대폰 메뉴)', fn: () => { ME.inv.medkit++; } },
-        { ic: '🧪', t: '건강검진 (스태미나 회복)', p: 200, fn: () => { ME.stamina = 100; } }]); break;
+        { ic: '🧪', t: '건강검진 (스태미나 회복)', p: 200, fn: () => { ME.stamina = 100; } },
+        { ic: '🧡', t: '병원 자원봉사 (무급 30초)', p: 0, d: '평판 +8 · 일하는 동안 가만히 있어야 한다', fn: () => { JOBS.channel(30, '🧡 병원 자원봉사 중', () => { REP.add(8, '병원 자원봉사'); SYS.stat('vol'); ME.stamina = Math.max(0, ME.stamina - 10); }); } },
+        { ic: '💝', t: '병원 기부', p: 10000, d: '평판 +6', fn: () => { REP.add(6, '병원 기부'); sfx('cash'); } }]); break;
       case 'dealer': this.openDealer(f); break;
       case 'factory': this.openMenu('🏭 공장', '목재·고기 매입, 아르바이트', [
         { ic: '🪵', t: `목재 판매 (${ME.inv.wood}개)`, p: '개당 ₩60', free: true, dis: !ME.inv.wood, disMsg: '목재가 없다 — 도끼로 나무를 베자', fn: () => { const a = ME.inv.wood * 60; ME.money += a; ME.inv.wood = 0; sfx('cash'); toast(`💰 +${fmtMoney(a)}`); } },
@@ -284,6 +286,8 @@ const UI = {
       ...QUEST.phoneItems(),
       SMS.phoneItem(),
       CAREER.phoneItem(),
+      REP.phoneItem(),
+      SYS.phoneItem(),
       BGM.phoneItem(),
       { ic: '📸', t: '사진 모드', p: 0, d: IS_TOUCH ? '글자 없이 풍경·친구 찍기' : 'K 키 · 글자 없이 풍경·친구 찍기', fn: () => setTimeout(() => PHOTO.enter(), 60) },
     ];
