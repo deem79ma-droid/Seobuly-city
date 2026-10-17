@@ -1,4 +1,4 @@
-// @v 2026101502
+// @v 2026101803
 // ================= 도시: 경제 · 대통령 선거 · 정책 · 뉴스 · 법원 · NPC 기억 =================
 // 공유 상태(대통령·정책·집값·뉴스)는 방장이 관리하고 모두에게 보낸다. 서버가 있으면 방 저장에 같이 남는다.
 
@@ -138,8 +138,11 @@ const NPCMEM = {
   talk(p, pid) {
     const e = this.mem(p)[pid]; const r = this.rep[pid] || 0;
     let s;
-    if (e && e.bad && G.t - e.t < 600) s = pick(e.bad >= 4 ? ['당신… 아까 그 사람이죠?! 가까이 오지 마세요!', '경찰 부를 거예요!', '또 무슨 짓을 하려고요?!'] : ['아까 봤어요. 조심하세요.', '…저 기억하죠? 전 다 봤어요.']);
+    if (e && e.rumor && G.t - e.t < 900) s = pick(['소문 들었어요… 당신이 그 사람 맞죠?', 'NPC들 사이에 소문 다 났어요. 조심하세요.']);
+    else if (e && e.bad && G.t - e.t < 600) s = pick(e.bad >= 4 ? ['당신… 아까 그 사람이죠?! 가까이 오지 마세요!', '경찰 부를 거예요!', '또 무슨 짓을 하려고요?!'] : ['아까 봤어요. 조심하세요.', '…저 기억하죠? 전 다 봤어요.']);
     else if (e && e.good) s = pick(['아까 정말 고마웠어요!', '선생님 덕분에 살았어요!', '또 만나네요! 반가워요']);
+    else if (pid === ME.id && REP.v >= 60) s = pick(['영웅님 안녕하세요!', '요즘 동네에서 칭찬이 자자해요']);
+    else if (pid === ME.id && REP.v <= -35) s = pick(['…소문 들었어요. 조용히 지내세요.', '저한테 볼일 없죠…?']);
     else if (r >= 60) s = pick(['…(눈을 피한다)', '뉴스에서 본 얼굴인데…', '저 아무것도 안 봤어요…']);
     else if (G.time < 5 || G.time > 22) s = pick(['이 밤에 무슨 일이세요?', '밤길 조심하세요', '피곤하네요… 집에 가는 중이에요']);
     else if (G.weather === 'rain') s = pick(['비 와서 우울하네요', '우산 깜빡했어요…']);
@@ -152,6 +155,8 @@ const NPCMEM = {
     const players = playersList();
     for (const p of PEDS) {
       if (!p.mem || p.state === 'parked' || p.state === 'dead' || p.state === 'fight' || p.state === 'flee') continue;
+      // 소문: 범죄를 본 NPC가 12초 뒤 가까운 NPC 3명에게 퍼뜨린다 (소문으로 들은 사람은 신고까지는 안 한다)
+      for (const k in p.mem) { const e = p.mem[k]; if (!e || !(e.bad >= 2) || e.rumor || e.sp || G.t - e.t < 12) continue; e.sp = 1; let n = 0; for (const q of PEDS) { if (n >= 3) break; if (q === p || q.state === 'parked' || q.state === 'dead' || (q.kind !== 'civ' && q.kind !== 'worker')) continue; if (Math.hypot(q.x - p.x, q.z - p.z) > 60) continue; const m = this.mem(q); if (m[k]) continue; m[k] = { bad: Math.max(1, e.bad - 2), t: G.t, rumor: 1, rep: 1 }; n++; } if (n) this.say(p, pick(['방금 어떤 사람이 그랬대요…', '들었어요? 저 사람 얘기!'])); }
       for (const pl of players) {
         const e = p.mem[pl.id]; if (!e || !e.bad || G.t - e.t > 600 || pl.inside) continue;
         const d = Math.hypot(pl.x - p.x, pl.z - p.z); if (d > 14) continue;

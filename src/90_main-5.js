@@ -1,4 +1,4 @@
-// @v 2026101802
+// @v 2026101803
 
 // ================= MAIN =================
 // 플레이어 id: 기기(브라우저)마다 저장하지만, 같은 브라우저의 탭 여러 개가 같은 id를 쓰면
@@ -125,7 +125,8 @@ async function startGame(mode, code) {
   AU.init(); ME.name = cleanName($('#nameIn').value.trim() || '플레이어'); if (ME.name === '???') ME.name = '플레이어'; ME.outfit = Object.assign({}, lobbyOutfit); G.quality = +$('#qualIn').value; try { localStorage.setItem('sbc3d_q', G.quality); } catch (e) { }
   if (ACCT.on) { ME.name = ACCT.nick; await ACCT.refresh(); } // 계정 닉네임 고정 · 최신 저장 불러오기
   if (NET.badName(ME.name)) { $('#lobbyMsg').textContent = '❌ "관리자"가 들어간 닉네임은 쓸 수 없어요'; $('#nameIn').focus(); return; } // 관리자는 이름표에 자동으로 붙는다
-  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); if (mode !== 'solo') await Promise.race([prepTurn(), sleep(2500)]); // 중계 서버 인증 준비 clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
+  ME.id = uid(); G.name = ME.name; G.myId = ME.id; LOBBY.lock(true); if (mode !== 'solo') await Promise.race([prepTurn(), sleep(2500)]); // 중계 서버 인증 준비
+  clearInterval(LOBBY.cd); clearInterval(PUBLIST.t); NET.stopProbe();
   const msg = t => { $('#lobbyMsg').textContent = t; };
   if ($('#admIn') && $('#admIn').value && !ADMIN.pre) { msg('🔐 관리자 비밀번호 확인 중…'); await ADMIN.preAuth(); }
   msg(mode === 'join' ? `🔌 방 ${code}에 접속 중…` : mode === 'host' ? '🌐 비공개방 만드는 중…' : mode === 'quick' ? '⚡ 공개방 찾는 중…' : mode === 'pub' ? `🌐 공개방 ${PUBLIC_ROOMS.indexOf(code) + 1} 접속 중…` : '');

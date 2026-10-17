@@ -1,4 +1,4 @@
-// @v 2026101420
+// @v 2026101803
 
 // ================= NETWORK (PeerJS P2P · 방장 권한형 · 원클릭 초대 · 자동 재접속 · 관리자 방장 이전) =================
 const MAX_PLAYERS = 20;
@@ -356,7 +356,8 @@ const NET = {
   },
   hello() { this.helloSent = true; this.send({ t: 'hello', id: ME.id, n: ME.name, o: ME.outfit, adm: ADMIN.on ? 1 : 0 }); },
   heartbeat() {
-    if (!G.online || this.wsMode) return; // 서버 모드: 연결 상태는 서버가 알려준다 const now = performance.now();
+    if (!G.online || this.wsMode) return; // 서버 모드: 연결 상태는 서버가 알려준다
+    const now = performance.now();
     for (const c of this.conns.slice()) { try { c.send({ t: 'hb', f: ME.id }); } catch (e) { } if (now - (c.lastRx || now) > 30000) { toast('⚠ 상대 응답 없음 — 연결 정리'); this.onClose(c); } }
   },
   updateRoomInfo() {
@@ -514,7 +515,9 @@ const NET = {
       case 'wanted': case 'robRes': case 'pedTip': case 'grudge': case 'kill': case 'meat': case 'petDead': case 'adopted': case 'bounty': if (m.to === ME.id) handlePersonal(m); break;
       case 'plotFail': if (m.to === ME.id) { ME.money += m.amt; toast('❌ ' + m.msg + ' (환불)'); } break;
       case 'income': if (m.to === ME.id) { const r = ECON.net(m.amt * ECON.rentMul(), 'rent'); ME.money += r.net; sfx('cash'); toast(`💰 임대 수익 ${fmtMoney(r.net)} 수령${r.tax ? ` (세금 -${fmtMoney(r.tax)})` : ''}`); } break;
-      case 'nade': if (m.o && typeof m.o.x === 'number') GRENADE.spawn(Object.assign({}, m.o, { by: f })); break;
+      case 'nade': if (m.o && typeof m.o.x === 'number' && isFinite(m.o.x + m.o.y + m.o.z)) { const o = m.o; GRENADE.spawn({ id: String(o.id || '').slice(0, 40) || undefined, k: ['g', 'tb', 'mine'].includes(o.k) ? o.k : 'g', x: +o.x, y: +o.y, z: +o.z, vx: clamp(+o.vx || 0, -60, 60), vy: clamp(+o.vy || 0, -60, 60), vz: clamp(+o.vz || 0, -60, 60), by: f }); } break;
+      case 'missile': if (m.o && isFinite(+m.o.x + +m.o.y + +m.o.z)) { const o = m.o; MISSILE.spawn({ id: String(o.id || '').slice(0, 40) || (f + '_m' + Math.random()), x: +o.x, y: +o.y, z: +o.z, vx: clamp(+o.vx || 0, -400, 400), vy: clamp(+o.vy || 0, -400, 400), vz: clamp(+o.vz || 0, -400, 400), tg: o.tg ? String(o.tg).slice(0, 40) : null, by: f }); } break;
+      case 'mineBoom': if (!G.isHost && f === G.hostId) GRENADE.remoteBoom(String(m.id)); break;
       case 'seat': {
         const v = vehicles.get(m.v); if (!v) break;
         if (m.s === 'd') { if (v.ai && G.isHost) ejectNpcDriver(v); v.ai = null; if (v.npcDriver) v.npcDriver.root.visible = false; v.driver = f; v.ctrl = 'remote'; v.mesh.visible = true; if (ME.vehicle === v && ME.seat === 'd') { exitVehicle(true); } }

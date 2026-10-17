@@ -1,4 +1,4 @@
-// @v 2026101703
+// @v 2026101803
 
 // ================= PLAYER =================
 const ME = {
@@ -419,7 +419,8 @@ function updatePlayer(dt) {
   // wanted decay
   if (ME.wanted > 0) {
     const copNear = PEDS.some(q => q.kind === 'police' && q.state !== 'dead' && q.state !== 'parked' && Math.hypot(q.x - ME.x, q.z - ME.z) < 75) || TRAFFIC.some(v => v.model === 'police' && v.ai && !v.dead && Math.hypot(v.x - ME.x, v.z - ME.z) < 90);
-    ME.wantedCool += copNear ? -dt * 0.25 : INTERIOR.cur ? dt * 0.4 : dt * 1.4; // 숨으면(건물 안 포함) 수배가 더 빨리 식는다 ME.wantedCool = Math.max(0, ME.wantedCool); // 건물에 숨어 있어도 수배는 그대로
+    ME.wantedCool += copNear ? -dt * 0.25 : INTERIOR.cur ? dt * 0.4 : dt * 1.4; // 숨으면(건물 안 포함) 수배가 더 빨리 식는다
+    ME.wantedCool = Math.max(0, ME.wantedCool);
     if (ME.wantedCool > 25 + ME.wanted * 10) { ME.wanted--; ME.wantedCool = 0; UI.updateStars(); if (!ME.wanted) toast('✅ 경찰을 따돌렸다 — 수배 해제' + (JOBS.criminal() ? ' (범죄 기록은 남아 있다)' : '')); }
   }
   if (INP.fire) { const W = WEAPONS[ME.weapon]; if (W.auto || !INP._fired) { tryAttack(); INP._fired = true; } } else INP._fired = false;
